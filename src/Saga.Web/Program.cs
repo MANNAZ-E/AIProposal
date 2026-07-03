@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
+using Saga.Core.Domain;
 using Saga.Infrastructure.Ai;
 using Saga.Infrastructure.Data;
 using Saga.Infrastructure.Extraction;
@@ -46,6 +48,7 @@ builder.Services.AddScoped<CondensationService>();
 builder.Services.AddScoped<WorkingContextService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<ReviewService>();
+builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
 
@@ -89,6 +92,40 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// File download endpoint: Blazor Server cannot stream files itself, so exports go over HTTP
+// using the same auth cookie/scheme and the same per-proposal role checks.
+app.MapGet("/proposals/{proposalId:guid}/export", async (
+    Guid proposalId, string? format, HttpContext http,
+    UserService users, ExportService export, CancellationToken ct) =>
+{
+    var email = http.User.FindFirstValue(ClaimTypes.Email)
+        ?? http.User.FindFirstValue("preferred_username");
+    var user = email is null ? null : await users.FindByEmailAsync(email, ct);
+    if (user is null) return Results.Unauthorized();
+
+    OutputFormat? requested = format?.ToLowerInvariant() switch
+    {
+        "pptx" or "powerpoint" => OutputFormat.PowerPoint,
+        "docx" or "word" => OutputFormat.Word,
+        _ => null,
+    };
+
+    try
+    {
+        var file = await export.ExportAsync(proposalId, user.Id,
+            requested ?? OutputFormat.PowerPoint, ct);
+        return Results.File(file.Bytes, file.ContentType, file.FileName);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Forbid();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
 
 // Apply pending migrations automatically in development.
 if (app.Environment.IsDevelopment())

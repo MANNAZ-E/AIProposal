@@ -645,6 +645,26 @@ a {
     50% { opacity: 0; }
 }
 
+/* ---------- Export ---------- */
+
+.export-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 0;
+    border-bottom: 1px solid var(--saga-border);
+}
+
+.export-row:first-child {
+    padding-top: 0;
+}
+
+.export-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
 /* ---------- Chat ---------- */
 
 .chat-thread {

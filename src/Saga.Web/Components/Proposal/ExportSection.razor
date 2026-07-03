@@ -1,0 +1,66 @@
+@inject ExportService Export
+@inject CurrentUserService CurrentUser
+
+<h2>Export</h2>
+<p class="text-muted" style="margin-top: 0;">
+    Exports the approved structure and content. Styling uses the clean Saga look until a sample
+    Mannaz deck is provided to mimic.
+</p>
+
+@if (_readiness is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (!_readiness.CanExport)
+{
+    <div class="empty-state">
+        <p>Nothing to export yet. Generate the <strong>structure</strong> and <strong>content</strong> first — the export is built from them.</p>
+    </div>
+}
+else
+{
+    @if (_readiness.StructureStale || _readiness.ContentStale)
+    {
+        <div class="card budget-warning" style="margin-bottom: 1rem;">
+            <strong>Out of date:</strong>
+            @(_readiness.StructureStale ? "the structure" : "the content") was generated before the latest
+            upstream changes. Consider regenerating before exporting.
+        </div>
+    }
+    @if (_readiness.MissingUnits > 0)
+    {
+        <div class="card budget-warning" style="margin-bottom: 1rem;">
+            <strong>Incomplete:</strong> @_readiness.MissingUnits structure @(_readiness.MissingUnits == 1 ? "entry has" : "entries have")
+            no content unit yet. Those slides/sections export with a placeholder.
+        </div>
+    }
+
+    <div class="card">
+        <div class="export-row">
+            <div>
+                <strong>PowerPoint (.pptx)</strong><br />
+                <span class="text-muted">Title slide + one slide per structure entry, bullets from the content units.</span>
+            </div>
+            <a class="btn btn-primary" href="/proposals/@ProposalId/export?format=pptx" target="_blank">Download</a>
+        </div>
+        <div class="export-row">
+            <div>
+                <strong>Word (.docx)</strong><br />
+                <span class="text-muted">Title page + chapters from the structure, prose from the content units.</span>
+            </div>
+            <a class="btn btn-primary" href="/proposals/@ProposalId/export?format=docx" target="_blank">Download</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+
+    private ExportReadiness? _readiness;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _readiness = await Export.GetReadinessAsync(ProposalId, user.Id);
+    }
+}
