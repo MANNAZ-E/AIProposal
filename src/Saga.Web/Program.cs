@@ -42,6 +42,8 @@ builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<ArtifactService>();
 builder.Services.AddScoped<GenerationService>();
+builder.Services.AddScoped<CondensationService>();
+builder.Services.AddScoped<WorkingContextService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
 

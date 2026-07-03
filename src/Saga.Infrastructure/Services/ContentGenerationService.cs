@@ -17,7 +17,8 @@ public record ContentProgress(int Unit, int TotalUnits, string Title);
 /// </summary>
 public class ContentGenerationService(
     IDbContextFactory<SagaDbContext> dbFactory,
-    IAiService ai)
+    IAiService ai,
+    WorkingContextService contextService)
 {
     /// <summary>
     /// Generates all units from the structure. Existing locked units are carried over
@@ -32,9 +33,8 @@ public class ContentGenerationService(
 
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
-        var documents = await db.Documents.Where(d => d.ProposalId == proposalId)
-            .OrderBy(d => d.CreatedAt).ToListAsync(ct);
-        var artifacts = await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
+        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var artifacts = loaded.Artifacts;
 
         var contentArtifact = artifacts.FirstOrDefault(a => a.Type == ArtifactType.Content);
         if (contentArtifact?.IsLocked == true)
@@ -46,8 +46,8 @@ public class ContentGenerationService(
             throw new InvalidOperationException("Generate and approve the structure before generating content.");
 
         var existing = ContentPayload.FromJson(contentArtifact?.ContentJson);
-        var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, documents, artifacts,
-            excludeArtifact: ArtifactType.Content);
+        var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, loaded.Documents, artifacts,
+            excludeArtifact: ArtifactType.Content, useCondensedDocuments: loaded.UseCondensed);
 
         var run = NewRun(proposalId, ArtifactType.Content, userId, instruction);
         var stopwatch = Stopwatch.StartNew();
@@ -106,9 +106,8 @@ public class ContentGenerationService(
 
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
-        var documents = await db.Documents.Where(d => d.ProposalId == proposalId)
-            .OrderBy(d => d.CreatedAt).ToListAsync(ct);
-        var artifacts = await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
+        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var artifacts = loaded.Artifacts;
 
         var contentArtifact = artifacts.FirstOrDefault(a => a.Type == ArtifactType.Content)
             ?? throw new InvalidOperationException("There is no content yet.");
@@ -125,7 +124,8 @@ public class ContentGenerationService(
         var position = Math.Max(1, structure.Items.FindIndex(s => s.Id == unit.StructureItemId) + 1);
         var total = Math.Max(structure.Items.Count, 1);
 
-        var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, documents, artifacts);
+        var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, loaded.Documents, artifacts,
+            useCondensedDocuments: loaded.UseCondensed);
 
         var run = NewRun(proposalId, ArtifactType.Content, userId, instruction);
         var stopwatch = Stopwatch.StartNew();

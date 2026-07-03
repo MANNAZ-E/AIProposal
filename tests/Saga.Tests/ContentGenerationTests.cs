@@ -12,9 +12,8 @@ public class ContentGenerationTests(LocalDbFixture db) : IClassFixture<LocalDbFi
     private readonly ProposalService _proposals = new(db);
     private readonly UserService _users = new(db);
     private readonly ArtifactService _artifacts = new(db);
-    private readonly GenerationService _generation = new(db, new FakeAiService(),
-        new NullWebResearchService(), new ConfigurationBuilder().Build());
-    private readonly ContentGenerationService _content = new(db, new FakeAiService());
+    private readonly GenerationService _generation = TestServices.Generation(db);
+    private readonly ContentGenerationService _content = TestServices.ContentGeneration(db);
 
     private async Task<(Guid ElvId, Guid ProposalId, StructurePayload Structure)> SetupWithStructureAsync()
     {

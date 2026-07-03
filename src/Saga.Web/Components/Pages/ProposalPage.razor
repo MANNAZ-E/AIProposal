@@ -1,5 +1,6 @@
 @page "/proposals/{ProposalId:guid}"
 @inject ProposalService Proposals
+@inject ArtifactService Artifacts
 @inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
 @rendermode InteractiveServer
@@ -48,35 +49,41 @@ else
     <div class="workspace">
         <nav class="workspace-nav">
             <button class="nav-item @(_section == Section.Material ? "active" : null)"
-                    @onclick="() => _section = Section.Material">Material</button>
-            <button class="nav-item" disabled title="Coming soon">Generate</button>
+                    @onclick="() => SelectSectionAsync(Section.Material)">Material</button>
+            <button class="nav-item @(_section == Section.Generate ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
             <div class="nav-group">Artifacts</div>
             <button class="nav-item @(_section == Section.ClientProfile ? "active" : null)"
-                    @onclick="() => _section = Section.ClientProfile">Client profile</button>
+                    @onclick="() => SelectSectionAsync(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</button>
             <button class="nav-item @(_section == Section.Summary ? "active" : null)"
-                    @onclick="() => _section = Section.Summary">Summary</button>
+                    @onclick="() => SelectSectionAsync(Section.Summary)">Summary @ArtifactBadge(ArtifactType.Summary)</button>
             <button class="nav-item @(_section == Section.Requirements ? "active" : null)"
-                    @onclick="() => _section = Section.Requirements">Requirements</button>
+                    @onclick="() => SelectSectionAsync(Section.Requirements)">Requirements @ArtifactBadge(ArtifactType.Requirements)</button>
             <button class="nav-item @(_section == Section.Scoping ? "active" : null)"
-                    @onclick="() => _section = Section.Scoping">Scoping</button>
+                    @onclick="() => SelectSectionAsync(Section.Scoping)">Scoping @ArtifactBadge(ArtifactType.Scoping)</button>
             <button class="nav-item @(_section == Section.SolutionProposal ? "active" : null)"
-                    @onclick="() => _section = Section.SolutionProposal">Solution proposal</button>
+                    @onclick="() => SelectSectionAsync(Section.SolutionProposal)">Solution proposal @ArtifactBadge(ArtifactType.SolutionProposal)</button>
             <button class="nav-item @(_section == Section.Structure ? "active" : null)"
-                    @onclick="() => _section = Section.Structure">Structure</button>
+                    @onclick="() => SelectSectionAsync(Section.Structure)">Structure @ArtifactBadge(ArtifactType.Structure)</button>
             <button class="nav-item @(_section == Section.Content ? "active" : null)"
-                    @onclick="() => _section = Section.Content">Content</button>
+                    @onclick="() => SelectSectionAsync(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</button>
             <button class="nav-item" disabled title="Coming soon">Review</button>
             <div class="nav-group">Proposal</div>
             <button class="nav-item" disabled title="Coming soon">Chat</button>
             <button class="nav-item" disabled title="Coming soon">Export</button>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
-                    @onclick="() => _section = Section.People">People</button>
+                    @onclick="() => SelectSectionAsync(Section.People)">People</button>
         </nav>
 
         <div class="workspace-content">
             @if (_section == Section.Material)
             {
                 <MaterialSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
+            }
+            else if (_section == Section.Generate)
+            {
+                <GenerateSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor"
+                                 OnChanged="LoadAsync" />
             }
             else if (_section == Section.Summary)
             {
@@ -201,9 +208,10 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, People }
+    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, People }
 
     private Proposal? _proposal;
+    private List<Artifact> _artifacts = [];
     private ProposalRole _myRole;
     private Section _section = Section.Material;
     private bool _notFound;
@@ -226,6 +234,23 @@ else
             return;
         }
         (_proposal, _myRole) = result.Value;
+        _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
+    }
+
+    private async Task SelectSectionAsync(Section section)
+    {
+        _section = section;
+        // Refresh nav badges: edits inside the previous section may have changed staleness.
+        await LoadAsync();
+    }
+
+    private RenderFragment? ArtifactBadge(ArtifactType type)
+    {
+        var artifact = _artifacts.FirstOrDefault(a => a.Type == type);
+        if (artifact is null || artifact.Status == ArtifactStatus.Empty) return null;
+        if (artifact.IsLocked) return @<span class="nav-flag" title="Locked">🔒</span>;
+        if (artifact.IsStale) return @<span class="nav-flag nav-flag-stale" title="Upstream changed — regeneration recommended">●</span>;
+        return @<span class="nav-flag nav-flag-ok" title="@artifact.Status.ToString()">●</span>;
     }
 
     private async Task ShareAsync()

@@ -7,6 +7,8 @@ public class PipelineTests
 {
     [Theory]
     // Spec §19 staleness table.
+    [InlineData(ArtifactType.Summary, new[] { ArtifactType.Scoping, ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
+    [InlineData(ArtifactType.Requirements, new[] { ArtifactType.Scoping, ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
     [InlineData(ArtifactType.Scoping, new[] { ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
     [InlineData(ArtifactType.SolutionProposal, new[] { ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
     [InlineData(ArtifactType.Structure, new[] { ArtifactType.Content, ArtifactType.Review })]
@@ -95,5 +97,59 @@ public class PipelineTests
 
         var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, [], artifacts);
         Assert.DoesNotContain("LEFTOVER", context);
+    }
+
+    [Fact]
+    public void Token_budget_passes_small_material_untouched()
+    {
+        var documents = new List<Document>
+        {
+            new() { Name = "small.pdf", Kind = DocumentKind.Upload, ExtractedText = new string('x', 400) },
+        };
+
+        var status = TokenBudget.Assess(documents, budget: 1000);
+
+        Assert.False(status.OverBudget);
+        Assert.False(status.UsingCondensed);
+        Assert.Equal(100, status.EstimatedTokens);
+    }
+
+    [Fact]
+    public void Token_budget_reports_condensed_fallback_only_when_it_fits()
+    {
+        var oversized = new List<Document>
+        {
+            new() { Name = "big.pdf", Kind = DocumentKind.Upload, ExtractedText = new string('x', 8000), CondensedText = new string('y', 400) },
+        };
+
+        var status = TokenBudget.Assess(oversized, budget: 1000);
+        Assert.True(status.OverBudget);
+        Assert.True(status.UsingCondensed);
+
+        // No condensed version yet: over budget but the fallback isn't available.
+        oversized[0].CondensedText = null;
+        status = TokenBudget.Assess(oversized, budget: 1000);
+        Assert.True(status.OverBudget);
+        Assert.False(status.UsingCondensed);
+    }
+
+    [Fact]
+    public void Condensed_context_uses_condensed_text_and_falls_back_per_document()
+    {
+        var documents = new List<Document>
+        {
+            new() { Name = "big.pdf", Kind = DocumentKind.Upload, ExtractedText = "FULL-TEXT", CondensedText = "CONDENSED-TEXT" },
+            new() { Name = "small.pdf", Kind = DocumentKind.Upload, ExtractedText = "OTHER-FULL" },
+        };
+
+        var condensed = WorkingContextBuilder.Build(WorkingContextKind.SourceMaterial, documents, [],
+            useCondensedDocuments: true);
+        Assert.Contains("CONDENSED-TEXT", condensed);
+        Assert.DoesNotContain("FULL-TEXT", condensed);
+        Assert.Contains("OTHER-FULL", condensed); // No condensed version: full text is used.
+
+        var full = WorkingContextBuilder.Build(WorkingContextKind.SourceMaterial, documents, []);
+        Assert.Contains("FULL-TEXT", full);
+        Assert.DoesNotContain("CONDENSED-TEXT", full);
     }
 }

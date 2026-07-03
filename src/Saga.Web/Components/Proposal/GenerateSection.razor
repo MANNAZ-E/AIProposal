@@ -1,0 +1,263 @@
+@using Saga.Core.Models
+@using Saga.Core.Pipeline
+@inject ArtifactService Artifacts
+@inject GenerationService Generation
+@inject RequirementsExtractionService Extraction
+@inject ContentGenerationService ContentGeneration
+@inject ProposalService Proposals
+@inject WorkingContextService WorkingContext
+@inject CurrentUserService CurrentUser
+
+<h2>Generate</h2>
+<p class="text-muted" style="margin-top: 0;">
+    Choose what AI should generate. Artifacts are generated in dependency order; results replace
+    the current versions directly (every previous version stays in History). Locked artifacts are skipped.
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="section-title" style="margin-top: 0;">Output format</div>
+    <div class="radio-row">
+        <label><input type="radio" checked="@(_format == OutputFormat.PowerPoint)" disabled="@(!CanEdit || _running)"
+                      @onchange="() => ChangeFormatAsync(OutputFormat.PowerPoint)" /> PowerPoint</label>
+        <label><input type="radio" checked="@(_format == OutputFormat.Word)" disabled="@(!CanEdit || _running)"
+                      @onchange="() => ChangeFormatAsync(OutputFormat.Word)" /> Word</label>
+    </div>
+    <div class="form-hint">Changing the format marks the structure (and downstream artifacts) as needing regeneration.</div>
+</div>
+
+@if (_budget is not null && _budget.OverBudget)
+{
+    <div class="card budget-warning" style="margin-bottom: 1rem;">
+        <strong>Large material:</strong> the client material is roughly @_budget.EstimatedTokens.ToString("N0") tokens,
+        above the @_budget.Budget.ToString("N0")-token budget. Generation will automatically use AI-condensed versions
+        of the documents. Requirements extraction always reads the full text.
+    </div>
+}
+
+<div class="card">
+    @foreach (var option in Options)
+    {
+        var artifact = _artifacts.FirstOrDefault(a => a.Type == option.Type);
+        var hasContent = artifact is not null && artifact.Status != ArtifactStatus.Empty;
+        <label class="gen-option">
+            <input type="checkbox" checked="@_selected.Contains(option.Type)" disabled="@(_running || artifact?.IsLocked == true)"
+                   @onchange="e => Toggle(option.Type, (bool)e.Value!)" />
+            <span>
+                <strong>@option.Label</strong>
+                @if (artifact?.IsLocked == true)
+                {
+                    <span class="badge badge-locked">🔒 locked — skipped</span>
+                }
+                else if (artifact?.IsStale == true)
+                {
+                    <span class="badge badge-stale">regenerate recommended</span>
+                }
+                else if (hasContent)
+                {
+                    <span class="badge badge-role">exists — will be replaced</span>
+                }
+                <br />
+                <span class="text-muted">@option.Description</span>
+            </span>
+            <span class="gen-status">@StatusFor(option.Type)</span>
+        </label>
+    }
+
+    @if (_recommended.Count > 0)
+    {
+        <div class="prereq-hint">
+            The selection needs these first: <strong>@string.Join(", ", _recommended.Select(Label))</strong>.
+            <button class="btn btn-outline btn-sm" @onclick="AddRecommended">Add them</button>
+        </div>
+    }
+
+    @if (CanEdit)
+    {
+        <div class="modal-actions" style="justify-content: flex-start;">
+            <button class="btn btn-primary" @onclick="RunAsync" disabled="@(_running || _selected.Count == 0)">
+                @(_running ? "Generating…" : $"Generate {_selected.Count} artifact{(_selected.Count == 1 ? "" : "s")}")
+            </button>
+        </div>
+    }
+</div>
+
+@if (_running && _currentDetail is not null)
+{
+    <div class="card" style="margin-top: 1rem;">
+        <p style="margin: 0;"><span class="cursor-blink">▌</span> @_currentDetail</p>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private sealed record Option(ArtifactType Type, string Label, string Description);
+
+    private static readonly Option[] Options =
+    [
+        new(ArtifactType.ClientProfile, "Client profile", "Research-based profile of the client (optional)."),
+        new(ArtifactType.Summary, "Summary", "Concise summary of the client material."),
+        new(ArtifactType.Requirements, "Requirements & criteria", "Extracted list of everything the proposal must satisfy."),
+        new(ArtifactType.Scoping, "Scoping", "Client situation, challenge, aspiration, boundaries."),
+        new(ArtifactType.SolutionProposal, "Solution proposal", "Mannaz's proposed solution — the red thread."),
+        new(ArtifactType.Structure, "Structure", "Slide or chapter structure for the chosen format."),
+        new(ArtifactType.Content, "Content", "The actual proposal, written from the structure."),
+    ];
+
+    private readonly HashSet<ArtifactType> _selected = [];
+    private List<ArtifactType> _recommended = [];
+    private readonly Dictionary<ArtifactType, string> _status = [];
+    private List<Artifact> _artifacts = [];
+    private OutputFormat _format;
+    private BudgetStatus? _budget;
+    private bool _running;
+    private string? _error;
+    private string? _currentDetail;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
+        var proposal = await Proposals.GetForUserAsync(ProposalId, user.Id);
+        if (proposal is not null) _format = proposal.Value.Proposal.OutputFormat;
+        _budget = await WorkingContext.AssessAsync(ProposalId);
+        UpdateRecommendations();
+    }
+
+    private void Toggle(ArtifactType type, bool selected)
+    {
+        if (selected) _selected.Add(type);
+        else _selected.Remove(type);
+        UpdateRecommendations();
+    }
+
+    private void UpdateRecommendations()
+    {
+        var existing = _artifacts
+            .Where(a => a.Status != ArtifactStatus.Empty)
+            .Select(a => a.Type)
+            .ToHashSet();
+        _recommended = _selected
+            .SelectMany(t => ArtifactDependencies.MissingPrerequisites(t, existing, _selected))
+            .Distinct()
+            .OrderBy(t => t)
+            .ToList();
+    }
+
+    private void AddRecommended()
+    {
+        foreach (var type in _recommended)
+            _selected.Add(type);
+        UpdateRecommendations();
+    }
+
+    private async Task ChangeFormatAsync(OutputFormat format)
+    {
+        var user = await CurrentUser.GetAsync();
+        await Proposals.SetOutputFormatAsync(ProposalId, user.Id, format);
+        _format = format;
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    private string StatusFor(ArtifactType type) => _status.GetValueOrDefault(type, "");
+
+    private static string Label(ArtifactType type) => Options.First(o => o.Type == type).Label;
+
+    private async Task RunAsync()
+    {
+        _error = null;
+        _running = true;
+        _status.Clear();
+        var user = await CurrentUser.GetAsync();
+
+        // Dependency order = enum order of the pipeline.
+        var queue = _selected.OrderBy(t => t).ToList();
+        foreach (var type in queue)
+            _status[type] = "queued";
+
+        try
+        {
+            foreach (var type in queue)
+            {
+                var artifact = _artifacts.FirstOrDefault(a => a.Type == type);
+                if (artifact?.IsLocked == true)
+                {
+                    _status[type] = "skipped (locked)";
+                    continue;
+                }
+
+                _status[type] = "generating…";
+                _currentDetail = $"Generating {Label(type).ToLowerInvariant()}…";
+                StateHasChanged();
+
+                try
+                {
+                    switch (type)
+                    {
+                        case ArtifactType.Requirements:
+                            var (_, requirements) = await Extraction.ExtractAsync(ProposalId, user.Id,
+                                async p =>
+                                {
+                                    _currentDetail = $"Extracting requirements: {p.DocumentName} — part {p.Chunk}/{p.TotalChunks}";
+                                    await InvokeAsync(StateHasChanged);
+                                });
+                            await Generation.ApplyAsync(ProposalId, type, user.Id, null, requirements.ToJson());
+                            break;
+
+                        case ArtifactType.Structure:
+                            var structureResult = await Generation.GenerateAsync(ProposalId, type, user.Id, null, null);
+                            var items = Saga.Infrastructure.Ai.ModelJson.ParseArray<StructureItem>(structureResult.Text)
+                                .Where(i => !string.IsNullOrWhiteSpace(i.Title)).ToList();
+                            if (items.Count == 0)
+                                throw new InvalidOperationException("The model did not return a usable structure.");
+                            await Generation.ApplyAsync(ProposalId, type, user.Id, null,
+                                new StructurePayload { Items = items }.ToJson());
+                            break;
+
+                        case ArtifactType.Content:
+                            var (_, content) = await ContentGeneration.GenerateAllAsync(ProposalId, user.Id, null,
+                                async p =>
+                                {
+                                    _currentDetail = $"Writing content {p.Unit}/{p.TotalUnits}: {p.Title}";
+                                    await InvokeAsync(StateHasChanged);
+                                });
+                            await Generation.ApplyAsync(ProposalId, type, user.Id, null, content.ToJson());
+                            break;
+
+                        default:
+                            var result = await Generation.GenerateAsync(ProposalId, type, user.Id, null, null);
+                            await Generation.ApplyAsync(ProposalId, type, user.Id, result.Text, null);
+                            break;
+                    }
+                    _status[type] = "✓ done";
+                    var refreshed = await Artifacts.GetAllAsync(ProposalId, user.Id);
+                    _artifacts = refreshed;
+                }
+                catch (Exception ex)
+                {
+                    _status[type] = "✗ failed";
+                    _error = $"{Label(type)}: {ex.Message}";
+                    break; // Later artifacts depend on this one; stop the chain.
+                }
+            }
+        }
+        finally
+        {
+            _running = false;
+            _currentDetail = null;
+            _selected.Clear();
+            UpdateRecommendations();
+            await OnChanged.InvokeAsync();
+        }
+    }
+}

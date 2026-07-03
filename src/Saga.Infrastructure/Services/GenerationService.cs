@@ -15,6 +15,7 @@ public class GenerationService(
     IDbContextFactory<SagaDbContext> dbFactory,
     IAiService ai,
     IWebResearchService webResearch,
+    WorkingContextService contextService,
     IConfiguration configuration)
 {
     /// <summary>
@@ -35,16 +36,15 @@ public class GenerationService(
             throw new InvalidOperationException("The artifact is locked. Unlock it before regenerating.");
 
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
-        var documents = await db.Documents.Where(d => d.ProposalId == proposalId)
-            .OrderBy(d => d.CreatedAt).ToListAsync(ct);
-        var artifacts = await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
+        var loaded = await contextService.LoadAsync(proposalId, null, ct);
 
-        if (!documents.Any(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
+        if (!loaded.Documents.Any(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
             throw new InvalidOperationException("Upload client documents or add notes before generating.");
 
         var systemPrompt = ArtifactPrompts.BuildSystemPrompt(type, proposal, voice, instruction);
         var context = WorkingContextBuilder.Build(
-            WorkingContextBuilder.ContextFor(type), documents, artifacts, excludeArtifact: type);
+            WorkingContextBuilder.ContextFor(type), loaded.Documents, loaded.Artifacts,
+            excludeArtifact: type, useCondensedDocuments: loaded.UseCondensed);
 
         // Client profile: add live web research (Bing grounding via Foundry) when configured.
         if (type == ArtifactType.ClientProfile)

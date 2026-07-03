@@ -113,6 +113,32 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Changes the output format. Spec §20: the structure was designed for the old format,
+    /// so it (and everything downstream) becomes stale.
+    /// </summary>
+    public async Task SetOutputFormatAsync(Guid proposalId, Guid actingUserId, OutputFormat format,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureRoleAsync(db, proposalId, actingUserId, ProposalRole.Editor, ct);
+        var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
+        if (proposal.OutputFormat == format) return;
+
+        proposal.OutputFormat = format;
+        proposal.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var affected = new[] { ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review };
+        var artifacts = await db.Artifacts
+            .Where(a => a.ProposalId == proposalId && affected.Contains(a.Type)
+                        && a.Status != ArtifactStatus.Empty && !a.IsLocked)
+            .ToListAsync(ct);
+        foreach (var artifact in artifacts)
+            artifact.IsStale = true;
+
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task SetArchivedAsync(Guid proposalId, Guid actingUserId, bool archived, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

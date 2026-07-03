@@ -116,9 +116,7 @@ public class RequirementsTests(LocalDbFixture db) : IClassFixture<LocalDbFixture
         Assert.Equal(ArtifactType.Requirements, run.ArtifactType);
 
         // Round-trip through the artifact JSON payload.
-        var generation = new GenerationService(db, new FakeAiService(),
-            new Saga.Core.Abstractions.NullWebResearchService(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+        var generation = TestServices.Generation(db);
         await generation.ApplyAsync(proposalId, ArtifactType.Requirements, elv, null, payload.ToJson());
         var artifact = await _artifacts.GetAsync(proposalId, ArtifactType.Requirements, elv);
         var restored = RequirementsPayload.FromJson(artifact!.ContentJson);

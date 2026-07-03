@@ -18,6 +18,12 @@ public class Document
     /// <summary>JSON map of page/section offsets into ExtractedText, from Document Intelligence. Null for notes.</summary>
     public string? PageMapJson { get; set; }
 
+    /// <summary>
+    /// AI-condensed version used instead of ExtractedText when the material exceeds the
+    /// context token budget. Cleared when the document changes.
+    /// </summary>
+    public string? CondensedText { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

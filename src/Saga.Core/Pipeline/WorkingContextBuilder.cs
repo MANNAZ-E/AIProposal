@@ -18,16 +18,19 @@ public static class WorkingContextBuilder
         WorkingContextKind kind,
         IReadOnlyList<Document> documents,
         IReadOnlyList<Artifact> artifacts,
-        ArtifactType? excludeArtifact = null)
+        ArtifactType? excludeArtifact = null,
+        bool useCondensedDocuments = false)
     {
         var sb = new StringBuilder();
 
         sb.AppendLine("<client_documents>");
         sb.AppendLine("These are the client's own documents. They are the highest-priority source and always take precedence over notes, research and generated artifacts.");
+        if (useCondensedDocuments)
+            sb.AppendLine("Note: the documents below are AI-condensed versions of larger originals.");
         foreach (var doc in documents.Where(d => d.Kind == DocumentKind.Upload))
         {
             sb.AppendLine($"<document name=\"{doc.Name}\">");
-            sb.AppendLine(doc.ExtractedText);
+            sb.AppendLine(useCondensedDocuments ? doc.CondensedText ?? doc.ExtractedText : doc.ExtractedText);
             sb.AppendLine("</document>");
         }
         sb.AppendLine("</client_documents>");

@@ -569,6 +569,67 @@ a {
     resize: vertical;
 }
 
+/* ---------- Generate section ---------- */
+
+.gen-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.7rem 0.5rem;
+    border-bottom: 1px solid var(--saga-border);
+    cursor: pointer;
+}
+
+.gen-option:last-of-type {
+    border-bottom: none;
+}
+
+.gen-option input[type="checkbox"] {
+    margin-top: 0.25rem;
+}
+
+.gen-option > span:first-of-type {
+    flex: 1;
+}
+
+.gen-status {
+    font-size: 0.85rem;
+    color: var(--saga-muted);
+    white-space: nowrap;
+    margin-top: 0.15rem;
+}
+
+.budget-warning {
+    background: #fdf3d7;
+    border-color: #e8d49a;
+    color: var(--saga-warning);
+}
+
+.prereq-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--saga-primary-light);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.nav-flag {
+    float: right;
+    font-size: 0.7rem;
+    line-height: 1.5;
+}
+
+.nav-flag-stale {
+    color: var(--saga-warning);
+}
+
+.nav-flag-ok {
+    color: #1e6b37;
+}
+
 .cursor-blink {
     animation: blink 1s step-end infinite;
     color: var(--saga-primary);
