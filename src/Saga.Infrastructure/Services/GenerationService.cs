@@ -84,7 +84,7 @@ public class GenerationService(
                         run.PromptTokens = c.PromptTokens;
                         run.CompletionTokens = c.CompletionTokens;
                         run.Model = c.Model;
-                        run.EstimatedCost = EstimateCost(request.Tier, c.PromptTokens, c.CompletionTokens);
+                        run.EstimatedCost = Ai.UsageCost.Estimate(configuration, request.Tier, c.PromptTokens, c.CompletionTokens);
                         run.Outcome = GenerationOutcome.Succeeded;
                         break;
                 }
@@ -155,13 +155,4 @@ public class GenerationService(
 
     private static AiModelTier TierFor(ArtifactType type)
         => type == ArtifactType.Requirements ? AiModelTier.Light : AiModelTier.Strong;
-
-    /// <summary>Prices per million tokens from configuration; 0 until configured.</summary>
-    private decimal EstimateCost(AiModelTier tier, int promptTokens, int completionTokens)
-    {
-        var prefix = tier == AiModelTier.Light ? "AzureOpenAI:LightPrice" : "AzureOpenAI:StrongPrice";
-        var inputPer1M = configuration.GetValue<decimal>($"{prefix}:InputPer1M");
-        var outputPer1M = configuration.GetValue<decimal>($"{prefix}:OutputPer1M");
-        return (promptTokens * inputPer1M + completionTokens * outputPer1M) / 1_000_000m;
-    }
 }

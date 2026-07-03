@@ -639,6 +639,61 @@ a {
     50% { opacity: 0; }
 }
 
+/* ---------- Chat ---------- */
+
+.chat-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.chat-message {
+    max-width: 85%;
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--saga-border);
+}
+
+.chat-user {
+    align-self: flex-end;
+    background: var(--saga-primary-light);
+}
+
+.chat-assistant {
+    align-self: flex-start;
+    background: #fff;
+}
+
+.chat-meta {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.chat-message .markdown-body > :first-child {
+    margin-top: 0;
+}
+
+.chat-message .markdown-body > :last-child {
+    margin-bottom: 0;
+}
+
+.chat-input {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-end;
+}
+
+.chat-input textarea {
+    flex: 1;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--saga-border);
+    border-radius: 8px;
+    font: inherit;
+    resize: vertical;
+}
+
 /* ---------- Blazor defaults ---------- */
 
 .blazor-error-boundary {

@@ -1,0 +1,135 @@
+@inject ChatService Chat
+@inject CurrentUserService CurrentUser
+
+<h2>Chat</h2>
+<p class="text-muted" style="margin-top: 0;">
+    Ask questions about the proposal. Answers come strictly from the selected context —
+    chat never changes the proposal.
+</p>
+
+<div class="card" style="margin-bottom: 1rem;">
+    <label for="chat-context" style="font-size: 0.85rem; font-weight: 600;">The AI answers from</label>
+    <select id="chat-context" @bind="_kind" disabled="@_busy" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
+        <option value="@WorkingContextKind.SourceMaterial">Source material — client documents and notes only</option>
+        <option value="@WorkingContextKind.Analysis">Analysis — source material + profile, summary, requirements</option>
+        <option value="@WorkingContextKind.FullProject">Full project — everything, including the written proposal</option>
+    </select>
+</div>
+
+<div class="chat-thread">
+    @if (_messages.Count == 0 && !_busy)
+    {
+        <p class="text-muted">No questions yet. Try "What is the submission deadline?" or "Which requirements are we weakest on?"</p>
+    }
+    @foreach (var message in _messages)
+    {
+        <div class="chat-message @(message.Role == ChatRole.User ? "chat-user" : "chat-assistant")">
+            <div class="chat-meta">
+                @(message.Role == ChatRole.User ? message.Author?.DisplayName ?? "You" : "Saga")
+                <span class="text-muted">· @ContextLabel(message.WorkingContext) · @message.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+            </div>
+            @if (message.Role == ChatRole.User)
+            {
+                <p style="margin: 0; white-space: pre-wrap;">@message.Text</p>
+            }
+            else
+            {
+                <div class="markdown-body">@Markdown.Render(message.Text)</div>
+            }
+        </div>
+    }
+    @if (_busy)
+    {
+        <div class="chat-message chat-assistant">
+            <div class="chat-meta">Saga <span class="text-muted">· @ContextLabel(_kind)</span></div>
+            <div class="markdown-body">
+                @Markdown.Render(_streaming)
+                <span class="cursor-blink">▌</span>
+            </div>
+        </div>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+<div class="chat-input">
+    <textarea rows="2" placeholder="Ask about the material, the requirements, the proposal…"
+              @bind="_question" @bind:event="oninput" disabled="@_busy"
+              @onkeydown="OnKeyDown"></textarea>
+    <button class="btn btn-primary" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">
+        @(_busy ? "Answering…" : "Ask")
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+
+    private List<ChatMessage> _messages = [];
+    private WorkingContextKind _kind = WorkingContextKind.FullProject;
+    private string _question = "";
+    private string _streaming = "";
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _messages = await Chat.GetMessagesAsync(ProposalId, user.Id);
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !_busy && !string.IsNullOrWhiteSpace(_question))
+            await AskAsync();
+    }
+
+    private async Task AskAsync()
+    {
+        var question = _question.Trim();
+        if (question.Length == 0 || _busy) return;
+
+        _error = null;
+        _busy = true;
+        _question = "";
+        _streaming = "";
+        var user = await CurrentUser.GetAsync();
+        _messages.Add(new ChatMessage
+        {
+            Role = ChatRole.User,
+            Text = question,
+            WorkingContext = _kind,
+            Author = user,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+        StateHasChanged();
+
+        try
+        {
+            await Chat.AskAsync(ProposalId, user.Id, question, _kind, async delta =>
+            {
+                _streaming += delta;
+                await InvokeAsync(StateHasChanged);
+            });
+            _messages = await Chat.GetMessagesAsync(ProposalId, user.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            _streaming = "";
+        }
+    }
+
+    private static string ContextLabel(WorkingContextKind kind) => kind switch
+    {
+        WorkingContextKind.SourceMaterial => "Source material",
+        WorkingContextKind.Analysis => "Analysis",
+        _ => "Full project",
+    };
+}

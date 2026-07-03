@@ -7,7 +7,8 @@ public class GenerationRun
     public Guid ProposalId { get; set; }
     public Proposal? Proposal { get; set; }
 
-    public ArtifactType ArtifactType { get; set; }
+    /// <summary>Null for chat runs, which are not tied to an artifact.</summary>
+    public ArtifactType? ArtifactType { get; set; }
     public required string Model { get; set; }
 
     /// <summary>Optional steering instruction the user gave for a regeneration.</summary>

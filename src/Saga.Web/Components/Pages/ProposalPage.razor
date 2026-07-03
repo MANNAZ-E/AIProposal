@@ -69,7 +69,8 @@ else
                     @onclick="() => SelectSectionAsync(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</button>
             <button class="nav-item" disabled title="Coming soon">Review</button>
             <div class="nav-group">Proposal</div>
-            <button class="nav-item" disabled title="Coming soon">Chat</button>
+            <button class="nav-item @(_section == Section.Chat ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Chat)">Chat</button>
             <button class="nav-item" disabled title="Coming soon">Export</button>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.People)">People</button>
@@ -122,6 +123,10 @@ else
             {
                 <ContentSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
                                 CanEdit="_myRole >= ProposalRole.Editor" />
+            }
+            else if (_section == Section.Chat)
+            {
+                <ChatSection ProposalId="ProposalId" />
             }
             else if (_section == Section.People)
             {
@@ -208,7 +213,7 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, People }
+    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Chat, People }
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
