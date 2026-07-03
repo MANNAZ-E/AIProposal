@@ -14,6 +14,7 @@ public record GenerationResult(Guid RunId, string Text, int PromptTokens, int Co
 public class GenerationService(
     IDbContextFactory<SagaDbContext> dbFactory,
     IAiService ai,
+    IWebResearchService webResearch,
     IConfiguration configuration)
 {
     /// <summary>
@@ -44,6 +45,15 @@ public class GenerationService(
         var systemPrompt = ArtifactPrompts.BuildSystemPrompt(type, proposal, voice, instruction);
         var context = WorkingContextBuilder.Build(
             WorkingContextBuilder.ContextFor(type), documents, artifacts, excludeArtifact: type);
+
+        // Client profile: add live web research (Bing grounding via Foundry) when configured.
+        if (type == ArtifactType.ClientProfile)
+        {
+            var findings = await webResearch.ResearchClientAsync(proposal.ClientName, proposal.Description, ct);
+            if (!string.IsNullOrWhiteSpace(findings))
+                context += $"\n<web_research>\nLive web research about the client, with sources. Ground the profile in this.\n{findings}\n</web_research>\n";
+        }
+
         var request = new AiRequest(systemPrompt, [AiMessage.User(context)], TierFor(type));
 
         var run = new GenerationRun

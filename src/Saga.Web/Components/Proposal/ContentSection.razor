@@ -1,0 +1,423 @@
+@using Saga.Core.Models
+@inject ArtifactService Artifacts
+@inject GenerationService Generation
+@inject ContentGenerationService ContentGeneration
+@inject CurrentUserService CurrentUser
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
+    <h2 style="margin-bottom: 0.25rem;">
+        Content
+        @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
+        {
+            <span class="badge badge-role" style="margin-left: 0.5rem;">@_units.Count @(IsPowerPoint ? "slides" : "sections")</span>
+            @if (_artifact.IsStale)
+            {
+                <span class="badge badge-stale" style="margin-left: 0.3rem;">Regenerate recommended</span>
+            }
+            @if (_artifact.IsLocked)
+            {
+                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+            }
+        }
+    </h2>
+    <div style="display: flex; gap: 0.4rem; white-space: nowrap;">
+        @if (CanEdit && _units.Count > 0 && !_generating)
+        {
+            <button class="btn btn-outline btn-sm" @onclick="() => _showRegenerate = true" disabled="@(_artifact!.IsLocked)">Regenerate all</button>
+            <button class="btn btn-outline btn-sm" @onclick="ToggleLockAsync">@(_artifact!.IsLocked ? "Unlock" : "Lock")</button>
+        }
+    </div>
+</div>
+<p class="text-muted" style="margin-top: 0;">
+    The actual proposal, written @(IsPowerPoint ? "slide by slide" : "section by section") from the approved
+    structure. Each @(IsPowerPoint ? "slide" : "section") can be edited, locked and regenerated on its own —
+    locked @(IsPowerPoint ? "slides" : "sections") survive "Regenerate all".
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+@if (_generating)
+{
+    <div class="card">
+        <p><span class="cursor-blink">▌</span> Writing @(_progress is null ? "content" : $"{(IsPowerPoint ? "slide" : "section")} {_progress.Unit}/{_progress.TotalUnits}: {_progress.Title}")…</p>
+        @if (_streamText.Length > 0)
+        {
+            <div class="markdown-body text-muted">@Markdown.Render(_streamText)</div>
+        }
+    </div>
+}
+else if (_pendingUnits is not null)
+{
+    <p><strong>Review the new content.</strong> Your current content is kept until you accept. Locked @(IsPowerPoint ? "slides" : "sections") were carried over unchanged.</p>
+    <div class="unit-list">
+        @foreach (var unit in _pendingUnits)
+        {
+            <div class="card">
+                <strong>@unit.Title</strong>
+                @if (unit.IsLocked)
+                {
+                    <span class="badge badge-locked">🔒 kept</span>
+                }
+                <div class="markdown-body">@Markdown.Render(unit.BodyMarkdown)</div>
+            </div>
+        }
+    </div>
+    <div class="modal-actions" style="justify-content: flex-start;">
+        <button class="btn btn-primary" @onclick="AcceptAllAsync" disabled="@_busy">Accept new content</button>
+        <button class="btn btn-outline" @onclick="RejectAllAsync" disabled="@_busy">Keep current content</button>
+    </div>
+}
+else if (_units.Count == 0)
+{
+    <div class="empty-state">
+        @if (!_hasStructure)
+        {
+            <p>Content is written from the structure. Generate and approve the structure first.</p>
+        }
+        else
+        {
+            <p>No content yet.</p>
+            @if (CanEdit)
+            {
+                <button class="btn btn-primary" @onclick="() => GenerateAllAsync(null)">Generate content</button>
+            }
+        }
+    </div>
+}
+else
+{
+    <div class="unit-list">
+        @for (var i = 0; i < _units.Count; i++)
+        {
+            var index = i;
+            var unit = _units[index];
+            <div class="card unit-card">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem;">
+                    <div>
+                        <span class="text-muted">@(index + 1).</span>
+                        <strong>@unit.Title</strong>
+                        @if (unit.IsLocked)
+                        {
+                            <span class="badge badge-locked">🔒</span>
+                        }
+                    </div>
+                    @if (CanEdit && !_artifact!.IsLocked)
+                    {
+                        <div style="white-space: nowrap;">
+                            <button class="btn btn-outline btn-sm" @onclick="() => BeginUnitEdit(unit)" disabled="@unit.IsLocked">Edit</button>
+                            <button class="btn btn-outline btn-sm" @onclick="() => OpenUnitRegenerate(unit)" disabled="@unit.IsLocked">Regenerate</button>
+                            <button class="btn btn-outline btn-sm" @onclick="() => ToggleUnitLockAsync(unit)">@(unit.IsLocked ? "Unlock" : "Lock")</button>
+                        </div>
+                    }
+                </div>
+                @if (unit.KeyMessage is not null)
+                {
+                    <p class="text-muted" style="margin: 0.25rem 0;"><em>@unit.KeyMessage</em></p>
+                }
+
+                @if (_editUnitId == unit.Id)
+                {
+                    <textarea class="editor-textarea" style="min-height: 220px;" @bind="_editText"></textarea>
+                    <div class="modal-actions" style="justify-content: flex-start;">
+                        <button class="btn btn-primary btn-sm" @onclick="SaveUnitEditAsync" disabled="@_busy">Save</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => _editUnitId = null">Cancel</button>
+                    </div>
+                }
+                else if (_unitDiff?.UnitId == unit.Id)
+                {
+                    <div class="editor-grid">
+                        <div>
+                            <div class="section-title" style="margin-top: 0;">Current</div>
+                            <div class="markdown-body diff-pane diff-old">@Markdown.Render(unit.BodyMarkdown)</div>
+                        </div>
+                        <div>
+                            <div class="section-title" style="margin-top: 0;">New</div>
+                            <div class="markdown-body diff-pane diff-new">@Markdown.Render(_unitDiff.NewBody)</div>
+                        </div>
+                    </div>
+                    <div class="modal-actions" style="justify-content: flex-start;">
+                        <button class="btn btn-primary btn-sm" @onclick="AcceptUnitAsync" disabled="@_busy">Accept new version</button>
+                        <button class="btn btn-outline btn-sm" @onclick="RejectUnitAsync" disabled="@_busy">Keep current</button>
+                    </div>
+                }
+                else if (_regenUnitId == unit.Id)
+                {
+                    <div class="markdown-body text-muted">
+                        <span class="cursor-blink">▌</span>
+                        @Markdown.Render(_streamText)
+                    </div>
+                }
+                else
+                {
+                    <div class="markdown-body">@Markdown.Render(unit.BodyMarkdown)</div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@if (_showRegenerate)
+{
+    <div class="modal-backdrop" @onclick="() => _showRegenerate = false">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Regenerate all content</h2>
+            <p class="text-muted">Locked @(IsPowerPoint ? "slides" : "sections") are kept unchanged. You review the result before anything is replaced.</p>
+            <div class="form-field">
+                <label for="content-instruction">Steering instruction (optional)</label>
+                <textarea id="content-instruction" rows="3" @bind="_instruction"
+                          placeholder="e.g. Shorter and sharper, emphasise measurable effect"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
+                <button class="btn btn-primary" @onclick="() => { _showRegenerate = false; return GenerateAllAsync(_instruction); }">Generate</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_unitInstructionFor is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _unitInstructionFor = null">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Regenerate: @_unitInstructionFor.Title</h2>
+            <div class="form-field">
+                <label for="unit-instruction">Steering instruction (optional)</label>
+                <textarea id="unit-instruction" rows="3" @bind="_instruction"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _unitInstructionFor = null">Cancel</button>
+                <button class="btn btn-primary" @onclick="RegenerateUnitAsync">Generate</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter, EditorRequired] public OutputFormat OutputFormat { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private sealed record UnitDiff(Guid UnitId, Guid RunId, string NewBody);
+
+    private bool IsPowerPoint => OutputFormat == OutputFormat.PowerPoint;
+
+    private Artifact? _artifact;
+    private List<ContentUnit> _units = [];
+    private bool _hasStructure;
+    private bool _generating;
+    private bool _busy;
+    private string? _error;
+    private string _streamText = "";
+    private ContentProgress? _progress;
+    private string _instruction = "";
+    private bool _showRegenerate;
+
+    private List<ContentUnit>? _pendingUnits;
+    private Guid _pendingRunId;
+
+    private Guid? _editUnitId;
+    private string _editText = "";
+    private Guid? _regenUnitId;
+    private ContentUnit? _unitInstructionFor;
+    private UnitDiff? _unitDiff;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _artifact = await Artifacts.GetAsync(ProposalId, ArtifactType.Content, user.Id);
+        _units = ContentPayload.FromJson(_artifact?.ContentJson).Units;
+        var structure = await Artifacts.GetAsync(ProposalId, ArtifactType.Structure, user.Id);
+        _hasStructure = StructurePayload.FromJson(structure?.ContentJson).Items.Count > 0;
+    }
+
+    private async Task GenerateAllAsync(string? instruction)
+    {
+        _error = null;
+        _generating = true;
+        _streamText = "";
+        _instruction = "";
+        var hadContent = _units.Count > 0;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var (runId, payload) = await ContentGeneration.GenerateAllAsync(ProposalId, user.Id, instruction,
+                async p =>
+                {
+                    _progress = p;
+                    _streamText = "";
+                    await InvokeAsync(StateHasChanged);
+                },
+                async delta =>
+                {
+                    _streamText += delta;
+                    await InvokeAsync(StateHasChanged);
+                });
+
+            if (!hadContent)
+            {
+                await Generation.ApplyAsync(ProposalId, ArtifactType.Content, user.Id, null, payload.ToJson());
+                await LoadAsync();
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                _pendingUnits = payload.Units;
+                _pendingRunId = runId;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _generating = false;
+            _progress = null;
+            _streamText = "";
+        }
+    }
+
+    private async Task AcceptAllAsync()
+    {
+        if (_pendingUnits is null) return;
+        _busy = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Generation.ApplyAsync(ProposalId, ArtifactType.Content, user.Id, null,
+                new ContentPayload { Units = _pendingUnits }.ToJson());
+            _pendingUnits = null;
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RejectAllAsync()
+    {
+        await Generation.MarkRejectedAsync(_pendingRunId);
+        _pendingUnits = null;
+    }
+
+    private void BeginUnitEdit(ContentUnit unit)
+    {
+        _editUnitId = unit.Id;
+        _editText = unit.BodyMarkdown;
+    }
+
+    private async Task SaveUnitEditAsync()
+    {
+        var unit = _units.FirstOrDefault(u => u.Id == _editUnitId);
+        if (unit is null) return;
+        unit.BodyMarkdown = _editText;
+        _editUnitId = null;
+        await SavePayloadAsync();
+    }
+
+    private void OpenUnitRegenerate(ContentUnit unit)
+    {
+        _instruction = "";
+        _unitInstructionFor = unit;
+    }
+
+    private async Task RegenerateUnitAsync()
+    {
+        var unit = _unitInstructionFor;
+        _unitInstructionFor = null;
+        if (unit is null) return;
+        _error = null;
+        _regenUnitId = unit.Id;
+        _streamText = "";
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var (runId, body) = await ContentGeneration.RegenerateUnitAsync(ProposalId, unit.Id, user.Id,
+                string.IsNullOrWhiteSpace(_instruction) ? null : _instruction,
+                async delta =>
+                {
+                    _streamText += delta;
+                    await InvokeAsync(StateHasChanged);
+                });
+            _unitDiff = new UnitDiff(unit.Id, runId, body);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _regenUnitId = null;
+            _streamText = "";
+        }
+    }
+
+    private async Task AcceptUnitAsync()
+    {
+        if (_unitDiff is null) return;
+        var unit = _units.FirstOrDefault(u => u.Id == _unitDiff.UnitId);
+        if (unit is null) return;
+        unit.BodyMarkdown = _unitDiff.NewBody;
+        _unitDiff = null;
+        await SavePayloadAsync();
+    }
+
+    private async Task RejectUnitAsync()
+    {
+        if (_unitDiff is not null)
+            await Generation.MarkRejectedAsync(_unitDiff.RunId);
+        _unitDiff = null;
+    }
+
+    private async Task ToggleUnitLockAsync(ContentUnit unit)
+    {
+        unit.IsLocked = !unit.IsLocked;
+        await SavePayloadAsync();
+    }
+
+    private async Task ToggleLockAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        await Artifacts.SetLockedAsync(ProposalId, ArtifactType.Content, user.Id, !_artifact!.IsLocked);
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task SavePayloadAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Artifacts.SaveEditAsync(ProposalId, ArtifactType.Content, user.Id, null,
+                new ContentPayload { Units = _units }.ToJson(), _artifact!.RowVersion);
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Saga.Core.Models.ConcurrencyConflictException)
+        {
+            _error = "Someone else changed the content while you were editing. Reload the page to see their version.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

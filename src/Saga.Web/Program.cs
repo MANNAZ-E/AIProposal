@@ -43,6 +43,10 @@ builder.Services.AddScoped<DocumentService>();
 builder.Services.AddScoped<ArtifactService>();
 builder.Services.AddScoped<GenerationService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
+builder.Services.AddScoped<ContentGenerationService>();
+
+// Bing-grounded research is wired up with the Foundry project in the deployment milestone.
+builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();
 
 builder.Services.AddSingleton<IAiService>(sp =>
 {

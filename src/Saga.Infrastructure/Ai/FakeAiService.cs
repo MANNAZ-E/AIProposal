@@ -12,6 +12,21 @@ public class FakeAiService : IAiService
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(AiRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        // Structure prompts get a canned slide/chapter list back.
+        if (request.SystemPrompt.Contains("visualSuggestion"))
+        {
+            var structureJson = """
+                [
+                  {"title": "Understanding your situation", "purpose": "Show we understand the client's context", "keyMessage": "We know where you are and why this matters now", "estimatedLength": "1 slide", "visualSuggestion": "context diagram", "addresses": "client situation"},
+                  {"title": "Our proposed approach", "purpose": "Present the solution idea", "keyMessage": "A phased, practical approach that fits your organisation", "estimatedLength": "1 slide", "visualSuggestion": "three-phase timeline", "addresses": "quality of approach criterion"},
+                  {"title": "Deliverables and process", "purpose": "Make the offer concrete", "keyMessage": "Clear deliverables at every step", "estimatedLength": "1 slide", "visualSuggestion": "table", "addresses": "documented experience requirement"}
+                ]
+                """;
+            yield return new AiStreamEvent.Delta(structureJson);
+            yield return new AiStreamEvent.Completed(800, 250, "fake-model");
+            yield break;
+        }
+
         // JSON-contract prompts (e.g. requirements extraction) get canned JSON back.
         if (request.SystemPrompt.Contains("Return ONLY a JSON array"))
         {

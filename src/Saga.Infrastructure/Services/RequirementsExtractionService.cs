@@ -110,23 +110,8 @@ public class RequirementsExtractionService(
 
     /// <summary>Parses the model's JSON array, tolerating markdown fences and stray prose.</summary>
     internal static List<RequirementItem> ParseItems(string modelOutput)
-    {
-        var text = modelOutput.Trim();
-        var start = text.IndexOf('[');
-        var end = text.LastIndexOf(']');
-        if (start < 0 || end <= start) return [];
-        text = text[start..(end + 1)];
-
-        try
-        {
-            var items = JsonSerializer.Deserialize<List<RequirementItem>>(text, ParseOptions) ?? [];
-            return items.Where(i => !string.IsNullOrWhiteSpace(i.Text)).ToList();
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-    }
+        => Ai.ModelJson.ParseArray<RequirementItem>(modelOutput)
+            .Where(i => !string.IsNullOrWhiteSpace(i.Text)).ToList();
 
     /// <summary>Removes near-duplicate requirements extracted from overlapping wording.</summary>
     internal static void Deduplicate(RequirementsPayload payload)

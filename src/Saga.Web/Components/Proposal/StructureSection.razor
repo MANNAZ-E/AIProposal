@@ -1,0 +1,238 @@
+@using Saga.Core.Models
+@inject ArtifactService Artifacts
+@inject GenerationService Generation
+@inject CurrentUserService CurrentUser
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
+    <h2 style="margin-bottom: 0.25rem;">
+        Structure
+        @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
+        {
+            <span class="badge badge-role" style="margin-left: 0.5rem;">@_items.Count @(IsPowerPoint ? "slides" : "chapters")</span>
+            @if (_artifact.IsStale)
+            {
+                <span class="badge badge-stale" style="margin-left: 0.3rem;">Regenerate recommended</span>
+            }
+            @if (_artifact.IsLocked)
+            {
+                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+            }
+        }
+    </h2>
+    <div style="display: flex; gap: 0.4rem; white-space: nowrap;">
+        @if (CanEdit)
+        {
+            @if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)
+            {
+                <button class="btn btn-primary btn-sm" @onclick="() => GenerateAsync(null)" disabled="@_generating">Generate</button>
+            }
+            else
+            {
+                <button class="btn btn-outline btn-sm" @onclick="() => _showRegenerate = true" disabled="@(_generating || _artifact.IsLocked)">Regenerate</button>
+                <button class="btn btn-outline btn-sm" @onclick="ToggleLockAsync">@(_artifact.IsLocked ? "Unlock" : "Lock")</button>
+            }
+        }
+    </div>
+</div>
+<p class="text-muted" style="margin-top: 0;">
+    @(IsPowerPoint
+        ? "The slide sequence: storyline, key messages and visual flow. Content is written slide by slide from this."
+        : "The chapter sequence: headings, argumentation and narrative. Content is written section by section from this.")
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+@if (_generating)
+{
+    <div class="card"><p style="margin: 0;"><span class="cursor-blink">▌</span> Designing the @(IsPowerPoint ? "slide" : "chapter") structure…</p></div>
+}
+else if (_pendingItems is not null)
+{
+    <p><strong>Review the new structure.</strong> Your current structure is kept until you accept.</p>
+    <StructureTable Items="_pendingItems" IsPowerPoint="IsPowerPoint" CanEdit="false" />
+    <div class="modal-actions" style="justify-content: flex-start;">
+        <button class="btn btn-primary" @onclick="AcceptAsync" disabled="@_busy">Accept new structure</button>
+        <button class="btn btn-outline" @onclick="RejectAsync" disabled="@_busy">Keep current structure</button>
+    </div>
+}
+else if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)
+{
+    <div class="empty-state">
+        <p>No structure yet. It is designed from the scoping, solution proposal and requirements.</p>
+        @if (CanEdit)
+        {
+            <button class="btn btn-primary" @onclick="() => GenerateAsync(null)">Generate structure</button>
+        }
+    </div>
+}
+else
+{
+    <StructureTable Items="_items" IsPowerPoint="IsPowerPoint" CanEdit="@(CanEdit && !_artifact.IsLocked)" OnChanged="MarkDirty" />
+    @if (CanEdit && !_artifact.IsLocked)
+    {
+        <div class="modal-actions" style="justify-content: flex-start;">
+            <button class="btn btn-outline" @onclick="AddRow">+ Add @(IsPowerPoint ? "slide" : "chapter")</button>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(!_dirty || _busy)">@(_dirty ? "Save changes" : "Saved")</button>
+        </div>
+    }
+}
+
+@if (_showRegenerate)
+{
+    <div class="modal-backdrop" @onclick="() => _showRegenerate = false">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Regenerate structure</h2>
+            <div class="form-field">
+                <label for="structure-instruction">Steering instruction (optional)</label>
+                <textarea id="structure-instruction" rows="3" @bind="_instruction"
+                          placeholder="e.g. Max 10 slides, and add a slide about our references"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
+                <button class="btn btn-primary" @onclick="() => { _showRegenerate = false; return GenerateAsync(_instruction); }">Generate</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter, EditorRequired] public OutputFormat OutputFormat { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool IsPowerPoint => OutputFormat == OutputFormat.PowerPoint;
+
+    private Artifact? _artifact;
+    private List<StructureItem> _items = [];
+    private List<StructureItem>? _pendingItems;
+    private Guid _pendingRunId;
+    private bool _generating;
+    private bool _busy;
+    private bool _dirty;
+    private string? _error;
+    private string _instruction = "";
+    private bool _showRegenerate;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _artifact = await Artifacts.GetAsync(ProposalId, ArtifactType.Structure, user.Id);
+        _items = StructurePayload.FromJson(_artifact?.ContentJson).Items;
+        _dirty = false;
+    }
+
+    private async Task GenerateAsync(string? instruction)
+    {
+        _error = null;
+        _generating = true;
+        _instruction = "";
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var result = await Generation.GenerateAsync(ProposalId, ArtifactType.Structure, user.Id, instruction, null);
+            var items = Saga.Infrastructure.Ai.ModelJson.ParseArray<StructureItem>(result.Text)
+                .Where(i => !string.IsNullOrWhiteSpace(i.Title)).ToList();
+            if (items.Count == 0)
+                throw new InvalidOperationException("The model did not return a usable structure. Try again.");
+
+            if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)
+            {
+                await Generation.ApplyAsync(ProposalId, ArtifactType.Structure, user.Id, null,
+                    new StructurePayload { Items = items }.ToJson());
+                await LoadAsync();
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                _pendingItems = items;
+                _pendingRunId = result.RunId;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _generating = false;
+        }
+    }
+
+    private async Task AcceptAsync()
+    {
+        if (_pendingItems is null) return;
+        _busy = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Generation.ApplyAsync(ProposalId, ArtifactType.Structure, user.Id, null,
+                new StructurePayload { Items = _pendingItems }.ToJson());
+            _pendingItems = null;
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        await Generation.MarkRejectedAsync(_pendingRunId);
+        _pendingItems = null;
+    }
+
+    private void AddRow()
+    {
+        _items.Add(new StructureItem());
+        MarkDirty();
+    }
+
+    private void MarkDirty() => _dirty = true;
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var payload = new StructurePayload { Items = _items.Where(i => !string.IsNullOrWhiteSpace(i.Title)).ToList() };
+            await Artifacts.SaveEditAsync(ProposalId, ArtifactType.Structure, user.Id, null, payload.ToJson(),
+                _artifact!.RowVersion);
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Saga.Core.Models.ConcurrencyConflictException)
+        {
+            _error = "Someone else changed the structure while you were editing. Reload the page to see their version.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ToggleLockAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        await Artifacts.SetLockedAsync(ProposalId, ArtifactType.Structure, user.Id, !_artifact!.IsLocked);
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+}

@@ -12,7 +12,7 @@ public class ArtifactLifecycleTests(LocalDbFixture db) : IClassFixture<LocalDbFi
     private readonly UserService _users = new(db);
     private readonly ArtifactService _artifacts = new(db);
     private readonly GenerationService _generation = new(db, new FakeAiService(),
-        new ConfigurationBuilder().Build());
+        new Saga.Core.Abstractions.NullWebResearchService(), new ConfigurationBuilder().Build());
 
     private async Task<(Guid ElvId, Guid SdaId, Guid ProposalId)> SetupWithMaterialAsync()
     {

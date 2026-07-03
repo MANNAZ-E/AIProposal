@@ -1,0 +1,140 @@
+@using Saga.Core.Models
+
+<div class="req-table-wrap">
+    <table class="table req-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th style="min-width: 160px;">@(IsPowerPoint ? "Slide title" : "Chapter heading")</th>
+                <th style="min-width: 160px;">Purpose</th>
+                <th style="min-width: 160px;">@(IsPowerPoint ? "Key message" : "Central points")</th>
+                <th>Length</th>
+                @if (IsPowerPoint)
+                {
+                    <th style="min-width: 120px;">Visual</th>
+                }
+                <th style="min-width: 130px;">Addresses</th>
+                @if (CanEdit)
+                {
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var index = i;
+                var item = Items[index];
+                <tr>
+                    <td class="text-muted">@(index + 1)</td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.Title"
+                                      @onchange='e => Set(() => item.Title = (string?)e.Value ?? "")'></textarea>
+                        }
+                        else
+                        {
+                            <strong>@item.Title</strong>
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.Purpose"
+                                      @onchange="e => Set(() => item.Purpose = (string?)e.Value)"></textarea>
+                        }
+                        else
+                        {
+                            @item.Purpose
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.KeyMessage"
+                                      @onchange="e => Set(() => item.KeyMessage = (string?)e.Value)"></textarea>
+                        }
+                        else
+                        {
+                            @item.KeyMessage
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <input type="text" class="req-input" style="min-width: 70px;" value="@item.EstimatedLength"
+                                   @onchange="e => Set(() => item.EstimatedLength = (string?)e.Value)" />
+                        }
+                        else
+                        {
+                            @item.EstimatedLength
+                        }
+                    </td>
+                    @if (IsPowerPoint)
+                    {
+                        <td>
+                            @if (CanEdit)
+                            {
+                                <input type="text" class="req-input" value="@item.VisualSuggestion"
+                                       @onchange="e => Set(() => item.VisualSuggestion = (string?)e.Value)" />
+                            }
+                            else
+                            {
+                                @item.VisualSuggestion
+                            }
+                        </td>
+                    }
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.Addresses"
+                                      @onchange="e => Set(() => item.Addresses = (string?)e.Value)"></textarea>
+                        }
+                        else
+                        {
+                            @item.Addresses
+                        }
+                    </td>
+                    @if (CanEdit)
+                    {
+                        <td style="white-space: nowrap;">
+                            <button class="btn btn-outline btn-sm" title="Move up" disabled="@(index == 0)"
+                                    @onclick="() => Move(index, -1)">↑</button>
+                            <button class="btn btn-outline btn-sm" title="Move down" disabled="@(index == Items.Count - 1)"
+                                    @onclick="() => Move(index, 1)">↓</button>
+                            <button class="btn btn-outline btn-sm" title="Remove" @onclick="() => Remove(item)">✕</button>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required List<StructureItem> Items { get; set; }
+    [Parameter] public bool IsPowerPoint { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private void Set(Action apply)
+    {
+        apply();
+        _ = OnChanged.InvokeAsync();
+    }
+
+    private void Move(int index, int delta)
+    {
+        var target = index + delta;
+        if (target < 0 || target >= Items.Count) return;
+        (Items[index], Items[target]) = (Items[target], Items[index]);
+        _ = OnChanged.InvokeAsync();
+    }
+
+    private void Remove(StructureItem item)
+    {
+        Items.Remove(item);
+        _ = OnChanged.InvokeAsync();
+    }
+}
