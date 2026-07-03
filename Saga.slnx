@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Saga.Core/Saga.Core.csproj" />
+    <Project Path="src/Saga.Infrastructure/Saga.Infrastructure.csproj" />
+    <Project Path="src/Saga.Web/Saga.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Saga.Tests/Saga.Tests.csproj" />
+  </Folder>
+</Solution>

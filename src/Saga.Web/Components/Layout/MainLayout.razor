@@ -1,0 +1,24 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="app-bar">
+        <a class="app-brand" href="/">
+            <span class="app-logo">Saga</span>
+            <span class="app-subtitle">Mannaz Proposal Assistant</span>
+        </a>
+        <div class="app-user">
+            <AuthorizeView>
+                <Authorized>@context.User.Identity?.Name</Authorized>
+            </AuthorizeView>
+        </div>
+    </header>
+    <main class="app-main">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

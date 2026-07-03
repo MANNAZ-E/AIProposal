@@ -1,0 +1,66 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Saga.Infrastructure.Data;
+using Saga.Infrastructure.Services;
+using Saga.Web.Auth;
+using Saga.Web.Components;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+
+builder.Services.AddDbContextFactory<SagaDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Saga")));
+
+if (builder.Configuration.GetValue<bool>("Auth:DevAutoSignIn"))
+{
+    builder.Services.AddAuthentication(DevAuthHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>(DevAuthHandler.SchemeName, _ => { });
+}
+else
+{
+    // Entra ID (Microsoft.Identity.Web) is wired up in the deployment milestone.
+    throw new InvalidOperationException(
+        "Entra ID sign-in is not configured yet. Set Auth:DevAutoSignIn=true for development.");
+}
+
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = options.DefaultPolicy;
+});
+builder.Services.AddCascadingAuthenticationState();
+
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ProposalService>();
+builder.Services.AddScoped<CurrentUserService>();
+
+var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseHsts();
+}
+app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseAntiforgery();
+
+app.MapStaticAssets();
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+
+// Apply pending migrations automatically in development.
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SagaDbContext>>();
+    await using var db = await dbFactory.CreateDbContextAsync();
+    await db.Database.MigrateAsync();
+}
+
+app.Run();

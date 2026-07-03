@@ -1,0 +1,91 @@
+@page "/proposals/new"
+@inject ProposalService Proposals
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Saga — New proposal</PageTitle>
+
+<h1>New proposal</h1>
+
+<div class="card" style="max-width: 640px;">
+    <EditForm Model="_model" OnValidSubmit="CreateAsync">
+        <DataAnnotationsValidator />
+
+        <div class="form-field">
+            <label for="title">Proposal title</label>
+            <InputText id="title" @bind-Value="_model.Title" />
+            <ValidationMessage For="() => _model.Title" />
+        </div>
+
+        <div class="form-field">
+            <label for="client">Client name</label>
+            <InputText id="client" @bind-Value="_model.ClientName" />
+            <ValidationMessage For="() => _model.ClientName" />
+        </div>
+
+        <div class="form-field">
+            <label for="description">Short description (optional)</label>
+            <InputTextArea id="description" @bind-Value="_model.Description" rows="3" />
+        </div>
+
+        <div class="form-field">
+            <label>Output format</label>
+            <div class="radio-row">
+                <InputRadioGroup @bind-Value="_model.OutputFormat">
+                    <label><InputRadio Value="OutputFormat.PowerPoint" /> PowerPoint</label>
+                    <label><InputRadio Value="OutputFormat.Word" /> Word</label>
+                </InputRadioGroup>
+            </div>
+            <div class="form-hint">
+                The format shapes the structure AI will recommend: slides, storyline and visual flow for
+                PowerPoint — chapters, argumentation and written narrative for Word.
+            </div>
+        </div>
+
+        @if (_error is not null)
+        {
+            <p class="error-text">@_error</p>
+        }
+
+        <div class="modal-actions" style="justify-content: flex-start;">
+            <button class="btn btn-primary" type="submit" disabled="@_saving">Create proposal</button>
+            <a class="btn btn-outline" href="/">Cancel</a>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private readonly FormModel _model = new();
+    private bool _saving;
+    private string? _error;
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var id = await Proposals.CreateAsync(user.Id, _model.Title, _model.ClientName, _model.Description, _model.OutputFormat);
+            Nav.NavigateTo($"/proposals/{id}");
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _saving = false;
+        }
+    }
+
+    private class FormModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A title is required.")]
+        public string Title { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A client name is required.")]
+        public string ClientName { get; set; } = "";
+
+        public string? Description { get; set; }
+        public OutputFormat OutputFormat { get; set; } = OutputFormat.PowerPoint;
+    }
+}

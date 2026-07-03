@@ -1,0 +1,39 @@
+<table class="table">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Client</th>
+            <th>Owner</th>
+            <th>Your role</th>
+            <th></th>
+            <th>Last updated</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Items)
+        {
+            <tr class="row-link" @onclick="() => OnOpen.InvokeAsync(item.Id)">
+                <td><strong>@item.Title</strong></td>
+                <td>@item.ClientName</td>
+                <td>@item.OwnerName</td>
+                <td><span class="badge badge-role">@item.MyRole</span></td>
+                <td>
+                    @if (item.IsOwnedByMe)
+                    {
+                        <span class="badge badge-owner">Owner</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-shared">Shared with you</span>
+                    }
+                </td>
+                <td class="text-muted">@item.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public required List<ProposalListItem> Items { get; set; }
+    [Parameter] public EventCallback<Guid> OnOpen { get; set; }
+}

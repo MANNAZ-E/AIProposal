@@ -1,0 +1,54 @@
+using Microsoft.EntityFrameworkCore;
+using Saga.Core.Domain;
+using Saga.Infrastructure.Data;
+
+namespace Saga.Infrastructure.Services;
+
+public class UserService(IDbContextFactory<SagaDbContext> dbFactory)
+{
+    /// <summary>
+    /// Resolves the local user for a signed-in principal, creating or updating the row on first sight.
+    /// Matches by Entra object id first, then by email (covers pre-seeded users signing in for the first time).
+    /// </summary>
+    public async Task<User> GetOrCreateAsync(string email, string displayName, string? entraObjectId,
+        CancellationToken ct = default)
+    {
+        email = email.Trim().ToLowerInvariant();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        User? user = null;
+        if (entraObjectId is not null)
+            user = await db.Users.FirstOrDefaultAsync(u => u.EntraObjectId == entraObjectId, ct);
+        user ??= await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+
+        if (user is null)
+        {
+            user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                DisplayName = displayName,
+                EntraObjectId = entraObjectId,
+                CreatedAt = DateTimeOffset.UtcNow,
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync(ct);
+            return user;
+        }
+
+        if (user.EntraObjectId != entraObjectId && entraObjectId is not null
+            || !string.IsNullOrWhiteSpace(displayName) && user.DisplayName != displayName)
+        {
+            user.EntraObjectId ??= entraObjectId;
+            if (!string.IsNullOrWhiteSpace(displayName)) user.DisplayName = displayName;
+            await db.SaveChangesAsync(ct);
+        }
+        return user;
+    }
+
+    public async Task<User?> FindByEmailAsync(string email, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Users.FirstOrDefaultAsync(u => u.Email == email.Trim().ToLowerInvariant(), ct);
+    }
+}

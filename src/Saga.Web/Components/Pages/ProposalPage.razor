@@ -1,0 +1,207 @@
+@page "/proposals/{ProposalId:guid}"
+@inject ProposalService Proposals
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Saga — @(_proposal?.Title ?? "Proposal")</PageTitle>
+
+@if (_notFound)
+{
+    <div class="empty-state">
+        <p>This proposal does not exist, or you do not have access to it.</p>
+        <a class="btn btn-outline" href="/">Back to proposals</a>
+    </div>
+}
+else if (_proposal is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1 style="margin: 0 0 0.2rem;">@_proposal.Title</h1>
+            <span class="text-muted">@_proposal.ClientName · @_proposal.OutputFormat</span>
+            @if (_proposal.IsArchived)
+            {
+                <span class="badge badge-shared" style="margin-left: 0.5rem;">Archived</span>
+            }
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            @if (_myRole == ProposalRole.Owner)
+            {
+                <button class="btn btn-outline" @onclick="() => _showShare = true">Share</button>
+                @if (_proposal.IsArchived)
+                {
+                    <button class="btn btn-outline" @onclick="() => SetArchivedAsync(false)">Unarchive</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline" @onclick="() => SetArchivedAsync(true)">Archive</button>
+                }
+                <button class="btn btn-danger" @onclick="() => _showDelete = true">Delete</button>
+            }
+        </div>
+    </div>
+
+    @if (_proposal.Description is not null)
+    {
+        <p class="text-muted">@_proposal.Description</p>
+    }
+
+    <div class="card">
+        <h2>Workspace</h2>
+        <p class="text-muted">
+            Material, generation, artifacts, chat, review and export are built in the upcoming milestones.
+        </p>
+    </div>
+
+    <div class="section-title">People</div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                @if (_myRole == ProposalRole.Owner)
+                {
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var member in _proposal.Members.OrderByDescending(m => m.Role))
+            {
+                <tr>
+                    <td>@member.User?.DisplayName</td>
+                    <td>@member.User?.Email</td>
+                    <td><span class="badge badge-role">@member.Role</span></td>
+                    @if (_myRole == ProposalRole.Owner)
+                    {
+                        <td style="text-align: right;">
+                            @if (member.Role != ProposalRole.Owner)
+                            {
+                                <button class="btn btn-outline btn-sm" @onclick="() => RemoveMemberAsync(member.UserId)">Remove</button>
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_showShare)
+    {
+        <div class="modal-backdrop" @onclick="() => _showShare = false">
+            <div class="modal-panel" @onclick:stopPropagation>
+                <h2 class="modal-title">Share proposal</h2>
+                <div class="form-field">
+                    <label for="share-email">Mannaz user email</label>
+                    <input id="share-email" type="email" @bind="_shareEmail" placeholder="name@mannaz.com" />
+                </div>
+                <div class="form-field">
+                    <label for="share-role">Role</label>
+                    <select id="share-role" @bind="_shareRole">
+                        <option value="@ProposalRole.Editor">Editor — can edit, generate and export</option>
+                        <option value="@ProposalRole.Reader">Reader — can view, chat and export</option>
+                    </select>
+                </div>
+                @if (_shareError is not null)
+                {
+                    <p class="error-text">@_shareError</p>
+                }
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="() => _showShare = false">Cancel</button>
+                    <button class="btn btn-primary" @onclick="ShareAsync" disabled="@_busy">Share</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_showDelete)
+    {
+        <div class="modal-backdrop" @onclick="() => _showDelete = false">
+            <div class="modal-panel" @onclick:stopPropagation>
+                <h2 class="modal-title">Delete proposal</h2>
+                <p>Delete <strong>@_proposal.Title</strong> permanently, including all material and artifacts? This cannot be undone.</p>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="() => _showDelete = false">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@_busy">Delete permanently</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public Guid ProposalId { get; set; }
+
+    private Proposal? _proposal;
+    private ProposalRole _myRole;
+    private bool _notFound;
+    private bool _showShare;
+    private bool _showDelete;
+    private bool _busy;
+    private string _shareEmail = "";
+    private ProposalRole _shareRole = ProposalRole.Editor;
+    private string? _shareError;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        var result = await Proposals.GetForUserAsync(ProposalId, user.Id);
+        if (result is null)
+        {
+            _notFound = true;
+            return;
+        }
+        (_proposal, _myRole) = result.Value;
+    }
+
+    private async Task ShareAsync()
+    {
+        _busy = true;
+        _shareError = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Proposals.ShareAsync(ProposalId, user.Id, _shareEmail, _shareRole);
+            _showShare = false;
+            _shareEmail = "";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _shareError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveMemberAsync(Guid memberUserId)
+    {
+        var user = await CurrentUser.GetAsync();
+        await Proposals.RemoveMemberAsync(ProposalId, user.Id, memberUserId);
+        await LoadAsync();
+    }
+
+    private async Task SetArchivedAsync(bool archived)
+    {
+        var user = await CurrentUser.GetAsync();
+        await Proposals.SetArchivedAsync(ProposalId, user.Id, archived);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync()
+    {
+        _busy = true;
+        var user = await CurrentUser.GetAsync();
+        await Proposals.DeleteAsync(ProposalId, user.Id);
+        Nav.NavigateTo("/");
+    }
+}

@@ -1,0 +1,393 @@
+:root {
+    --saga-primary: #5A616D;
+    --saga-primary-dark: #464c56;
+    --saga-primary-light: #eceef1;
+    --saga-text: #24272c;
+    --saga-muted: #6c7280;
+    --saga-border: #d9dce1;
+    --saga-danger: #b32121;
+    --saga-warning: #9a6b00;
+    --saga-bg: #f6f7f8;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--saga-text);
+    background: var(--saga-bg);
+    font-size: 15px;
+}
+
+h1:focus {
+    outline: none;
+}
+
+h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+a {
+    color: var(--saga-primary-dark);
+}
+
+/* ---------- App shell ---------- */
+
+.app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-bar {
+    background: var(--saga-primary);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    height: 56px;
+    flex-shrink: 0;
+}
+
+.app-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    color: #fff;
+    text-decoration: none;
+}
+
+.app-logo {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.app-subtitle {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.app-user {
+    font-size: 0.9rem;
+    opacity: 0.95;
+}
+
+.app-main {
+    flex: 1;
+    padding: 1.5rem;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+.auth-message {
+    padding: 2rem;
+    text-align: center;
+    color: var(--saga-muted);
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 0.45rem 1rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    background: transparent;
+    color: var(--saga-text);
+}
+
+.btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.btn-primary {
+    background: var(--saga-primary);
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--saga-primary-dark);
+}
+
+.btn-outline {
+    border-color: var(--saga-border);
+    background: #fff;
+}
+
+.btn-outline:hover:not(:disabled) {
+    border-color: var(--saga-primary);
+}
+
+.btn-danger {
+    background: #fff;
+    border-color: var(--saga-danger);
+    color: var(--saga-danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--saga-danger);
+    color: #fff;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+/* ---------- Cards, tables ---------- */
+
+.card {
+    background: #fff;
+    border: 1px solid var(--saga-border);
+    border-radius: 8px;
+    padding: 1.25rem;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid var(--saga-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.table th {
+    text-align: left;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--saga-muted);
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--saga-border);
+    background: var(--saga-primary-light);
+}
+
+.table td {
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--saga-border);
+    vertical-align: middle;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.table tbody tr.row-link {
+    cursor: pointer;
+}
+
+.table tbody tr.row-link:hover {
+    background: var(--saga-primary-light);
+}
+
+/* ---------- Badges ---------- */
+
+.badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.badge-owner {
+    background: var(--saga-primary);
+    color: #fff;
+}
+
+.badge-shared {
+    background: var(--saga-primary-light);
+    color: var(--saga-primary-dark);
+}
+
+.badge-role {
+    background: #fff;
+    border: 1px solid var(--saga-border);
+    color: var(--saga-muted);
+}
+
+/* ---------- Forms ---------- */
+
+.form-field {
+    margin-bottom: 1rem;
+}
+
+.form-field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.form-field input[type="text"],
+.form-field input[type="email"],
+.form-field textarea,
+.form-field select {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--saga-border);
+    border-radius: 6px;
+    font: inherit;
+    background: #fff;
+}
+
+.form-field input:focus,
+.form-field textarea:focus,
+.form-field select:focus {
+    outline: 2px solid var(--saga-primary);
+    outline-offset: -1px;
+}
+
+.form-hint {
+    font-size: 0.8rem;
+    color: var(--saga-muted);
+    margin-top: 0.25rem;
+}
+
+.radio-row {
+    display: flex;
+    gap: 1.25rem;
+}
+
+.radio-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid #e50000;
+}
+
+.validation-message {
+    color: #e50000;
+    font-size: 0.85rem;
+}
+
+/* ---------- Page headers & sections ---------- */
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.section-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--saga-muted);
+    margin: 2rem 0 0.75rem;
+}
+
+.empty-state {
+    padding: 2.5rem;
+    text-align: center;
+    color: var(--saga-muted);
+    background: #fff;
+    border: 1px dashed var(--saga-border);
+    border-radius: 8px;
+}
+
+.text-muted {
+    color: var(--saga-muted);
+}
+
+.error-text {
+    color: var(--saga-danger);
+    font-size: 0.9rem;
+}
+
+/* ---------- Modal ---------- */
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 39, 44, 0.45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 10vh;
+    z-index: 100;
+}
+
+.modal-panel {
+    background: #fff;
+    border-radius: 10px;
+    width: min(560px, 92vw);
+    padding: 1.5rem;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.modal-title {
+    margin: 0 0 1rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+}
+
+/* ---------- Blazor defaults ---------- */
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem;
+    color: white;
+    border-radius: 6px;
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred.";
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
