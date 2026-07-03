@@ -81,6 +81,20 @@ a {
 .app-user {
     font-size: 0.9rem;
     opacity: 0.95;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+}
+
+.app-nav-link {
+    color: #fff;
+    text-decoration: none;
+    opacity: 0.85;
+}
+
+.app-nav-link:hover {
+    opacity: 1;
+    text-decoration: underline;
 }
 
 .app-main {

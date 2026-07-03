@@ -1,5 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
@@ -27,9 +30,11 @@ if (builder.Configuration.GetValue<bool>("Auth:DevAutoSignIn"))
 }
 else
 {
-    // Entra ID (Microsoft.Identity.Web) is wired up in the deployment milestone.
-    throw new InvalidOperationException(
-        "Entra ID sign-in is not configured yet. Set Auth:DevAutoSignIn=true for development.");
+    // Entra ID sign-in against the Mannaz tenant (config section "AzureAd": TenantId restricts
+    // the issuer, so only Mannaz accounts can sign in). First sign-in upserts the local user.
+    builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+        .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+    builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
 }
 
 builder.Services.AddAuthorization(options =>
@@ -49,6 +54,7 @@ builder.Services.AddScoped<WorkingContextService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<ReviewService>();
 builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
 
@@ -63,8 +69,11 @@ builder.Services.AddSingleton<IAiService>(sp =>
         : new AzureOpenAiService(config);
 });
 
-// Azure Blob storage replaces this in production (deployment milestone).
-builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+// Azure Blob (Managed Identity) when configured; local disk otherwise (dev).
+if (!string.IsNullOrEmpty(builder.Configuration["Storage:BlobServiceUri"]))
+    builder.Services.AddSingleton<IFileStorage, AzureBlobFileStorage>();
+else
+    builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 
 builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
 {
@@ -92,6 +101,8 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+if (!app.Configuration.GetValue<bool>("Auth:DevAutoSignIn"))
+    app.MapControllers(); // MicrosoftIdentity/Account sign-in and sign-out endpoints.
 
 // File download endpoint: Blazor Server cannot stream files itself, so exports go over HTTP
 // using the same auth cookie/scheme and the same per-proposal role checks.

@@ -75,8 +75,8 @@ public class ExportTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         Assert.Equal(1 + structure.Items.Count, slideCount); // title + one per entry
 
         // Slide text contains the titles and body lines.
-        var allText = string.Join(" ", pptx.PresentationPart.SlideParts
-            .Select(s => s.Slide.InnerText));
+        var allText = string.Join(" ", pptx.PresentationPart!.SlideParts
+            .Select(s => s.Slide!.InnerText));
         Assert.Contains("Leadership Development Program", allText);
         Assert.Contains("Understanding your situation", allText);
         Assert.Contains("120 managers across three units", allText); // markdown markers stripped
@@ -93,7 +93,7 @@ public class ExportTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         using var docx = WordprocessingDocument.Open(stream, false);
         AssertNoValidationErrors(new OpenXmlValidator().Validate(docx));
 
-        var text = docx.MainDocumentPart!.Document.InnerText;
+        var text = docx.MainDocumentPart!.Document!.InnerText;
         Assert.Contains("Leadership Development Program", text);
         Assert.Contains("ACME A/S", text);
         Assert.Contains("Our proposed approach", text);

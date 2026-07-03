@@ -7,6 +7,7 @@
             <span class="app-subtitle">Mannaz Proposal Assistant</span>
         </a>
         <div class="app-user">
+            <a class="app-nav-link" href="/admin">Admin</a>
             <AuthorizeView>
                 <Authorized>@context.User.Identity?.Name</Authorized>
             </AuthorizeView>

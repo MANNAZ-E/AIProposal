@@ -1,0 +1,121 @@
+@page "/admin"
+@inject AdminService Admin
+@rendermode InteractiveServer
+
+<PageTitle>Saga — Admin</PageTitle>
+
+<h1>Admin</h1>
+
+<div class="section-title" style="margin-top: 1rem;">Mannaz voice</div>
+<p class="text-muted" style="margin-top: 0;">
+    These settings are injected into every generation prompt so output sounds like Mannaz.
+    Leave a field empty to fall back to the default professional consulting tone.
+</p>
+
+<div class="card" style="max-width: 760px;">
+    <div class="form-field">
+        <label for="voice-tone">Tone of voice</label>
+        <textarea id="voice-tone" rows="4" @bind="_tone"
+                  placeholder="e.g. Confident but not salesy. Concrete and specific. Short sentences. No filler, no hype."></textarea>
+    </div>
+    <div class="form-field">
+        <label for="voice-about">About Mannaz (boilerplate the AI may draw on)</label>
+        <textarea id="voice-about" rows="5" @bind="_about"
+                  placeholder="Who Mannaz is, history, size, signature strengths, typical clients…"></textarea>
+    </div>
+    <div class="form-field">
+        <label for="voice-terms">Terminology and methods</label>
+        <textarea id="voice-terms" rows="4" @bind="_terminology"
+                  placeholder="Preferred terms and method names — and words to avoid."></textarea>
+    </div>
+    <div class="modal-actions" style="justify-content: flex-start;">
+        <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save voice settings</button>
+        @if (_saved)
+        {
+            <span class="badge badge-ok">Saved</span>
+        }
+    </div>
+</div>
+
+<div class="section-title">Usage</div>
+<p class="text-muted" style="margin-top: 0;">
+    AI spend per proposal, across generations, reviews and chat. Costs are estimates from the
+    configured token prices@(_usage.Sum(u => u.EstimatedCost) == 0 ? " (prices not configured yet, so costs show as zero)" : "").
+</p>
+
+@if (_usage.Count == 0)
+{
+    <div class="empty-state"><p>No AI runs recorded yet.</p></div>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Proposal</th>
+                <th>Client</th>
+                <th style="text-align: right;">Runs</th>
+                <th style="text-align: right;">Prompt tokens</th>
+                <th style="text-align: right;">Completion tokens</th>
+                <th style="text-align: right;">Est. cost</th>
+                <th>Last activity</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _usage)
+            {
+                <tr>
+                    <td><a href="/proposals/@row.ProposalId">@row.Title</a></td>
+                    <td>@row.ClientName</td>
+                    <td style="text-align: right;">@row.Runs</td>
+                    <td style="text-align: right;">@row.PromptTokens.ToString("N0")</td>
+                    <td style="text-align: right;">@row.CompletionTokens.ToString("N0")</td>
+                    <td style="text-align: right;">@row.EstimatedCost.ToString("N4")</td>
+                    <td>@row.LastRunAt?.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot>
+            <tr>
+                <th>Total</th>
+                <th></th>
+                <th style="text-align: right;">@_usage.Sum(u => u.Runs)</th>
+                <th style="text-align: right;">@_usage.Sum(u => u.PromptTokens).ToString("N0")</th>
+                <th style="text-align: right;">@_usage.Sum(u => u.CompletionTokens).ToString("N0")</th>
+                <th style="text-align: right;">@_usage.Sum(u => u.EstimatedCost).ToString("N4")</th>
+                <th></th>
+            </tr>
+        </tfoot>
+    </table>
+}
+
+@code {
+    private string _tone = "";
+    private string _about = "";
+    private string _terminology = "";
+    private bool _saving;
+    private bool _saved;
+    private List<ProposalUsage> _usage = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var voice = await Admin.GetVoiceAsync();
+        (_tone, _about, _terminology) = (voice.ToneOfVoice, voice.AboutMannaz, voice.Terminology);
+        _usage = await Admin.GetUsageAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saved = false;
+        try
+        {
+            await Admin.SaveVoiceAsync(_tone, _about, _terminology);
+            _saved = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
