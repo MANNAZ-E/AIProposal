@@ -1,0 +1,285 @@
+@inject DocumentService Documents
+@inject CurrentUserService CurrentUser
+
+<h2>Material</h2>
+<p class="text-muted">
+    Upload the client's documents and add your own notes. Everything here becomes the source
+    material AI works from.
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+<div class="section-title" style="margin-top: 1rem;">Client documents</div>
+
+@if (CanEdit)
+{
+    <label class="upload-area">
+        <InputFile OnChange="UploadAsync" multiple disabled="@_uploading" />
+        @if (_uploading)
+        {
+            <span>Uploading and extracting text…</span>
+        }
+        else
+        {
+            <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, text</span>
+        }
+    </label>
+}
+
+@if (_documents is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else
+{
+    var uploads = _documents.Where(d => d.Kind == DocumentKind.Upload).ToList();
+    var notes = _documents.Where(d => d.Kind == DocumentKind.Note).ToList();
+
+    @if (uploads.Count == 0)
+    {
+        <p class="text-muted">No client documents uploaded yet.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Document</th>
+                    <th>Extracted</th>
+                    <th>Uploaded</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var doc in uploads)
+                {
+                    <tr>
+                        <td><strong>@doc.Name</strong></td>
+                        <td class="text-muted">@FormatLength(doc.ExtractedText)</td>
+                        <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                        <td style="text-align: right; white-space: nowrap;">
+                            <button class="btn btn-outline btn-sm" @onclick="() => _previewDocument = doc">View text</button>
+                            @if (CanEdit)
+                            {
+                                <button class="btn btn-outline btn-sm" @onclick="() => _deleteDocument = doc">Delete</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="section-title">Notes</div>
+
+    @if (CanEdit)
+    {
+        <button class="btn btn-outline" @onclick="NewNote">+ Add note</button>
+    }
+
+    @if (notes.Count == 0)
+    {
+        <p class="text-muted" style="margin-top: 0.75rem;">No notes yet. Notes are treated as source material alongside client documents.</p>
+    }
+    else
+    {
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem;">
+            @foreach (var note in notes)
+            {
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                        <strong>@note.Name</strong>
+                        <span style="white-space: nowrap;">
+                            @if (CanEdit)
+                            {
+                                <button class="btn btn-outline btn-sm" @onclick="() => EditNote(note)">Edit</button>
+                                <button class="btn btn-outline btn-sm" @onclick="() => _deleteDocument = note">Delete</button>
+                            }
+                        </span>
+                    </div>
+                    <p style="white-space: pre-wrap; margin-bottom: 0;">@Truncate(note.ExtractedText, 400)</p>
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (_previewDocument is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _previewDocument = null">
+        <div class="modal-panel modal-wide" @onclick:stopPropagation>
+            <h2 class="modal-title">@_previewDocument.Name</h2>
+            <div class="preview-text">@_previewDocument.ExtractedText</div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _previewDocument = null">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_noteEditorOpen)
+{
+    <div class="modal-backdrop" @onclick="CloseNoteEditor">
+        <div class="modal-panel modal-wide" @onclick:stopPropagation>
+            <h2 class="modal-title">@(_editingNoteId is null ? "New note" : "Edit note")</h2>
+            <div class="form-field">
+                <label for="note-title">Title</label>
+                <input id="note-title" type="text" @bind="_noteTitle" />
+            </div>
+            <div class="form-field">
+                <label for="note-text">Note</label>
+                <textarea id="note-text" rows="10" @bind="_noteText"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="CloseNoteEditor">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveNoteAsync" disabled="@_busy">Save note</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteDocument is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteDocument = null">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Delete @(_deleteDocument.Kind == DocumentKind.Note ? "note" : "document")</h2>
+            <p>
+                Delete <strong>@_deleteDocument.Name</strong>? Artifacts generated from this material
+                will be marked as needing regeneration.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _deleteDocument = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteDocumentAsync" disabled="@_busy">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+
+    private const long MaxFileSize = 100 * 1024 * 1024;
+
+    private List<Document>? _documents;
+    private Document? _previewDocument;
+    private Document? _deleteDocument;
+    private bool _uploading;
+    private bool _busy;
+    private string? _error;
+
+    private bool _noteEditorOpen;
+    private Guid? _editingNoteId;
+    private string _noteTitle = "";
+    private string _noteText = "";
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _documents = await Documents.GetForProposalAsync(ProposalId, user.Id);
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        _uploading = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            foreach (var file in e.GetMultipleFiles())
+            {
+                await using var stream = file.OpenReadStream(MaxFileSize);
+                await Documents.UploadAsync(ProposalId, user.Id, file.Name, stream);
+            }
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void NewNote()
+    {
+        _editingNoteId = null;
+        _noteTitle = "";
+        _noteText = "";
+        _noteEditorOpen = true;
+    }
+
+    private void EditNote(Document note)
+    {
+        _editingNoteId = note.Id;
+        _noteTitle = note.Name;
+        _noteText = note.ExtractedText;
+        _noteEditorOpen = true;
+    }
+
+    private void CloseNoteEditor() => _noteEditorOpen = false;
+
+    private async Task SaveNoteAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            if (_editingNoteId is null)
+                await Documents.AddNoteAsync(ProposalId, user.Id, _noteTitle, _noteText);
+            else
+                await Documents.UpdateNoteAsync(_editingNoteId.Value, user.Id, _noteTitle, _noteText);
+            _noteEditorOpen = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteDocumentAsync()
+    {
+        if (_deleteDocument is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.DeleteAsync(_deleteDocument.Id, user.Id);
+            _deleteDocument = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string FormatLength(string text)
+        => text.Length switch
+        {
+            0 => "no text",
+            < 2000 => $"{text.Length} characters",
+            _ => $"~{text.Length / 1000}k characters",
+        };
+
+    private static string Truncate(string text, int max)
+        => text.Length <= max ? text : text[..max] + "…";
+}

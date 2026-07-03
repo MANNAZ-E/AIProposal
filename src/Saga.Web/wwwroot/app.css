@@ -358,6 +358,111 @@ a {
     margin-top: 1.25rem;
 }
 
+/* ---------- Workspace ---------- */
+
+.workspace {
+    display: grid;
+    grid-template-columns: 210px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.workspace-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: #fff;
+    border: 1px solid var(--saga-border);
+    border-radius: 8px;
+    padding: 0.5rem;
+    position: sticky;
+    top: 1rem;
+}
+
+.nav-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0.45rem 0.7rem;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 0.92rem;
+    cursor: pointer;
+    color: var(--saga-text);
+}
+
+.nav-item:hover:not(:disabled) {
+    background: var(--saga-primary-light);
+}
+
+.nav-item.active {
+    background: var(--saga-primary);
+    color: #fff;
+    font-weight: 600;
+}
+
+.nav-item:disabled {
+    color: var(--saga-muted);
+    opacity: 0.55;
+    cursor: default;
+}
+
+.nav-group {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--saga-muted);
+    padding: 0.7rem 0.7rem 0.2rem;
+}
+
+.workspace-content {
+    min-width: 0;
+}
+
+/* ---------- Material ---------- */
+
+.upload-area {
+    display: block;
+    border: 2px dashed var(--saga-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--saga-muted);
+    cursor: pointer;
+    background: #fff;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.upload-area:hover {
+    border-color: var(--saga-primary);
+}
+
+.upload-area input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+}
+
+.modal-wide {
+    width: min(820px, 94vw);
+}
+
+.preview-text {
+    white-space: pre-wrap;
+    max-height: 55vh;
+    overflow-y: auto;
+    border: 1px solid var(--saga-border);
+    border-radius: 6px;
+    padding: 0.9rem;
+    font-size: 0.88rem;
+    background: var(--saga-bg);
+}
+
 /* ---------- Blazor defaults ---------- */
 
 .blazor-error-boundary {

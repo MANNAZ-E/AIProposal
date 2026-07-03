@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Saga.Core.Abstractions;
 using Saga.Infrastructure.Data;
+using Saga.Infrastructure.Extraction;
 using Saga.Infrastructure.Services;
+using Saga.Infrastructure.Storage;
 using Saga.Web.Auth;
 using Saga.Web.Components;
 
@@ -35,6 +38,19 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProposalService>();
 builder.Services.AddScoped<CurrentUserService>();
+builder.Services.AddScoped<DocumentService>();
+
+// Azure Blob storage replaces this in production (deployment milestone).
+builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+
+builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var extractors = new List<IDocumentTextExtractor> { new PlainTextExtractor() };
+    if (!string.IsNullOrEmpty(config["DocumentIntelligence:Endpoint"]))
+        extractors.Add(new DocumentIntelligenceExtractor(config));
+    return new CompositeTextExtractor(extractors);
+});
 
 var app = builder.Build();
 

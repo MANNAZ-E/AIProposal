@@ -45,51 +45,70 @@ else
         </div>
     </div>
 
-    @if (_proposal.Description is not null)
-    {
-        <p class="text-muted">@_proposal.Description</p>
-    }
+    <div class="workspace">
+        <nav class="workspace-nav">
+            <button class="nav-item @(_section == Section.Material ? "active" : null)"
+                    @onclick="() => _section = Section.Material">Material</button>
+            <button class="nav-item" disabled title="Coming soon">Generate</button>
+            <div class="nav-group">Artifacts</div>
+            <button class="nav-item" disabled title="Coming soon">Client profile</button>
+            <button class="nav-item" disabled title="Coming soon">Summary</button>
+            <button class="nav-item" disabled title="Coming soon">Requirements</button>
+            <button class="nav-item" disabled title="Coming soon">Scoping</button>
+            <button class="nav-item" disabled title="Coming soon">Solution proposal</button>
+            <button class="nav-item" disabled title="Coming soon">Structure</button>
+            <button class="nav-item" disabled title="Coming soon">Content</button>
+            <button class="nav-item" disabled title="Coming soon">Review</button>
+            <div class="nav-group">Proposal</div>
+            <button class="nav-item" disabled title="Coming soon">Chat</button>
+            <button class="nav-item" disabled title="Coming soon">Export</button>
+            <button class="nav-item @(_section == Section.People ? "active" : null)"
+                    @onclick="() => _section = Section.People">People</button>
+        </nav>
 
-    <div class="card">
-        <h2>Workspace</h2>
-        <p class="text-muted">
-            Material, generation, artifacts, chat, review and export are built in the upcoming milestones.
-        </p>
-    </div>
-
-    <div class="section-title">People</div>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                @if (_myRole == ProposalRole.Owner)
-                {
-                    <th></th>
-                }
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var member in _proposal.Members.OrderByDescending(m => m.Role))
+        <div class="workspace-content">
+            @if (_section == Section.Material)
             {
-                <tr>
-                    <td>@member.User?.DisplayName</td>
-                    <td>@member.User?.Email</td>
-                    <td><span class="badge badge-role">@member.Role</span></td>
-                    @if (_myRole == ProposalRole.Owner)
-                    {
-                        <td style="text-align: right;">
-                            @if (member.Role != ProposalRole.Owner)
-                            {
-                                <button class="btn btn-outline btn-sm" @onclick="() => RemoveMemberAsync(member.UserId)">Remove</button>
-                            }
-                        </td>
-                    }
-                </tr>
+                <MaterialSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
             }
-        </tbody>
-    </table>
+            else if (_section == Section.People)
+            {
+                <h2>People</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            @if (_myRole == ProposalRole.Owner)
+                            {
+                                <th></th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var member in _proposal.Members.OrderByDescending(m => m.Role))
+                        {
+                            <tr>
+                                <td>@member.User?.DisplayName</td>
+                                <td>@member.User?.Email</td>
+                                <td><span class="badge badge-role">@member.Role</span></td>
+                                @if (_myRole == ProposalRole.Owner)
+                                {
+                                    <td style="text-align: right;">
+                                        @if (member.Role != ProposalRole.Owner)
+                                        {
+                                            <button class="btn btn-outline btn-sm" @onclick="() => RemoveMemberAsync(member.UserId)">Remove</button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
 
     @if (_showShare)
     {
@@ -137,8 +156,11 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
+    private enum Section { Material, People }
+
     private Proposal? _proposal;
     private ProposalRole _myRole;
+    private Section _section = Section.Material;
     private bool _notFound;
     private bool _showShare;
     private bool _showDelete;
