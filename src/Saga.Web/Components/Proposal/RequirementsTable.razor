@@ -1,0 +1,153 @@
+@using Saga.Core.Models
+
+<div class="req-table-wrap">
+    <table class="table req-table">
+        <thead>
+            <tr>
+                <th style="min-width: 220px;">Requirement</th>
+                <th>Source</th>
+                <th>Type</th>
+                <th style="min-width: 180px;">AI interpretation</th>
+                <th style="min-width: 180px;">How addressed</th>
+                <th>Status</th>
+                @if (CanEdit)
+                {
+                    <th></th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.Text"
+                                      @onchange='e => Set(() => item.Text = (string?)e.Value ?? "")'></textarea>
+                        }
+                        else
+                        {
+                            @item.Text
+                        }
+                        @if (item.UserAdded)
+                        {
+                            <span class="badge badge-shared" title="Added manually">manual</span>
+                        }
+                    </td>
+                    <td class="text-muted" style="white-space: nowrap;">
+                        @item.SourceDocument
+                        @if (item.SourceLocation is not null)
+                        {
+                            <br /><small>@item.SourceLocation</small>
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <select class="req-input" value="@item.Type"
+                                    @onchange="e => Set(() => item.Type = Enum.Parse<RequirementType>((string)e.Value!))">
+                                @foreach (var type in Enum.GetValues<RequirementType>())
+                                {
+                                    <option value="@type">@TypeLabel(type)</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <span class="badge badge-role">@TypeLabel(item.Type)</span>
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.Interpretation"
+                                      @onchange="e => Set(() => item.Interpretation = (string?)e.Value)"></textarea>
+                        }
+                        else
+                        {
+                            @item.Interpretation
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <textarea rows="2" class="req-input" value="@item.HowAddressed"
+                                      @onchange="e => Set(() => item.HowAddressed = (string?)e.Value)"></textarea>
+                        }
+                        else
+                        {
+                            @item.HowAddressed
+                        }
+                    </td>
+                    <td>
+                        @if (CanEdit)
+                        {
+                            <select class="req-input" value="@item.Status"
+                                    @onchange="e => Set(() => item.Status = Enum.Parse<RequirementStatus>((string)e.Value!))">
+                                @foreach (var status in Enum.GetValues<RequirementStatus>())
+                                {
+                                    <option value="@status">@StatusLabel(status)</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <span class="badge @StatusBadgeClass(item.Status)">@StatusLabel(item.Status)</span>
+                        }
+                    </td>
+                    @if (CanEdit)
+                    {
+                        <td>
+                            <button class="btn btn-outline btn-sm" title="Remove"
+                                    @onclick="() => Remove(item)">✕</button>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public required List<RequirementItem> Items { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private void Set(Action apply)
+    {
+        apply();
+        _ = OnChanged.InvokeAsync();
+    }
+
+    private void Remove(RequirementItem item)
+    {
+        Items.Remove(item);
+        _ = OnChanged.InvokeAsync();
+    }
+
+    internal static string TypeLabel(RequirementType type) => type switch
+    {
+        RequirementType.Mandatory => "Mandatory",
+        RequirementType.Criterion => "Evaluation criterion",
+        RequirementType.Wish => "Wish / preference",
+        RequirementType.Practical => "Practical",
+        RequirementType.Unclear => "Unclear",
+        _ => type.ToString(),
+    };
+
+    internal static string StatusLabel(RequirementStatus status) => status switch
+    {
+        RequirementStatus.NotAddressed => "Not addressed",
+        RequirementStatus.Partly => "Partly addressed",
+        RequirementStatus.Addressed => "Addressed",
+        _ => status.ToString(),
+    };
+
+    internal static string StatusBadgeClass(RequirementStatus status) => status switch
+    {
+        RequirementStatus.Addressed => "badge-ok",
+        RequirementStatus.Partly => "badge-stale",
+        _ => "badge-shared",
+    };
+}

@@ -542,6 +542,33 @@ a {
     min-height: 120px;
 }
 
+.badge-ok {
+    background: #ddf0e2;
+    color: #1e6b37;
+    border: 1px solid #b7ddc2;
+}
+
+.req-table-wrap {
+    overflow-x: auto;
+}
+
+.req-table td {
+    vertical-align: top;
+    font-size: 0.88rem;
+}
+
+.req-input {
+    width: 100%;
+    min-width: 130px;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid var(--saga-border);
+    border-radius: 5px;
+    font: inherit;
+    font-size: 0.85rem;
+    background: #fff;
+    resize: vertical;
+}
+
 .cursor-blink {
     animation: blink 1s step-end infinite;
     color: var(--saga-primary);

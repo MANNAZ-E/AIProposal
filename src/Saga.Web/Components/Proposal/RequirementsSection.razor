@@ -1,0 +1,224 @@
+@using Saga.Core.Models
+@inject ArtifactService Artifacts
+@inject GenerationService Generation
+@inject RequirementsExtractionService Extraction
+@inject CurrentUserService CurrentUser
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
+    <h2 style="margin-bottom: 0.25rem;">
+        Requirements &amp; criteria
+        @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
+        {
+            <span class="badge badge-role" style="margin-left: 0.5rem;">@_items.Count items</span>
+            @if (_artifact.IsStale)
+            {
+                <span class="badge badge-stale" style="margin-left: 0.3rem;">Regenerate recommended</span>
+            }
+            @if (_artifact.IsLocked)
+            {
+                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+            }
+        }
+    </h2>
+    <div style="display: flex; gap: 0.4rem; white-space: nowrap;">
+        @if (CanEdit)
+        {
+            @if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)
+            {
+                <button class="btn btn-primary btn-sm" @onclick="ExtractAsync" disabled="@_extracting">Extract from material</button>
+            }
+            else
+            {
+                <button class="btn btn-outline btn-sm" @onclick="ExtractAsync" disabled="@(_extracting || _artifact.IsLocked)">Re-extract</button>
+                <button class="btn btn-outline btn-sm" @onclick="ToggleLockAsync">@(_artifact.IsLocked ? "Unlock" : "Lock")</button>
+            }
+        }
+    </div>
+</div>
+<p class="text-muted" style="margin-top: 0;">
+    Everything in the client material the proposal must satisfy or relate to. AI extracts the list;
+    you can edit, add and remove rows. The review step checks the proposal against this list.
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+@if (_extracting)
+{
+    <div class="card">
+        <p style="margin: 0;">
+            <span class="cursor-blink">▌</span>
+            Extracting requirements… @(_progress is null ? "" : $"{_progress.DocumentName} — part {_progress.Chunk}/{_progress.TotalChunks}")
+        </p>
+    </div>
+}
+else if (_pendingItems is not null)
+{
+    <p><strong>Review the newly extracted list.</strong> Your current list is kept until you accept.</p>
+    <RequirementsTable Items="_pendingItems" CanEdit="false" />
+    <div class="modal-actions" style="justify-content: flex-start;">
+        <button class="btn btn-primary" @onclick="AcceptExtractionAsync" disabled="@_busy">Accept new list (@_pendingItems.Count items)</button>
+        <button class="btn btn-outline" @onclick="RejectExtractionAsync" disabled="@_busy">Keep current list</button>
+    </div>
+}
+else if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)
+{
+    <div class="empty-state">
+        <p>No requirements extracted yet.</p>
+        @if (CanEdit)
+        {
+            <button class="btn btn-primary" @onclick="ExtractAsync">Extract requirements from material</button>
+        }
+    </div>
+}
+else
+{
+    <RequirementsTable Items="_items" CanEdit="@(CanEdit && !_artifact.IsLocked)" OnChanged="MarkDirty" />
+    @if (CanEdit && !_artifact.IsLocked)
+    {
+        <div class="modal-actions" style="justify-content: flex-start;">
+            <button class="btn btn-outline" @onclick="AddRow">+ Add requirement</button>
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(!_dirty || _busy)">
+                @(_dirty ? "Save changes" : "Saved")
+            </button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Artifact? _artifact;
+    private List<RequirementItem> _items = [];
+    private List<RequirementItem>? _pendingItems;
+    private Guid _pendingRunId;
+    private ExtractionProgress? _progress;
+    private bool _extracting;
+    private bool _busy;
+    private bool _dirty;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _artifact = await Artifacts.GetAsync(ProposalId, ArtifactType.Requirements, user.Id);
+        _items = RequirementsPayload.FromJson(_artifact?.ContentJson).Items;
+        _dirty = false;
+    }
+
+    private async Task ExtractAsync()
+    {
+        _error = null;
+        _extracting = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var (runId, payload) = await Extraction.ExtractAsync(ProposalId, user.Id,
+                async p =>
+                {
+                    _progress = p;
+                    await InvokeAsync(StateHasChanged);
+                });
+
+            if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)
+            {
+                var applyUser = await CurrentUser.GetAsync();
+                await Generation.ApplyAsync(ProposalId, ArtifactType.Requirements, applyUser.Id, null, payload.ToJson());
+                await LoadAsync();
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                _pendingItems = payload.Items;
+                _pendingRunId = runId;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _extracting = false;
+            _progress = null;
+        }
+    }
+
+    private async Task AcceptExtractionAsync()
+    {
+        if (_pendingItems is null) return;
+        _busy = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var payload = new RequirementsPayload { Items = _pendingItems };
+            await Generation.ApplyAsync(ProposalId, ArtifactType.Requirements, user.Id, null, payload.ToJson());
+            _pendingItems = null;
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RejectExtractionAsync()
+    {
+        await Generation.MarkRejectedAsync(_pendingRunId);
+        _pendingItems = null;
+    }
+
+    private void AddRow()
+    {
+        _items.Add(new RequirementItem { UserAdded = true });
+        MarkDirty();
+    }
+
+    private void MarkDirty() => _dirty = true;
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var payload = new RequirementsPayload { Items = _items.Where(i => !string.IsNullOrWhiteSpace(i.Text)).ToList() };
+            await Artifacts.SaveEditAsync(ProposalId, ArtifactType.Requirements, user.Id, null, payload.ToJson(),
+                _artifact!.RowVersion);
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Saga.Core.Models.ConcurrencyConflictException)
+        {
+            _error = "Someone else changed the requirements list while you were editing. Reload the page to see their version.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ToggleLockAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        await Artifacts.SetLockedAsync(ProposalId, ArtifactType.Requirements, user.Id, !_artifact!.IsLocked);
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+}
