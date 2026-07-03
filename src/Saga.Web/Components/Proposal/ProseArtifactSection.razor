@@ -1,0 +1,414 @@
+@inject ArtifactService Artifacts
+@inject GenerationService Generation
+@inject CurrentUserService CurrentUser
+
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
+    <h2 style="margin-bottom: 0.25rem;">
+        @Title
+        @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
+        {
+            <span class="badge badge-role" style="margin-left: 0.5rem;">@StatusLabel</span>
+            @if (_artifact.IsStale)
+            {
+                <span class="badge badge-stale" style="margin-left: 0.3rem;" title="Upstream material or artifacts changed since this was generated.">Regenerate recommended</span>
+            }
+            @if (_artifact.IsLocked)
+            {
+                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+            }
+        }
+    </h2>
+    <div style="display: flex; gap: 0.4rem; white-space: nowrap;">
+        @if (CanEdit && _mode == Mode.View)
+        {
+            @if (HasContent)
+            {
+                <button class="btn btn-outline btn-sm" @onclick="BeginEdit" disabled="@(_artifact!.IsLocked)">Edit</button>
+                <button class="btn btn-outline btn-sm" @onclick="() => _showRegenerate = true" disabled="@(_artifact!.IsLocked)">Regenerate</button>
+                <button class="btn btn-outline btn-sm" @onclick="ToggleLockAsync">@(_artifact!.IsLocked ? "Unlock" : "Lock")</button>
+            }
+            else
+            {
+                <button class="btn btn-primary btn-sm" @onclick="() => GenerateAsync(null)">Generate</button>
+            }
+            @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
+            {
+                <button class="btn btn-outline btn-sm" @onclick="OpenHistoryAsync">History</button>
+            }
+        }
+    </div>
+</div>
+<p class="text-muted" style="margin-top: 0;">@Description</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+@if (_mode == Mode.View)
+{
+    @if (_artifact is null || !HasContent)
+    {
+        <div class="empty-state">
+            <p>Not generated yet.</p>
+            @if (CanEdit)
+            {
+                <button class="btn btn-primary" @onclick="() => GenerateAsync(null)">Generate @Title.ToLowerInvariant()</button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card markdown-body">@Markdown.Render(_artifact.ContentMarkdown)</div>
+    }
+}
+else if (_mode == Mode.Edit)
+{
+    <div class="editor-grid">
+        <div>
+            <div class="section-title" style="margin-top: 0;">Markdown</div>
+            <textarea class="editor-textarea" @bind="_editText" @bind:event="oninput"></textarea>
+        </div>
+        <div>
+            <div class="section-title" style="margin-top: 0;">Preview</div>
+            <div class="card markdown-body editor-preview">@Markdown.Render(_editText)</div>
+        </div>
+    </div>
+    <div class="modal-actions" style="justify-content: flex-start;">
+        <button class="btn btn-primary" @onclick="SaveEditAsync" disabled="@_busy">Save</button>
+        <button class="btn btn-outline" @onclick="() => _mode = Mode.View">Cancel</button>
+    </div>
+}
+else if (_mode == Mode.Generating)
+{
+    <div class="card markdown-body generating">
+        @Markdown.Render(_streamText)
+        <span class="cursor-blink">▌</span>
+    </div>
+}
+else if (_mode == Mode.DiffReview)
+{
+    <p><strong>Review the new version.</strong> Nothing is overwritten until you accept.</p>
+    <div class="editor-grid">
+        <div>
+            <div class="section-title" style="margin-top: 0;">Current version</div>
+            <div class="card markdown-body diff-pane diff-old">@Markdown.Render(_artifact?.ContentMarkdown)</div>
+        </div>
+        <div>
+            <div class="section-title" style="margin-top: 0;">New version</div>
+            <div class="card markdown-body diff-pane diff-new">@Markdown.Render(_pendingText)</div>
+        </div>
+    </div>
+    <div class="modal-actions" style="justify-content: flex-start;">
+        <button class="btn btn-primary" @onclick="AcceptGenerationAsync" disabled="@_busy">Accept new version</button>
+        <button class="btn btn-outline" @onclick="RejectGenerationAsync" disabled="@_busy">Keep current version</button>
+    </div>
+}
+
+@if (_showRegenerate)
+{
+    <div class="modal-backdrop" @onclick="() => _showRegenerate = false">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Regenerate @Title.ToLowerInvariant()</h2>
+            <div class="form-field">
+                <label for="regen-instruction">Steering instruction (optional)</label>
+                <textarea id="regen-instruction" rows="3" @bind="_instruction"
+                          placeholder="e.g. Make it shorter and put more emphasis on change management"></textarea>
+                <div class="form-hint">You'll see the new version side by side with the current one before anything is replaced.</div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
+                <button class="btn btn-primary" @onclick="() => { _showRegenerate = false; return GenerateAsync(_instruction); }">Generate</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showHistory)
+{
+    <div class="modal-backdrop" @onclick="() => _showHistory = false">
+        <div class="modal-panel modal-wide" @onclick:stopPropagation>
+            <h2 class="modal-title">History — @Title</h2>
+            @if (_versions is null)
+            {
+                <p class="text-muted">Loading…</p>
+            }
+            else if (_viewVersion is not null)
+            {
+                <p class="text-muted">
+                    @_viewVersion.Origin · @_viewVersion.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")
+                    · @(_viewVersion.CreatedBy?.DisplayName ?? "unknown")
+                </p>
+                <div class="preview-text markdown-body">@Markdown.Render(_viewVersion.ContentMarkdown)</div>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="() => _viewVersion = null">Back to list</button>
+                    @if (CanEdit)
+                    {
+                        <button class="btn btn-primary" @onclick="() => RestoreVersionAsync(_viewVersion.Id)"
+                                disabled="@(_busy || _artifact?.IsLocked == true)">Restore this version</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr><th>When</th><th>Origin</th><th>By</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var version in _versions)
+                        {
+                            <tr>
+                                <td>@version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                                <td><span class="badge badge-role">@version.Origin</span></td>
+                                <td>@(version.CreatedBy?.DisplayName ?? "—")</td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-outline btn-sm" @onclick="() => _viewVersion = version">View</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="() => _showHistory = false">Close</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (_conflict is not null)
+{
+    <div class="modal-backdrop">
+        <div class="modal-panel modal-wide" @onclick:stopPropagation>
+            <h2 class="modal-title">Someone else changed this artifact</h2>
+            <p>While you were editing, another user saved changes. Nothing has been lost — choose what to do.</p>
+            <div class="editor-grid">
+                <div>
+                    <div class="section-title" style="margin-top: 0;">Their version (currently saved)</div>
+                    <div class="card markdown-body diff-pane">@Markdown.Render(_conflict.CurrentMarkdown)</div>
+                </div>
+                <div>
+                    <div class="section-title" style="margin-top: 0;">Your version</div>
+                    <div class="card markdown-body diff-pane">@Markdown.Render(_editText)</div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="TakeTheirsAsync">Take their version</button>
+                <button class="btn btn-primary" @onclick="OverwriteWithMineAsync" disabled="@_busy">Save my version anyway</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter, EditorRequired] public ArtifactType Type { get; set; }
+    [Parameter, EditorRequired] public required string Title { get; set; }
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private enum Mode { View, Edit, Generating, DiffReview }
+
+    private Artifact? _artifact;
+    private Mode _mode = Mode.View;
+    private bool _busy;
+    private string? _error;
+
+    private string _editText = "";
+    private string _streamText = "";
+    private string _pendingText = "";
+    private Guid _pendingRunId;
+    private string _instruction = "";
+    private bool _showRegenerate;
+
+    private bool _showHistory;
+    private List<ArtifactVersion>? _versions;
+    private ArtifactVersion? _viewVersion;
+
+    private Saga.Core.Models.ConcurrencyConflictException? _conflict;
+
+    private bool HasContent => !string.IsNullOrWhiteSpace(_artifact?.ContentMarkdown);
+
+    private string StatusLabel => _artifact?.Status switch
+    {
+        ArtifactStatus.Generated => "Generated",
+        ArtifactStatus.Edited => "Edited",
+        _ => "",
+    };
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _artifact = await Artifacts.GetAsync(ProposalId, Type, user.Id);
+    }
+
+    private async Task GenerateAsync(string? instruction)
+    {
+        _error = null;
+        _streamText = "";
+        _instruction = "";
+        var hadContent = HasContent;
+        _mode = Mode.Generating;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var result = await Generation.GenerateAsync(ProposalId, Type, user.Id, instruction,
+                async delta =>
+                {
+                    _streamText += delta;
+                    await InvokeAsync(StateHasChanged);
+                });
+
+            if (hadContent)
+            {
+                // Existing content: the user reviews the diff before anything is replaced.
+                _pendingText = result.Text;
+                _pendingRunId = result.RunId;
+                _mode = Mode.DiffReview;
+            }
+            else
+            {
+                await Generation.ApplyAsync(ProposalId, Type, user.Id, result.Text, null);
+                await LoadAsync();
+                _mode = Mode.View;
+                await OnChanged.InvokeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _mode = Mode.View;
+        }
+    }
+
+    private async Task AcceptGenerationAsync()
+    {
+        _busy = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Generation.ApplyAsync(ProposalId, Type, user.Id, _pendingText, null);
+            await LoadAsync();
+            _mode = Mode.View;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RejectGenerationAsync()
+    {
+        await Generation.MarkRejectedAsync(_pendingRunId);
+        _pendingText = "";
+        _mode = Mode.View;
+    }
+
+    private void BeginEdit()
+    {
+        _editText = _artifact?.ContentMarkdown ?? "";
+        _mode = Mode.Edit;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Artifacts.SaveEditAsync(ProposalId, Type, user.Id, _editText, null, _artifact!.RowVersion);
+            await LoadAsync();
+            _mode = Mode.View;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Saga.Core.Models.ConcurrencyConflictException conflict)
+        {
+            _conflict = conflict;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OverwriteWithMineAsync()
+    {
+        if (_conflict is null) return;
+        _busy = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Artifacts.SaveEditAsync(ProposalId, Type, user.Id, _editText, null, _conflict.CurrentRowVersion);
+            _conflict = null;
+            await LoadAsync();
+            _mode = Mode.View;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task TakeTheirsAsync()
+    {
+        _conflict = null;
+        await LoadAsync();
+        _mode = Mode.View;
+    }
+
+    private async Task ToggleLockAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        await Artifacts.SetLockedAsync(ProposalId, Type, user.Id, !_artifact!.IsLocked);
+        await LoadAsync();
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task OpenHistoryAsync()
+    {
+        _showHistory = true;
+        _viewVersion = null;
+        var user = await CurrentUser.GetAsync();
+        _versions = await Artifacts.GetVersionsAsync(ProposalId, Type, user.Id);
+    }
+
+    private async Task RestoreVersionAsync(Guid versionId)
+    {
+        _busy = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Artifacts.RestoreVersionAsync(versionId, user.Id);
+            _showHistory = false;
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

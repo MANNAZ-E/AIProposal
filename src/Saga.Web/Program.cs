@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
+using Saga.Infrastructure.Ai;
 using Saga.Infrastructure.Data;
 using Saga.Infrastructure.Extraction;
 using Saga.Infrastructure.Services;
@@ -39,6 +40,16 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProposalService>();
 builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<DocumentService>();
+builder.Services.AddScoped<ArtifactService>();
+builder.Services.AddScoped<GenerationService>();
+
+builder.Services.AddSingleton<IAiService>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    return string.IsNullOrEmpty(config["AzureOpenAI:Endpoint"])
+        ? new FakeAiService()
+        : new AzureOpenAiService(config);
+});
 
 // Azure Blob storage replaces this in production (deployment milestone).
 builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();

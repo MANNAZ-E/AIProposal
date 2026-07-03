@@ -52,7 +52,8 @@ else
             <button class="nav-item" disabled title="Coming soon">Generate</button>
             <div class="nav-group">Artifacts</div>
             <button class="nav-item" disabled title="Coming soon">Client profile</button>
-            <button class="nav-item" disabled title="Coming soon">Summary</button>
+            <button class="nav-item @(_section == Section.Summary ? "active" : null)"
+                    @onclick="() => _section = Section.Summary">Summary</button>
             <button class="nav-item" disabled title="Coming soon">Requirements</button>
             <button class="nav-item" disabled title="Coming soon">Scoping</button>
             <button class="nav-item" disabled title="Coming soon">Solution proposal</button>
@@ -70,6 +71,12 @@ else
             @if (_section == Section.Material)
             {
                 <MaterialSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
+            }
+            else if (_section == Section.Summary)
+            {
+                <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Summary" Title="Summary"
+                                      Description="A concise summary of the client material: what the client asks for, why it matters, central themes, key requirements, and ambiguities."
+                                      CanEdit="_myRole >= ProposalRole.Editor" />
             }
             else if (_section == Section.People)
             {
@@ -156,7 +163,7 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, People }
+    private enum Section { Material, Summary, People }
 
     private Proposal? _proposal;
     private ProposalRole _myRole;
