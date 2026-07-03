@@ -1,0 +1,149 @@
+@using Saga.Core.Models
+@inject ArtifactService Artifacts
+@inject ReviewService Review
+@inject GenerationService Generation
+@inject CurrentUserService CurrentUser
+
+<h2>Review</h2>
+<p class="text-muted" style="margin-top: 0;">
+    Checks the proposal against the current requirements list and reports coverage, gaps and
+    improvements. The review only reports — it never changes the proposal.
+</p>
+
+@if (_error is not null)
+{
+    <p class="error-text">@_error</p>
+}
+
+@if (_artifact?.IsStale == true)
+{
+    <div class="card budget-warning" style="margin-bottom: 1rem;">
+        <strong>Out of date:</strong> the requirements or the proposal changed after this review ran.
+        Run it again for a current picture.
+    </div>
+}
+
+<div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem;">
+    @if (CanEdit)
+    {
+        <button class="btn btn-primary" @onclick="RunAsync" disabled="@_running">
+            @(_running ? "Reviewing…" : _payload.Items.Count > 0 ? "Run review again" : "Run review")
+        </button>
+    }
+    @if (_running && _progress is not null)
+    {
+        <span class="text-muted"><span class="cursor-blink">▌</span> @_progress</span>
+    }
+    else if (_payload.Items.Count > 0)
+    {
+        <span class="text-muted">Last run @_payload.GeneratedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+    }
+</div>
+
+@if (_payload.Items.Count == 0 && !_running)
+{
+    <div class="empty-state">
+        <p>No review yet. It needs a requirements list and generated content to check against.</p>
+    </div>
+}
+else if (_payload.Items.Count > 0)
+{
+    <div style="display: flex; gap: 0.6rem; margin-bottom: 1rem;">
+        <span class="badge badge-ok">@Count(ReviewCoverage.Addressed) addressed</span>
+        <span class="badge badge-stale">@Count(ReviewCoverage.Partly) partly</span>
+        <span class="badge badge-missing">@Count(ReviewCoverage.NotAddressed) not addressed</span>
+    </div>
+
+    <div class="req-table-wrap">
+        <table class="table req-table">
+            <thead>
+                <tr>
+                    <th style="width: 28%;">Requirement</th>
+                    <th>Coverage</th>
+                    <th style="width: 20%;">Where addressed</th>
+                    <th style="width: 24%;">Suggested improvement</th>
+                    <th style="width: 20%;">Risk</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _payload.Items)
+                {
+                    <tr>
+                        <td>
+                            @item.RequirementText
+                            <div class="text-muted" style="font-size: 0.78rem;">@item.RequirementType</div>
+                        </td>
+                        <td><span class="badge @BadgeFor(item.Coverage)">@LabelFor(item.Coverage)</span></td>
+                        <td>@item.WhereAddressed</td>
+                        <td>@item.Improvement</td>
+                        <td>@item.Risk</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Artifact? _artifact;
+    private ReviewPayload _payload = new();
+    private bool _running;
+    private string? _progress;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _artifact = await Artifacts.GetAsync(ProposalId, ArtifactType.Review, user.Id);
+        _payload = ReviewPayload.FromJson(_artifact?.ContentJson);
+    }
+
+    private async Task RunAsync()
+    {
+        _error = null;
+        _running = true;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var (_, payload) = await Review.GenerateAsync(ProposalId, user.Id, async p =>
+            {
+                _progress = p;
+                await InvokeAsync(StateHasChanged);
+            });
+            await Generation.ApplyAsync(ProposalId, ArtifactType.Review, user.Id, null, payload.ToJson());
+            await LoadAsync();
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _running = false;
+            _progress = null;
+        }
+    }
+
+    private int Count(ReviewCoverage coverage) => _payload.Items.Count(i => i.Coverage == coverage);
+
+    private static string BadgeFor(ReviewCoverage coverage) => coverage switch
+    {
+        ReviewCoverage.Addressed => "badge-ok",
+        ReviewCoverage.Partly => "badge-stale",
+        _ => "badge-missing",
+    };
+
+    private static string LabelFor(ReviewCoverage coverage) => coverage switch
+    {
+        ReviewCoverage.Addressed => "Addressed",
+        ReviewCoverage.Partly => "Partly",
+        _ => "Not addressed",
+    };
+}

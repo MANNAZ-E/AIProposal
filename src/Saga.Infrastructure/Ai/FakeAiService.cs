@@ -27,6 +27,31 @@ public class FakeAiService : IAiService
             yield break;
         }
 
+        // Review prompts: echo the real requirement ids so the coverage report joins up offline.
+        if (request.SystemPrompt.Contains("[req id: "))
+        {
+            var ids = System.Text.RegularExpressions.Regex
+                .Matches(request.SystemPrompt, @"\[req id: ([0-9a-fA-F-]{36})\]")
+                .Select(m => m.Groups[1].Value)
+                .ToList();
+            var coverages = new[]
+            {
+                ("Addressed", "\"Our proposed approach\" and \"Deliverables and process\"", null as string, null as string),
+                ("Partly", "\"Understanding your situation\"", "Add a concrete reference case with measurable results.", "The evaluators may score the criterion low without evidence."),
+                ("NotAddressed", null, "Add a dedicated slide covering this requirement.", "A mandatory requirement left unaddressed can disqualify the bid."),
+            };
+            var rows = ids.Select((id, i) =>
+            {
+                var (coverage, where, improvement, risk) = coverages[i % coverages.Length];
+                return $$"""
+                    {"requirementId": "{{id}}", "coverage": "{{coverage}}", "whereAddressed": {{Json(where)}}, "improvement": {{Json(improvement)}}, "risk": {{Json(risk)}}}
+                    """.Trim();
+            });
+            yield return new AiStreamEvent.Delta("[" + string.Join(",\n", rows) + "]");
+            yield return new AiStreamEvent.Completed(1200, 300, "fake-model");
+            yield break;
+        }
+
         // JSON-contract prompts (e.g. requirements extraction) get canned JSON back.
         if (request.SystemPrompt.Contains("Return ONLY a JSON array"))
         {
@@ -65,4 +90,7 @@ public class FakeAiService : IAiService
         }
         yield return new AiStreamEvent.Completed(1000, 200, "fake-model");
     }
+
+    private static string Json(string? value)
+        => value is null ? "null" : System.Text.Json.JsonSerializer.Serialize(value);
 }

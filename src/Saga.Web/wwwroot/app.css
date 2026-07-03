@@ -548,6 +548,12 @@ a {
     border: 1px solid #b7ddc2;
 }
 
+.badge-missing {
+    background: #f8dfdf;
+    color: var(--saga-danger);
+    border: 1px solid #e7b9b9;
+}
+
 .req-table-wrap {
     overflow-x: auto;
 }

@@ -45,6 +45,7 @@ builder.Services.AddScoped<GenerationService>();
 builder.Services.AddScoped<CondensationService>();
 builder.Services.AddScoped<WorkingContextService>();
 builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<ReviewService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
 

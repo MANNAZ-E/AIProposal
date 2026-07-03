@@ -67,7 +67,8 @@ else
                     @onclick="() => SelectSectionAsync(Section.Structure)">Structure @ArtifactBadge(ArtifactType.Structure)</button>
             <button class="nav-item @(_section == Section.Content ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</button>
-            <button class="nav-item" disabled title="Coming soon">Review</button>
+            <button class="nav-item @(_section == Section.Review ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Review)">Review @ArtifactBadge(ArtifactType.Review)</button>
             <div class="nav-group">Proposal</div>
             <button class="nav-item @(_section == Section.Chat ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Chat)">Chat</button>
@@ -123,6 +124,11 @@ else
             {
                 <ContentSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
                                 CanEdit="_myRole >= ProposalRole.Editor" />
+            }
+            else if (_section == Section.Review)
+            {
+                <ReviewSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor"
+                               OnChanged="LoadAsync" />
             }
             else if (_section == Section.Chat)
             {
@@ -213,7 +219,7 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Chat, People }
+    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, People }
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
