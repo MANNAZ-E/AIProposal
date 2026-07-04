@@ -53,6 +53,7 @@ builder.Services.AddScoped<CondensationService>();
 builder.Services.AddScoped<WorkingContextService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<ReviewService>();
+builder.Services.AddScoped<ProposalReviewService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
@@ -78,9 +79,14 @@ else
 builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
-    var extractors = new List<IDocumentTextExtractor> { new PlainTextExtractor() };
-    if (!string.IsNullOrEmpty(config["DocumentIntelligence:Endpoint"]))
-        extractors.Add(new DocumentIntelligenceExtractor(config));
+    var extractors = new List<IDocumentTextExtractor>
+    {
+        new PlainTextExtractor(),
+        // Offline stand-in accepts the same file types, so uploads work without Azure.
+        string.IsNullOrEmpty(config["DocumentIntelligence:Endpoint"])
+            ? new FakeDocumentExtractor()
+            : new DocumentIntelligenceExtractor(config),
+    };
     return new CompositeTextExtractor(extractors);
 });
 

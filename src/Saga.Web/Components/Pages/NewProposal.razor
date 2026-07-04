@@ -29,20 +29,6 @@
             <InputTextArea id="description" @bind-Value="_model.Description" rows="3" />
         </div>
 
-        <div class="form-field">
-            <label>Output format</label>
-            <div class="radio-row">
-                <InputRadioGroup @bind-Value="_model.OutputFormat">
-                    <label><InputRadio Value="OutputFormat.PowerPoint" /> PowerPoint</label>
-                    <label><InputRadio Value="OutputFormat.Word" /> Word</label>
-                </InputRadioGroup>
-            </div>
-            <div class="form-hint">
-                The format shapes the structure AI will recommend: slides, storyline and visual flow for
-                PowerPoint — chapters, argumentation and written narrative for Word.
-            </div>
-        </div>
-
         @if (_error is not null)
         {
             <p class="error-text">@_error</p>
@@ -67,7 +53,8 @@
         try
         {
             var user = await CurrentUser.GetAsync();
-            var id = await Proposals.CreateAsync(user.Id, _model.Title, _model.ClientName, _model.Description, _model.OutputFormat);
+            // The output format is chosen later, in the Generate step (next to the Structure option).
+            var id = await Proposals.CreateAsync(user.Id, _model.Title, _model.ClientName, _model.Description, OutputFormat.PowerPoint);
             Nav.NavigateTo($"/proposals/{id}");
         }
         catch (Exception ex)
@@ -86,6 +73,5 @@
         public string ClientName { get; set; } = "";
 
         public string? Description { get; set; }
-        public OutputFormat OutputFormat { get; set; } = OutputFormat.PowerPoint;
     }
 }

@@ -63,10 +63,74 @@ public class DocumentService(
             UpdatedAt = now,
         };
         db.Documents.Add(document);
+        db.DocumentVersions.Add(NewVersion(document.Id, extractedText, VersionOrigin.Generated, userId, now));
         await MarkMaterialChangedAsync(db, proposalId, now, ct);
         await db.SaveChangesAsync(ct);
         return document;
     }
+
+    /// <summary>
+    /// Saves a manual edit of an upload's extracted text (e.g. removing boilerplate sections).
+    /// Every save is snapshotted to the document's version history.
+    /// </summary>
+    public async Task UpdateExtractedTextAsync(Guid documentId, Guid userId, string text,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var document = await db.Documents.FirstAsync(d => d.Id == documentId && d.Kind == DocumentKind.Upload, ct);
+        await ProposalService.EnsureRoleAsync(db, document.ProposalId, userId, ProposalRole.Editor, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        document.ExtractedText = text;
+        document.PageMapJson = null;   // Page offsets no longer match the edited text.
+        document.CondensedText = null; // Re-condense from the edited text when needed.
+        document.UpdatedAt = now;
+        db.DocumentVersions.Add(NewVersion(document.Id, text, VersionOrigin.Edited, userId, now));
+        await MarkMaterialChangedAsync(db, document.ProposalId, now, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<List<DocumentVersion>> GetVersionsAsync(Guid documentId, Guid userId,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var document = await db.Documents.FirstAsync(d => d.Id == documentId, ct);
+        await ProposalService.EnsureRoleAsync(db, document.ProposalId, userId, ProposalRole.Reader, ct);
+        return await db.DocumentVersions
+            .Include(v => v.CreatedBy)
+            .Where(v => v.DocumentId == documentId)
+            .OrderByDescending(v => v.CreatedAt)
+            .ToListAsync(ct);
+    }
+
+    public async Task RestoreVersionAsync(Guid versionId, Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var version = await db.DocumentVersions.Include(v => v.Document).FirstAsync(v => v.Id == versionId, ct);
+        var document = version.Document!;
+        await ProposalService.EnsureRoleAsync(db, document.ProposalId, userId, ProposalRole.Editor, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        document.ExtractedText = version.Text;
+        document.PageMapJson = null;   // The page map only ever matches the original extraction.
+        document.CondensedText = null;
+        document.UpdatedAt = now;
+        db.DocumentVersions.Add(NewVersion(document.Id, version.Text, VersionOrigin.Restored, userId, now));
+        await MarkMaterialChangedAsync(db, document.ProposalId, now, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static DocumentVersion NewVersion(Guid documentId, string text, VersionOrigin origin,
+        Guid userId, DateTimeOffset now)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            DocumentId = documentId,
+            Text = text,
+            Origin = origin,
+            CreatedById = userId,
+            CreatedAt = now,
+        };
 
     public async Task<Document> AddNoteAsync(Guid proposalId, Guid userId, string title, string text,
         CancellationToken ct = default)

@@ -27,10 +27,13 @@ public class DocumentIntelligenceExtractor : IDocumentTextExtractor
             : new DocumentIntelligenceClient(new Uri(endpoint), new AzureKeyCredential(key));
     }
 
-    public IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string>
+    /// <summary>Shared with <see cref="FakeDocumentExtractor"/> so the offline stand-in accepts the same types.</summary>
+    public static readonly IReadOnlySet<string> Extensions = new HashSet<string>
     {
         ".pdf", ".docx", ".pptx", ".xlsx", ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".heif",
     };
+
+    public IReadOnlySet<string> SupportedExtensions => Extensions;
 
     public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName, CancellationToken ct = default)
     {

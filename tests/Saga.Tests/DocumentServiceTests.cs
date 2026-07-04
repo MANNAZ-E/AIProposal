@@ -60,6 +60,62 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
     }
 
     [Fact]
+    public async Task Extracted_text_can_be_edited_and_restored_with_full_history()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("tender content"));
+        var document = await service.UploadAsync(proposalId, elv, "tender.pdf", stream);
+
+        await service.UpdateExtractedTextAsync(document.Id, elv, "edited text");
+
+        var updated = (await service.GetForProposalAsync(proposalId, elv)).Single(d => d.Id == document.Id);
+        Assert.Equal("edited text", updated.ExtractedText);
+        Assert.Null(updated.PageMapJson); // page offsets no longer match the edited text
+
+        // History: the original extraction plus the edit, newest first.
+        var versions = await service.GetVersionsAsync(document.Id, elv);
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(VersionOrigin.Edited, versions[0].Origin);
+        Assert.Equal(VersionOrigin.Generated, versions[1].Origin);
+        Assert.Equal("extracted: tender.pdf", versions[1].Text);
+
+        // Restoring the original extraction writes a third, Restored snapshot.
+        await service.RestoreVersionAsync(versions[1].Id, elv);
+        var restored = (await service.GetForProposalAsync(proposalId, elv)).Single(d => d.Id == document.Id);
+        Assert.Equal("extracted: tender.pdf", restored.ExtractedText);
+        versions = await service.GetVersionsAsync(document.Id, elv);
+        Assert.Equal(3, versions.Count);
+        Assert.Equal(VersionOrigin.Restored, versions[0].Origin);
+    }
+
+    [Fact]
+    public async Task Editing_extracted_text_requires_editor_role_and_marks_artifacts_stale()
+    {
+        var (elv, sda, proposalId) = await SetupAsync();
+        await _proposals.ShareAsync(proposalId, elv, "sda@mannaz.com", ProposalRole.Reader);
+        var service = CreateService();
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
+        var document = await service.UploadAsync(proposalId, elv, "tender.pdf", stream);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.UpdateExtractedTextAsync(document.Id, sda, "hacked"));
+
+        await using (var setup = db.CreateDbContext())
+        {
+            setup.Artifacts.Add(new Artifact { Id = Guid.NewGuid(), ProposalId = proposalId, Type = ArtifactType.Summary, Status = ArtifactStatus.Generated, UpdatedAt = DateTimeOffset.UtcNow });
+            await setup.SaveChangesAsync();
+        }
+
+        await service.UpdateExtractedTextAsync(document.Id, elv, "edited");
+
+        await using var check = db.CreateDbContext();
+        Assert.True(check.Artifacts.Single(a => a.ProposalId == proposalId && a.Type == ArtifactType.Summary).IsStale);
+    }
+
+    [Fact]
     public async Task Notes_can_be_added_edited_and_deleted()
     {
         var (elv, _, proposalId) = await SetupAsync();

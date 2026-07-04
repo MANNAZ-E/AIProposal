@@ -25,4 +25,5 @@ public class Proposal
     public ICollection<Artifact> Artifacts { get; set; } = [];
     public ICollection<ChatSession> ChatSessions { get; set; } = [];
     public ICollection<GenerationRun> GenerationRuns { get; set; } = [];
+    public ICollection<FinalProposalVersion> FinalProposalVersions { get; set; } = [];
 }

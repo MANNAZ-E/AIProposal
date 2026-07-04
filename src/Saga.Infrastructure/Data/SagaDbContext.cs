@@ -9,12 +9,15 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<Proposal> Proposals => Set<Proposal>();
     public DbSet<ProposalMember> ProposalMembers => Set<ProposalMember>();
     public DbSet<Document> Documents => Set<Document>();
+    public DbSet<DocumentVersion> DocumentVersions => Set<DocumentVersion>();
     public DbSet<Artifact> Artifacts => Set<Artifact>();
     public DbSet<ArtifactVersion> ArtifactVersions => Set<ArtifactVersion>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<GenerationRun> GenerationRuns => Set<GenerationRun>();
     public DbSet<MannazVoiceSettings> MannazVoiceSettings => Set<MannazVoiceSettings>();
+    public DbSet<FinalProposalVersion> FinalProposalVersions => Set<FinalProposalVersion>();
+    public DbSet<FinalProposalFile> FinalProposalFiles => Set<FinalProposalFile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -47,6 +50,28 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.Property(d => d.Name).HasMaxLength(500);
             b.Property(d => d.OriginalFilePath).HasMaxLength(1024);
             b.HasOne(d => d.Proposal).WithMany(p => p.Documents).HasForeignKey(d => d.ProposalId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<DocumentVersion>(b =>
+        {
+            b.HasIndex(v => new { v.DocumentId, v.CreatedAt });
+            b.HasOne(v => v.Document).WithMany(d => d.Versions).HasForeignKey(v => v.DocumentId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(v => v.CreatedBy).WithMany().HasForeignKey(v => v.CreatedById).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<FinalProposalVersion>(b =>
+        {
+            b.Property(v => v.Label).HasMaxLength(500);
+            b.HasIndex(v => new { v.ProposalId, v.Number }).IsUnique();
+            b.HasOne(v => v.Proposal).WithMany(p => p.FinalProposalVersions).HasForeignKey(v => v.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(v => v.CreatedBy).WithMany().HasForeignKey(v => v.CreatedById).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<FinalProposalFile>(b =>
+        {
+            b.Property(f => f.Name).HasMaxLength(500);
+            b.Property(f => f.OriginalFilePath).HasMaxLength(1024);
+            b.HasOne(f => f.Version).WithMany(v => v.Files).HasForeignKey(f => f.VersionId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Artifact>(b =>

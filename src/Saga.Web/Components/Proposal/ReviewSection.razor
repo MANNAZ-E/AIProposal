@@ -1,86 +1,260 @@
+@using Saga.Core.Abstractions
 @using Saga.Core.Models
 @inject ArtifactService Artifacts
 @inject ReviewService Review
+@inject ProposalReviewService ProposalReview
 @inject GenerationService Generation
 @inject CurrentUserService CurrentUser
+@inject IDocumentTextExtractor TextExtractor
 
 <h2>Review</h2>
-<p class="text-muted" style="margin-top: 0;">
-    Checks the proposal against the current requirements list and reports coverage, gaps and
-    improvements. The review only reports — it never changes the proposal.
-</p>
+
+<div class="radio-row" style="margin-bottom: 1rem;">
+    <label><input type="radio" checked="@(_tab == Tab.Draft)" @onchange="() => _tab = Tab.Draft" /> Draft review — the draft in Saga</label>
+    <label><input type="radio" checked="@(_tab == Tab.Proposal)" @onchange="() => _tab = Tab.Proposal" /> Proposal review — your uploaded final proposal</label>
+</div>
 
 @if (_error is not null)
 {
     <p class="error-text">@_error</p>
 }
 
-@if (_artifact?.IsStale == true)
+@if (_tab == Tab.Draft)
 {
-    <div class="card budget-warning" style="margin-bottom: 1rem;">
-        <strong>Out of date:</strong> the requirements or the proposal changed after this review ran.
-        Run it again for a current picture.
-    </div>
-}
+    <p class="text-muted" style="margin-top: 0;">
+        Checks the draft (structure and content generated in Saga) against the current requirements
+        list and reports coverage, gaps and improvements. The review only reports — it never changes the draft.
+    </p>
 
-<div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem;">
-    @if (CanEdit)
+    @if (_artifact?.IsStale == true)
     {
-        <button class="btn btn-primary" @onclick="RunAsync" disabled="@_running">
-            @(_running ? "Reviewing…" : _payload.Items.Count > 0 ? "Run review again" : "Run review")
-        </button>
+        <div class="card budget-warning" style="margin-bottom: 1rem;">
+            <strong>Out of date:</strong> the requirements or the draft changed after this review ran.
+            Run it again for a current picture.
+        </div>
     }
-    @if (_running && _progress is not null)
+
+    <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem;">
+        @if (CanEdit)
+        {
+            <button class="btn btn-primary" @onclick="RunDraftAsync" disabled="@_running">
+                @(_running ? "Reviewing…" : _payload.Items.Count > 0 ? "Run review again" : "Run review")
+            </button>
+        }
+        @if (_running && _progress is not null)
+        {
+            <span class="text-muted"><span class="cursor-blink">▌</span> @_progress</span>
+        }
+        else if (_payload.Items.Count > 0)
+        {
+            <span class="text-muted">Last run @_payload.GeneratedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+        }
+    </div>
+
+    @if (_payload.Items.Count == 0 && !_running)
     {
-        <span class="text-muted"><span class="cursor-blink">▌</span> @_progress</span>
+        <div class="empty-state">
+            <p>No review yet. It needs a requirements list and generated content to check against.</p>
+        </div>
     }
     else if (_payload.Items.Count > 0)
     {
-        <span class="text-muted">Last run @_payload.GeneratedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+        <div style="display: flex; gap: 0.6rem; margin-bottom: 1rem;">
+            <span class="badge badge-ok">@Count(ReviewCoverage.Addressed) addressed</span>
+            <span class="badge badge-stale">@Count(ReviewCoverage.Partly) partly</span>
+            <span class="badge badge-missing">@Count(ReviewCoverage.NotAddressed) not addressed</span>
+        </div>
+
+        @CriteriaTable(_payload.Items)
     }
-</div>
-
-@if (_payload.Items.Count == 0 && !_running)
-{
-    <div class="empty-state">
-        <p>No review yet. It needs a requirements list and generated content to check against.</p>
-    </div>
 }
-else if (_payload.Items.Count > 0)
+else
 {
-    <div style="display: flex; gap: 0.6rem; margin-bottom: 1rem;">
-        <span class="badge badge-ok">@Count(ReviewCoverage.Addressed) addressed</span>
-        <span class="badge badge-stale">@Count(ReviewCoverage.Partly) partly</span>
-        <span class="badge badge-missing">@Count(ReviewCoverage.NotAddressed) not addressed</span>
-    </div>
+    <p class="text-muted" style="margin-top: 0;">
+        Upload the proposal you finished outside Saga (PowerPoint, Word, PDF — several files can make up
+        one version) and get it reviewed on three axes: the tender's <strong>criteria</strong>,
+        <strong>language</strong> (spelling errors, weird phrases) and <strong>general quality</strong>.
+        You do the edits in your own files; upload a new version whenever you want a fresh review.
+    </p>
 
-    <div class="req-table-wrap">
-        <table class="table req-table">
-            <thead>
-                <tr>
-                    <th style="width: 28%;">Requirement</th>
-                    <th>Coverage</th>
-                    <th style="width: 20%;">Where addressed</th>
-                    <th style="width: 24%;">Suggested improvement</th>
-                    <th style="width: 20%;">Risk</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in _payload.Items)
-                {
-                    <tr>
-                        <td>
-                            @item.RequirementText
-                            <div class="text-muted" style="font-size: 0.78rem;">@item.RequirementType</div>
-                        </td>
-                        <td><span class="badge @BadgeFor(item.Coverage)">@LabelFor(item.Coverage)</span></td>
-                        <td>@item.WhereAddressed</td>
-                        <td>@item.Improvement</td>
-                        <td>@item.Risk</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+    @if (CanEdit)
+    {
+        <div class="form-field" style="max-width: 420px;">
+            <label for="fp-label">Version label (optional)</label>
+            <input id="fp-label" type="text" @bind="_uploadLabel" placeholder="e.g. Final before QA" disabled="@_uploading" />
+        </div>
+        <label class="upload-area">
+            <InputFile OnChange="UploadVersionAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
+            @if (_uploading)
+            {
+                <span>Uploading and extracting text…</span>
+            }
+            else
+            {
+                <span><strong>Choose files</strong> or drop them here — all files together become one new version</span>
+            }
+        </label>
+    }
+
+    @if (_versions is null)
+    {
+        <p class="text-muted">Loading…</p>
+    }
+    else if (_versions.Count == 0)
+    {
+        <div class="empty-state" style="margin-top: 1rem;">
+            <p>No final proposal uploaded yet. Export the draft, do your editing in PowerPoint or Word, and upload the result here for review.</p>
+        </div>
+    }
+    else
+    {
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem;">
+            @foreach (var version in _versions)
+            {
+                var report = ProposalReviewPayload.FromJson(version.ReviewJson);
+                var isOpen = _openVersionId == version.Id;
+                <div class="card">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;">
+                        <div>
+                            <strong>Version @version.Number</strong>
+                            @if (version.Label is not null)
+                            {
+                                <span> — @version.Label</span>
+                            }
+                            <div class="text-muted" style="font-size: 0.85rem;">
+                                @string.Join(", ", version.Files.Select(f => f.Name))
+                                · uploaded @version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")
+                                by @(version.CreatedBy?.DisplayName ?? "—")
+                            </div>
+                        </div>
+                        <span style="white-space: nowrap; display: flex; gap: 0.4rem; align-items: center;">
+                            @if (version.ReviewedAt is not null)
+                            {
+                                <span class="badge badge-ok">Reviewed @version.ReviewedAt.Value.LocalDateTime.ToString("dd MMM HH:mm")</span>
+                                <button class="btn btn-outline btn-sm" @onclick="() => _openVersionId = isOpen ? null : version.Id">
+                                    @(isOpen ? "Hide report" : "View report")
+                                </button>
+                            }
+                            @if (CanEdit)
+                            {
+                                <button class="btn btn-primary btn-sm" @onclick="() => RunProposalReviewAsync(version.Id)"
+                                        disabled="@(_reviewingVersionId is not null)">
+                                    @(_reviewingVersionId == version.Id ? "Reviewing…" : version.ReviewedAt is null ? "Run review" : "Run review again")
+                                </button>
+                                <button class="btn btn-outline btn-sm" @onclick="() => _deleteVersion = version"
+                                        disabled="@(_reviewingVersionId is not null)">Delete</button>
+                            }
+                        </span>
+                    </div>
+
+                    @if (_reviewingVersionId == version.Id && _progress is not null)
+                    {
+                        <p class="text-muted" style="margin: 0.5rem 0 0;"><span class="cursor-blink">▌</span> @_progress</p>
+                    }
+
+                    @if (isOpen && version.ReviewedAt is not null)
+                    {
+                        <div style="margin-top: 1rem;">
+                            <div class="section-title" style="margin-top: 0;">Criteria</div>
+                            @if (report.Criteria.Count == 0)
+                            {
+                                <p class="text-muted">No requirements list existed when this review ran, so criteria coverage was skipped.</p>
+                            }
+                            else
+                            {
+                                <div style="display: flex; gap: 0.6rem; margin-bottom: 1rem;">
+                                    <span class="badge badge-ok">@report.Criteria.Count(i => i.Coverage == ReviewCoverage.Addressed) addressed</span>
+                                    <span class="badge badge-stale">@report.Criteria.Count(i => i.Coverage == ReviewCoverage.Partly) partly</span>
+                                    <span class="badge badge-missing">@report.Criteria.Count(i => i.Coverage == ReviewCoverage.NotAddressed) not addressed</span>
+                                </div>
+                                @CriteriaTable(report.Criteria)
+                            }
+
+                            <div class="section-title">Language</div>
+                            @if (report.Language.Count == 0)
+                            {
+                                <p class="text-muted">No language issues found.</p>
+                            }
+                            else
+                            {
+                                <div class="req-table-wrap">
+                                    <table class="table req-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 15%;">Where</th>
+                                                <th style="width: 28%;">Text</th>
+                                                <th style="width: 27%;">Issue</th>
+                                                <th style="width: 30%;">Suggestion</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach (var finding in report.Language)
+                                            {
+                                                <tr>
+                                                    <td>@finding.Where</td>
+                                                    <td><em>"@finding.Quote"</em></td>
+                                                    <td>@finding.Issue</td>
+                                                    <td>@finding.Suggestion</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <div class="section-title">General quality</div>
+                            @if (report.Quality.Count == 0)
+                            {
+                                <p class="text-muted">No quality findings.</p>
+                            }
+                            else
+                            {
+                                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                    @foreach (var finding in report.Quality)
+                                    {
+                                        <div class="card" style="background: var(--surface-2, #f7f7f8);">
+                                            <div><strong>@finding.Where</strong></div>
+                                            <p style="margin: 0.35rem 0;">@finding.Observation</p>
+                                            @if (finding.Suggestions.Count > 0)
+                                            {
+                                                <div class="text-muted" style="font-size: 0.85rem;">Ways to edit:</div>
+                                                <ul style="margin: 0.25rem 0;">
+                                                    @foreach (var suggestion in finding.Suggestions)
+                                                    {
+                                                        <li>@suggestion</li>
+                                                    }
+                                                </ul>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(finding.RecommendedEdit))
+                                            {
+                                                <p style="margin: 0.35rem 0 0;"><strong>Recommended edit:</strong> @finding.RecommendedEdit</p>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (_deleteVersion is not null)
+{
+    <div class="modal-backdrop" @onclick="() => _deleteVersion = null">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Delete version @_deleteVersion.Number</h2>
+            <p>
+                Delete this uploaded version (@string.Join(", ", _deleteVersion.Files.Select(f => f.Name)))
+                and its review report? This cannot be undone.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _deleteVersion = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteVersionAsync" disabled="@_busy">Delete</button>
+            </div>
+        </div>
     </div>
 }
 
@@ -89,11 +263,59 @@ else if (_payload.Items.Count > 0)
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    private enum Tab { Draft, Proposal }
+
+    private const long MaxFileSize = 100 * 1024 * 1024;
+
+    private Tab _tab = Tab.Draft;
+    private string _acceptTypes = "";
+
     private Artifact? _artifact;
     private ReviewPayload _payload = new();
     private bool _running;
     private string? _progress;
     private string? _error;
+
+    private List<FinalProposalVersion>? _versions;
+    private string _uploadLabel = "";
+    private bool _uploading;
+    private Guid? _reviewingVersionId;
+    private Guid? _openVersionId;
+    private FinalProposalVersion? _deleteVersion;
+    private bool _busy;
+
+    private RenderFragment CriteriaTable(List<ReviewItem> items) =>
+        @<div class="req-table-wrap">
+            <table class="table req-table">
+                <thead>
+                    <tr>
+                        <th style="width: 28%;">Requirement</th>
+                        <th>Coverage</th>
+                        <th style="width: 20%;">Where addressed</th>
+                        <th style="width: 24%;">Suggested improvement</th>
+                        <th style="width: 20%;">Risk</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in items)
+                    {
+                        <tr>
+                            <td>
+                                @item.RequirementText
+                                <div class="text-muted" style="font-size: 0.78rem;">@item.RequirementType</div>
+                            </td>
+                            <td><span class="badge @BadgeFor(item.Coverage)">@LabelFor(item.Coverage)</span></td>
+                            <td>@item.WhereAddressed</td>
+                            <td>@item.Improvement</td>
+                            <td>@item.Risk</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>;
+
+    protected override void OnInitialized()
+        => _acceptTypes = string.Join(",", TextExtractor.SupportedExtensions.Order());
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
@@ -102,9 +324,10 @@ else if (_payload.Items.Count > 0)
         var user = await CurrentUser.GetAsync();
         _artifact = await Artifacts.GetAsync(ProposalId, ArtifactType.Review, user.Id);
         _payload = ReviewPayload.FromJson(_artifact?.ContentJson);
+        _versions = await ProposalReview.GetVersionsAsync(ProposalId, user.Id);
     }
 
-    private async Task RunAsync()
+    private async Task RunDraftAsync()
     {
         _error = null;
         _running = true;
@@ -128,6 +351,86 @@ else if (_payload.Items.Count > 0)
         {
             _running = false;
             _progress = null;
+        }
+    }
+
+    private async Task UploadVersionAsync(InputFileChangeEventArgs e)
+    {
+        _uploading = true;
+        _error = null;
+        var streams = new List<Stream>();
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            var files = new List<(string, Stream)>();
+            foreach (var file in e.GetMultipleFiles())
+            {
+                var stream = file.OpenReadStream(MaxFileSize);
+                streams.Add(stream);
+                files.Add((file.Name, stream));
+            }
+            await ProposalReview.CreateVersionAsync(ProposalId, user.Id, files, _uploadLabel);
+            _uploadLabel = "";
+            _openVersionId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            foreach (var stream in streams)
+                await stream.DisposeAsync();
+            _uploading = false;
+        }
+    }
+
+    private async Task RunProposalReviewAsync(Guid versionId)
+    {
+        _error = null;
+        _reviewingVersionId = versionId;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await ProposalReview.ReviewAsync(versionId, user.Id, async p =>
+            {
+                _progress = p;
+                await InvokeAsync(StateHasChanged);
+            });
+            await LoadAsync();
+            _openVersionId = versionId;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _reviewingVersionId = null;
+            _progress = null;
+        }
+    }
+
+    private async Task DeleteVersionAsync()
+    {
+        if (_deleteVersion is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await ProposalReview.DeleteVersionAsync(_deleteVersion.Id, user.Id);
+            _deleteVersion = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 

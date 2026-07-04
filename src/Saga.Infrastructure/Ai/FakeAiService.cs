@@ -27,6 +27,45 @@ public class FakeAiService : IAiService
             yield break;
         }
 
+        // Proposal review prompts (checked before the draft review: both embed req ids, but only
+        // this one asks for a recommendedEdit): canned three-axis JSON object with real ids.
+        if (request.SystemPrompt.Contains("recommendedEdit"))
+        {
+            var reviewIds = System.Text.RegularExpressions.Regex
+                .Matches(request.SystemPrompt, @"\[req id: ([0-9a-fA-F-]{36})\]")
+                .Select(m => m.Groups[1].Value)
+                .ToList();
+            var criteriaCoverages = new[]
+            {
+                ("Addressed", "\"Our proposed approach\" (slide 3)", null as string, null as string),
+                ("Partly", "\"Understanding your situation\" (slide 2)", "Add a concrete reference case with measurable results.", "The evaluators may score the criterion low without evidence."),
+                ("NotAddressed", null, "Add a dedicated section covering this requirement.", "A mandatory requirement left unaddressed can disqualify the bid."),
+            };
+            var criteriaRows = reviewIds.Select((id, i) =>
+            {
+                var (coverage, where, improvement, risk) = criteriaCoverages[i % criteriaCoverages.Length];
+                return $$"""
+                    {"requirementId": "{{id}}", "coverage": "{{coverage}}", "whereAddressed": {{Json(where)}}, "improvement": {{Json(improvement)}}, "risk": {{Json(risk)}}}
+                    """.Trim();
+            });
+            var proposalReviewJson = $$"""
+                {
+                  "criteria": [{{string.Join(",\n", criteriaRows)}}],
+                  "language": [
+                    {"where": "Slide 2", "quote": "we has extensive experience", "issue": "Subject–verb agreement error.", "suggestion": "we have extensive experience"},
+                    {"where": "Slide 5", "quote": "leverage synergies going forward", "issue": "Empty consultant phrasing.", "suggestion": "combine the two programmes so participants share one learning path"}
+                  ],
+                  "quality": [
+                    {"where": "Opening section", "observation": "The proposal opens with Mannaz's history instead of the client's challenge.", "suggestions": ["Open with a one-paragraph restatement of the client's aspiration.", "Move the company introduction to an appendix."], "recommendedEdit": "Open with a one-paragraph restatement of the client's aspiration, then link the approach directly to it."},
+                    {"where": "Pricing section", "observation": "The price table is not connected to the deliverables.", "suggestions": ["Add a deliverable column to the price table.", "Reference deliverable numbers in each price row."], "recommendedEdit": "Add a deliverable column to the price table so every amount maps to a concrete output."}
+                  ]
+                }
+                """;
+            yield return new AiStreamEvent.Delta(proposalReviewJson);
+            yield return new AiStreamEvent.Completed(1500, 400, "fake-model");
+            yield break;
+        }
+
         // Review prompts: echo the real requirement ids so the coverage report joins up offline.
         if (request.SystemPrompt.Contains("[req id: "))
         {

@@ -1,5 +1,7 @@
+@using Saga.Core.Abstractions
 @inject DocumentService Documents
 @inject CurrentUserService CurrentUser
+@inject IDocumentTextExtractor TextExtractor
 
 <h2>Material</h2>
 <p class="text-muted">
@@ -17,14 +19,14 @@
 @if (CanEdit)
 {
     <label class="upload-area">
-        <InputFile OnChange="UploadAsync" multiple disabled="@_uploading" />
+        <InputFile OnChange="UploadAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
         {
             <span>Uploading and extracting text…</span>
         }
         else
         {
-            <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, text</span>
+            <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, Excel, images, text</span>
         }
     </label>
 }
@@ -62,6 +64,11 @@ else
                         <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
                         <td style="text-align: right; white-space: nowrap;">
                             <button class="btn btn-outline btn-sm" @onclick="() => _previewDocument = doc">View text</button>
+                            @if (CanEdit)
+                            {
+                                <button class="btn btn-outline btn-sm" @onclick="() => BeginEditText(doc)">Edit text</button>
+                            }
+                            <button class="btn btn-outline btn-sm" @onclick="() => OpenTextHistoryAsync(doc)">History</button>
                             @if (CanEdit)
                             {
                                 <button class="btn btn-outline btn-sm" @onclick="() => _deleteDocument = doc">Delete</button>
@@ -120,6 +127,88 @@ else
     </div>
 }
 
+@if (_textEditDocument is not null)
+{
+    <div class="modal-backdrop" @onclick="CloseTextEditor">
+        <div class="modal-panel modal-wide" @onclick:stopPropagation>
+            <h2 class="modal-title">Edit extracted text — @_textEditDocument.Name</h2>
+            <p class="text-muted" style="margin-top: 0;">
+                Edit or remove sections before AI works from this material. Every save is kept in the
+                document's history, so nothing is lost.
+            </p>
+            <div class="form-field">
+                <textarea rows="22" style="width: 100%; font-family: ui-monospace, monospace; font-size: 0.85rem;"
+                          @bind="_textEditValue"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="CloseTextEditor">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveTextEditAsync" disabled="@_busy">Save text</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_historyDocument is not null)
+{
+    <div class="modal-backdrop" @onclick="CloseTextHistory">
+        <div class="modal-panel modal-wide" @onclick:stopPropagation>
+            <h2 class="modal-title">History — @_historyDocument.Name</h2>
+            @if (_historyVersions is null)
+            {
+                <p class="text-muted">Loading…</p>
+            }
+            else if (_historyVersions.Count == 0)
+            {
+                <p class="text-muted">No saved versions yet. The history starts with the first edit.</p>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="CloseTextHistory">Close</button>
+                </div>
+            }
+            else if (_viewHistoryVersion is not null)
+            {
+                <p class="text-muted">
+                    @_viewHistoryVersion.Origin · @_viewHistoryVersion.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")
+                    · @(_viewHistoryVersion.CreatedBy?.DisplayName ?? "unknown")
+                </p>
+                <div class="preview-text">@_viewHistoryVersion.Text</div>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="() => _viewHistoryVersion = null">Back to list</button>
+                    @if (CanEdit)
+                    {
+                        <button class="btn btn-primary" @onclick="() => RestoreTextVersionAsync(_viewHistoryVersion.Id)"
+                                disabled="@_busy">Restore this version</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <table class="table">
+                    <thead>
+                        <tr><th>When</th><th>Origin</th><th>By</th><th>Length</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var version in _historyVersions)
+                        {
+                            <tr>
+                                <td>@version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                                <td><span class="badge badge-role">@OriginLabel(version.Origin)</span></td>
+                                <td>@(version.CreatedBy?.DisplayName ?? "—")</td>
+                                <td class="text-muted">@FormatLength(version.Text)</td>
+                                <td style="text-align: right;">
+                                    <button class="btn btn-outline btn-sm" @onclick="() => _viewHistoryVersion = version">View</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" @onclick="CloseTextHistory">Close</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (_noteEditorOpen)
 {
     <div class="modal-backdrop" @onclick="CloseNoteEditor">
@@ -164,6 +253,7 @@ else
 
     private const long MaxFileSize = 100 * 1024 * 1024;
 
+    private string _acceptTypes = "";
     private List<Document>? _documents;
     private Document? _previewDocument;
     private Document? _deleteDocument;
@@ -175,6 +265,15 @@ else
     private Guid? _editingNoteId;
     private string _noteTitle = "";
     private string _noteText = "";
+
+    private Document? _textEditDocument;
+    private string _textEditValue = "";
+    private Document? _historyDocument;
+    private List<DocumentVersion>? _historyVersions;
+    private DocumentVersion? _viewHistoryVersion;
+
+    protected override void OnInitialized()
+        => _acceptTypes = string.Join(",", TextExtractor.SupportedExtensions.Order());
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
@@ -207,6 +306,80 @@ else
             _uploading = false;
         }
     }
+
+    private void BeginEditText(Document document)
+    {
+        _textEditDocument = document;
+        _textEditValue = document.ExtractedText;
+    }
+
+    private void CloseTextEditor() => _textEditDocument = null;
+
+    private async Task SaveTextEditAsync()
+    {
+        if (_textEditDocument is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.UpdateExtractedTextAsync(_textEditDocument.Id, user.Id, _textEditValue);
+            _textEditDocument = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OpenTextHistoryAsync(Document document)
+    {
+        _historyDocument = document;
+        _historyVersions = null;
+        _viewHistoryVersion = null;
+        var user = await CurrentUser.GetAsync();
+        _historyVersions = await Documents.GetVersionsAsync(document.Id, user.Id);
+    }
+
+    private void CloseTextHistory()
+    {
+        _historyDocument = null;
+        _historyVersions = null;
+        _viewHistoryVersion = null;
+    }
+
+    private async Task RestoreTextVersionAsync(Guid versionId)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.RestoreVersionAsync(versionId, user.Id);
+            CloseTextHistory();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string OriginLabel(VersionOrigin origin) => origin switch
+    {
+        VersionOrigin.Generated => "Extracted",
+        VersionOrigin.Edited => "Edited",
+        _ => "Restored",
+    };
 
     private void NewNote()
     {

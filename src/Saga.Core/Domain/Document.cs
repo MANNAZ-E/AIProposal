@@ -26,4 +26,6 @@ public class Document
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public ICollection<DocumentVersion> Versions { get; set; } = [];
 }

@@ -19,17 +19,6 @@
     <p class="error-text">@_error</p>
 }
 
-<div class="card" style="margin-bottom: 1rem;">
-    <div class="section-title" style="margin-top: 0;">Output format</div>
-    <div class="radio-row">
-        <label><input type="radio" checked="@(_format == OutputFormat.PowerPoint)" disabled="@(!CanEdit || _running)"
-                      @onchange="() => ChangeFormatAsync(OutputFormat.PowerPoint)" /> PowerPoint</label>
-        <label><input type="radio" checked="@(_format == OutputFormat.Word)" disabled="@(!CanEdit || _running)"
-                      @onchange="() => ChangeFormatAsync(OutputFormat.Word)" /> Word</label>
-    </div>
-    <div class="form-hint">Changing the format marks the structure (and downstream artifacts) as needing regeneration.</div>
-</div>
-
 @if (_budget is not null && _budget.OverBudget)
 {
     <div class="card budget-warning" style="margin-bottom: 1rem;">
@@ -66,6 +55,23 @@
             </span>
             <span class="gen-status">@StatusFor(option.Type)</span>
         </label>
+
+        @if (option.Type == ArtifactType.Structure)
+        {
+            <div style="margin: -0.25rem 0 0.5rem 2rem;">
+                <div class="radio-row">
+                    <span class="text-muted" style="margin-right: 0.25rem;">Output format:</span>
+                    <label><input type="radio" checked="@(_format == OutputFormat.PowerPoint)" disabled="@(!CanEdit || _running)"
+                                  @onchange="() => ChangeFormatAsync(OutputFormat.PowerPoint)" /> PowerPoint</label>
+                    <label><input type="radio" checked="@(_format == OutputFormat.Word)" disabled="@(!CanEdit || _running)"
+                                  @onchange="() => ChangeFormatAsync(OutputFormat.Word)" /> Word</label>
+                </div>
+                <div class="form-hint" style="margin-top: 0.15rem;">
+                    Slides, storyline and visual flow for PowerPoint — chapters and written narrative for Word.
+                    Changing it later marks the structure (and downstream artifacts) as needing regeneration.
+                </div>
+            </div>
+        }
     }
 
     @if (_recommended.Count > 0)
@@ -123,6 +129,8 @@
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
+    private bool _defaultsApplied;
+
     private async Task LoadAsync()
     {
         var user = await CurrentUser.GetAsync();
@@ -130,7 +138,24 @@
         var proposal = await Proposals.GetForUserAsync(ProposalId, user.Id);
         if (proposal is not null) _format = proposal.Value.Proposal.OutputFormat;
         _budget = await WorkingContext.AssessAsync(ProposalId);
+        ApplyDefaultSelection();
         UpdateRecommendations();
+    }
+
+    /// <summary>
+    /// First visit: everything except Content (the actual proposal text) starts checked,
+    /// so the first generation round runs the whole analysis in one click.
+    /// </summary>
+    private void ApplyDefaultSelection()
+    {
+        if (_defaultsApplied) return;
+        _defaultsApplied = true;
+        foreach (var option in Options.Where(o => o.Type != ArtifactType.Content))
+        {
+            var artifact = _artifacts.FirstOrDefault(a => a.Type == option.Type);
+            if (artifact?.IsLocked != true)
+                _selected.Add(option.Type);
+        }
     }
 
     private void Toggle(ArtifactType type, bool selected)
