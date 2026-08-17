@@ -20,39 +20,13 @@ else if (_proposal is null)
 }
 else
 {
-    <div class="page-header">
-        <div>
-            <h1 style="margin: 0 0 0.2rem;">@_proposal.Title</h1>
-            <span class="text-muted">@_proposal.ClientName · @_proposal.OutputFormat</span>
-            @if (_proposal.IsArchived)
-            {
-                <span class="badge badge-shared" style="margin-left: 0.5rem;">Archived</span>
-            }
-        </div>
-        <div style="display: flex; gap: 0.5rem;">
-            @if (_myRole == ProposalRole.Owner)
-            {
-                <button class="btn btn-outline" @onclick="() => _showShare = true">Share</button>
-                @if (_proposal.IsArchived)
-                {
-                    <button class="btn btn-outline" @onclick="() => SetArchivedAsync(false)">Unarchive</button>
-                }
-                else
-                {
-                    <button class="btn btn-outline" @onclick="() => SetArchivedAsync(true)">Archive</button>
-                }
-                <button class="btn btn-danger" @onclick="() => _showDelete = true">Delete</button>
-            }
-        </div>
-    </div>
-
     <div class="workspace">
         <nav class="workspace-nav">
             <button class="nav-item @(_section == Section.Material ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Material)">Material</button>
             <button class="nav-item @(_section == Section.Generate ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
-            <div class="nav-group">Artifacts</div>
+            <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.ClientProfile ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</button>
             <button class="nav-item @(_section == Section.Summary ? "active" : null)"
@@ -62,119 +36,150 @@ else
             <button class="nav-item @(_section == Section.Scoping ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Scoping)">Scoping @ArtifactBadge(ArtifactType.Scoping)</button>
             <button class="nav-item @(_section == Section.SolutionProposal ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.SolutionProposal)">Solution proposal @ArtifactBadge(ArtifactType.SolutionProposal)</button>
+                    @onclick="() => SelectSectionAsync(Section.SolutionProposal)">Solution @ArtifactBadge(ArtifactType.SolutionProposal)</button>
+            <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Structure ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Structure)">Structure @ArtifactBadge(ArtifactType.Structure)</button>
             <button class="nav-item @(_section == Section.Content ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</button>
-            <button class="nav-item @(_section == Section.Review ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Review)">Review @ArtifactBadge(ArtifactType.Review)</button>
-            <div class="nav-group">Proposal</div>
-            <button class="nav-item @(_section == Section.Chat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Chat)">Chat</button>
+            <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Export ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Export)">Export</button>
+            <div class="nav-divider"></div>
+            <button class="nav-item @(_section == Section.Chat ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Chat)">Chat</button>
+            <div class="nav-divider"></div>
+            <button class="nav-item @(_section == Section.Review ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Review)">Review</button>
+            <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.People)">People</button>
+                    @onclick="() => SelectSectionAsync(Section.People)">Team</button>
         </nav>
 
-        <div class="workspace-content">
-            @if (_section == Section.Material)
-            {
-                <MaterialSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.Generate)
-            {
-                <GenerateSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor"
-                                 OnChanged="LoadAsync" />
-            }
-            else if (_section == Section.Summary)
-            {
-                <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Summary" Title="Summary"
-                                      Description="A concise summary of the client material: what the client asks for, why it matters, central themes, key requirements, and ambiguities."
-                                      CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.Requirements)
-            {
-                <RequirementsSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.ClientProfile)
-            {
-                <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.ClientProfile" Title="Client profile"
-                                      Description="Optional research-based profile of the client: industry, business model, strategic themes and relevant initiatives. Background only — it never overrides the client's own documents."
-                                      CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.Scoping)
-            {
-                <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Scoping" Title="Scoping"
-                                      Description="The professional scoping: client situation and context, business challenge, aspiration, and boundaries and assumptions."
-                                      CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.SolutionProposal)
-            {
-                <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.SolutionProposal" Title="Solution proposal"
-                                      Description="Mannaz's proposed solution: idea, approach, methods, process and deliverables — the red thread through structure and content."
-                                      CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.Structure)
-            {
-                <StructureSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
-                                  CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.Content)
-            {
-                <ContentSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
-                                CanEdit="_myRole >= ProposalRole.Editor" />
-            }
-            else if (_section == Section.Review)
-            {
-                <ReviewSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor"
-                               OnChanged="LoadAsync" />
-            }
-            else if (_section == Section.Chat)
-            {
-                <ChatSection ProposalId="ProposalId" />
-            }
-            else if (_section == Section.Export)
-            {
-                <ExportSection ProposalId="ProposalId" />
-            }
-            else if (_section == Section.People)
-            {
-                <h2>People</h2>
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            @if (_myRole == ProposalRole.Owner)
-                            {
-                                <th></th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var member in _proposal.Members.OrderByDescending(m => m.Role))
+        <div class="workspace-main">
+            <div class="page-header">
+                <div>
+                    <h1 style="margin: 0 0 0.2rem;">@_proposal.Title</h1>
+                    <span class="text-muted">@_proposal.ClientName · @_proposal.OutputFormat</span>
+                    @if (_proposal.IsArchived)
+                    {
+                        <span class="badge badge-shared" style="margin-left: 0.5rem;">Archived</span>
+                    }
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    @if (_myRole == ProposalRole.Owner)
+                    {
+                        <button class="btn btn-outline" @onclick="() => _showShare = true">Share</button>
+                        @if (_proposal.IsArchived)
                         {
+                            <button class="btn btn-outline" @onclick="() => SetArchivedAsync(false)">Unarchive</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-outline" @onclick="() => SetArchivedAsync(true)">Archive</button>
+                        }
+                        <button class="btn btn-danger" @onclick="() => _showDelete = true">Delete</button>
+                    }
+                </div>
+            </div>
+
+            <div class="workspace-content">
+                @if (_section == Section.Material)
+                {
+                    <MaterialSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Generate)
+                {
+                    <GenerateSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor"
+                                     OnChanged="LoadAsync" />
+                }
+                else if (_section == Section.Summary)
+                {
+                    <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Summary" Title="Summary"
+                                          Description="A concise summary of the client material: what the client asks for, why it matters, central themes, key requirements, and ambiguities."
+                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Requirements)
+                {
+                    <RequirementsSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.ClientProfile)
+                {
+                    <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.ClientProfile" Title="Client profile"
+                                          Description="Optional research-based profile of the client: industry, business model, strategic themes and relevant initiatives. Background only — it never overrides the client's own documents."
+                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Scoping)
+                {
+                    <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Scoping" Title="Scoping"
+                                          Description="The professional scoping: client situation and context, business challenge, aspiration, and boundaries and assumptions."
+                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.SolutionProposal)
+                {
+                    <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.SolutionProposal" Title="Solution"
+                                          Description="Mannaz's proposed solution: idea, approach, methods, process and deliverables — the red thread through structure and content."
+                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Structure)
+                {
+                    <StructureSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
+                                      CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Content)
+                {
+                    <ContentSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
+                                    CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Review)
+                {
+                    <ReviewSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
+                }
+                else if (_section == Section.Chat)
+                {
+                    <ChatSection ProposalId="ProposalId" />
+                }
+                else if (_section == Section.Export)
+                {
+                    <ExportSection ProposalId="ProposalId" />
+                }
+                else if (_section == Section.People)
+                {
+                    <h2>Team</h2>
+                    <table class="table">
+                        <thead>
                             <tr>
-                                <td>@member.User?.DisplayName</td>
-                                <td>@member.User?.Email</td>
-                                <td><span class="badge badge-role">@member.Role</span></td>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
                                 @if (_myRole == ProposalRole.Owner)
                                 {
-                                    <td style="text-align: right;">
-                                        @if (member.Role != ProposalRole.Owner)
-                                        {
-                                            <button class="btn btn-outline btn-sm" @onclick="() => RemoveMemberAsync(member.UserId)">Remove</button>
-                                        }
-                                    </td>
+                                    <th></th>
                                 }
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            }
+                        </thead>
+                        <tbody>
+                            @foreach (var member in _proposal.Members.OrderByDescending(m => m.Role))
+                            {
+                                <tr>
+                                    <td>@member.User?.DisplayName</td>
+                                    <td>@member.User?.Email</td>
+                                    <td><span class="badge badge-role">@member.Role</span></td>
+                                    @if (_myRole == ProposalRole.Owner)
+                                    {
+                                        <td style="text-align: right;">
+                                            @if (member.Role != ProposalRole.Owner)
+                                            {
+                                                <button class="btn btn-outline btn-sm" @onclick="() => RemoveMemberAsync(member.UserId)">Remove</button>
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
         </div>
     </div>
 

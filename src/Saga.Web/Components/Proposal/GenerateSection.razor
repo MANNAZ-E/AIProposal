@@ -40,15 +40,15 @@
                 <strong>@option.Label</strong>
                 @if (artifact?.IsLocked == true)
                 {
-                    <span class="badge badge-locked">🔒 locked — skipped</span>
+                    <span class="badge badge-locked" style="margin-left: 0.5rem;">🔒 locked — skipped</span>
                 }
                 else if (artifact?.IsStale == true)
                 {
-                    <span class="badge badge-stale">regenerate recommended</span>
+                    <span class="badge badge-stale" style="margin-left: 0.5rem;">regenerate recommended</span>
                 }
                 else if (hasContent)
                 {
-                    <span class="badge badge-role">exists — will be replaced</span>
+                    <span class="badge badge-role" style="margin-left: 0.5rem;">exists — will be replaced</span>
                 }
                 <br />
                 <span class="text-muted">@option.Description</span>
@@ -112,7 +112,7 @@
         new(ArtifactType.Summary, "Summary", "Concise summary of the client material."),
         new(ArtifactType.Requirements, "Requirements & criteria", "Extracted list of everything the proposal must satisfy."),
         new(ArtifactType.Scoping, "Scoping", "Client situation, challenge, aspiration, boundaries."),
-        new(ArtifactType.SolutionProposal, "Solution proposal", "Mannaz's proposed solution — the red thread."),
+        new(ArtifactType.SolutionProposal, "Solution", "Mannaz's proposed solution — the red thread."),
         new(ArtifactType.Structure, "Structure", "Slide or chapter structure for the chosen format."),
         new(ArtifactType.Content, "Content", "The actual proposal, written from the structure."),
     ];

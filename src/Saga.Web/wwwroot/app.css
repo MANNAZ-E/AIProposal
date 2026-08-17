@@ -43,9 +43,10 @@ a {
 /* ---------- App shell ---------- */
 
 .app-shell {
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .app-bar {
@@ -100,9 +101,11 @@ a {
 .app-main {
     flex: 1;
     padding: 1.5rem;
-    max-width: 1100px;
     width: 100%;
-    margin: 0 auto;
+    min-width: 0;
+    /* The shell fills the viewport; the content pane scrolls so the workspace nav
+       can stay pinned over the full height. */
+    overflow-y: auto;
 }
 
 .auth-message {
@@ -376,21 +379,29 @@ a {
 
 .workspace {
     display: grid;
-    grid-template-columns: 210px 1fr;
-    gap: 1.5rem;
-    align-items: start;
+    grid-template-columns: 250px minmax(0, 1fr);
+    /* Break out of the .app-main padding so the nav sits flush against the app bar
+       and the viewport edge. */
+    margin: -1.5rem;
+    /* Exactly fills .app-main, so the nav stays put and only the content pane
+       scrolls — no sticky positioning and no scrollbar on .app-main itself. */
+    height: calc(100vh - 56px);
 }
 
 .workspace-nav {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    background: #fff;
-    border: 1px solid var(--saga-border);
-    border-radius: 8px;
-    padding: 0.5rem;
-    position: sticky;
-    top: 1rem;
+    background: var(--saga-primary);
+    color: #fff;
+    padding: 1rem 0.6rem;
+    overflow-y: auto;
+}
+
+.workspace-main {
+    min-width: 0;
+    padding: 1.5rem;
+    overflow-y: auto;
 }
 
 .nav-item {
@@ -404,31 +415,27 @@ a {
     font: inherit;
     font-size: 0.92rem;
     cursor: pointer;
-    color: var(--saga-text);
+    color: #fff;
 }
 
 .nav-item:hover:not(:disabled) {
-    background: var(--saga-primary-light);
+    background: rgba(255, 255, 255, 0.12);
 }
 
 .nav-item.active {
-    background: var(--saga-primary);
+    background: rgba(255, 255, 255, 0.22);
     color: #fff;
     font-weight: 600;
 }
 
 .nav-item:disabled {
-    color: var(--saga-muted);
-    opacity: 0.55;
+    color: rgba(255, 255, 255, 0.5);
     cursor: default;
 }
 
-.nav-group {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--saga-muted);
-    padding: 0.7rem 0.7rem 0.2rem;
+.nav-divider {
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    margin: 0.5rem 0.7rem;
 }
 
 .workspace-content {
@@ -643,11 +650,11 @@ a {
 }
 
 .nav-flag-stale {
-    color: var(--saga-warning);
+    color: #ffd166;
 }
 
 .nav-flag-ok {
-    color: #1e6b37;
+    color: #8fdca8;
 }
 
 .cursor-blink {
