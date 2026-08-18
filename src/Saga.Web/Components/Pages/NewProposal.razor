@@ -14,19 +14,24 @@
 
         <div class="form-field">
             <label for="title">Proposal title</label>
-            <InputText id="title" @bind-Value="_model.Title" />
+            <InputText id="title" type="text" @bind-Value="_model.Title" />
             <ValidationMessage For="() => _model.Title" />
         </div>
 
         <div class="form-field">
             <label for="client">Client name</label>
-            <InputText id="client" @bind-Value="_model.ClientName" />
+            <InputText id="client" type="text" @bind-Value="_model.ClientName" />
             <ValidationMessage For="() => _model.ClientName" />
         </div>
 
         <div class="form-field">
-            <label for="description">Short description (optional)</label>
-            <InputTextArea id="description" @bind-Value="_model.Description" rows="3" />
+            <label>Format</label>
+            <div class="radio-row">
+                <label><input type="radio" name="new-format" checked="@(_model.OutputFormat == OutputFormat.PowerPoint)"
+                              @onchange="() => _model.OutputFormat = OutputFormat.PowerPoint" /> PowerPoint</label>
+                <label><input type="radio" name="new-format" checked="@(_model.OutputFormat == OutputFormat.Word)"
+                              @onchange="() => _model.OutputFormat = OutputFormat.Word" /> Word</label>
+            </div>
         </div>
 
         @if (_error is not null)
@@ -53,8 +58,8 @@
         try
         {
             var user = await CurrentUser.GetAsync();
-            // The output format is chosen later, in the Generate step (next to the Structure option).
-            var id = await Proposals.CreateAsync(user.Id, _model.Title, _model.ClientName, _model.Description, OutputFormat.PowerPoint);
+            // The format can still be switched later, in the Generate and Structure steps.
+            var id = await Proposals.CreateAsync(user.Id, _model.Title, _model.ClientName, null, _model.OutputFormat);
             Nav.NavigateTo($"/proposals/{id}");
         }
         catch (Exception ex)
@@ -72,6 +77,6 @@
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A client name is required.")]
         public string ClientName { get; set; } = "";
 
-        public string? Description { get; set; }
+        public OutputFormat OutputFormat { get; set; } = OutputFormat.PowerPoint;
     }
 }

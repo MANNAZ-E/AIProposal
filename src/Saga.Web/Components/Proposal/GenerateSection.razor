@@ -3,17 +3,11 @@
 @inject ArtifactService Artifacts
 @inject GenerationService Generation
 @inject RequirementsExtractionService Extraction
-@inject ContentGenerationService ContentGeneration
 @inject ProposalService Proposals
 @inject WorkingContextService WorkingContext
 @inject CurrentUserService CurrentUser
 
 <h2>Generate</h2>
-<p class="text-muted" style="margin-top: 0;">
-    Choose what AI should generate. Artifacts are generated in dependency order; results replace
-    the current versions directly (every previous version stays in History). Locked artifacts are skipped.
-</p>
-
 @if (_error is not null)
 {
     <p class="error-text">@_error</p>
@@ -29,68 +23,64 @@
 }
 
 <div class="card">
+    <div class="gen-options">
     @foreach (var option in Options)
     {
         var artifact = _artifacts.FirstOrDefault(a => a.Type == option.Type);
         var hasContent = artifact is not null && artifact.Status != ArtifactStatus.Empty;
-        <label class="gen-option">
-            <input type="checkbox" checked="@_selected.Contains(option.Type)" disabled="@(_running || artifact?.IsLocked == true)"
-                   @onchange="e => Toggle(option.Type, (bool)e.Value!)" />
-            <span>
-                <strong>@option.Label</strong>
-                @if (artifact?.IsLocked == true)
-                {
-                    <span class="badge badge-locked" style="margin-left: 0.5rem;">🔒 locked — skipped</span>
-                }
-                else if (hasContent)
-                {
-                    <span class="badge badge-role" style="margin-left: 0.5rem;">exists — will be replaced</span>
-                }
-                <br />
-                <span class="text-muted">@option.Description</span>
-            </span>
-            <span class="gen-status">@StatusFor(option.Type)</span>
-        </label>
+        <div class="gen-group">
+            <label class="gen-option">
+                <input type="checkbox" checked="@_selected.Contains(option.Type)" disabled="@(_running || artifact?.IsLocked == true)"
+                       @onchange="e => Toggle(option.Type, (bool)e.Value!)" />
+                <span>
+                    <strong>@option.Label</strong>
+                    @if (artifact?.IsLocked == true)
+                    {
+                        <span class="badge badge-locked" style="margin-left: 0.5rem;"><LockIcon /> locked — skipped</span>
+                    }
+                    else if (hasContent)
+                    {
+                        <span class="badge badge-role" style="margin-left: 0.5rem;">exists — will be replaced</span>
+                    }
+                    <br />
+                    <span class="text-muted">@option.Description</span>
+                </span>
+                <span class="gen-status">@StatusFor(option.Type)</span>
+            </label>
 
-        @if (option.Type == ArtifactType.ClientProfile)
-        {
-            <div class="gen-suboptions">
-                <div class="gen-field">
-                    <label for="research-client-name">Client name</label>
-                    <input id="research-client-name" type="text" disabled="@(!CanEdit || _running)"
-                           value="@_researchClientName"
-                           @onchange="e => SaveClientResearchAsync((string?)e.Value, _clientWebsite)" />
+            @if (option.Type == ArtifactType.ClientProfile)
+            {
+                <div class="gen-suboptions">
+                    <div class="gen-field">
+                        <label for="research-client-name">Client name</label>
+                        <input id="research-client-name" type="text" disabled="@(!CanEdit || _running)"
+                               value="@_researchClientName"
+                               @onchange="e => SaveClientResearchAsync((string?)e.Value, _clientWebsite)" />
+                    </div>
+                    <div class="gen-field">
+                        <label for="client-website">Client website (optional)</label>
+                        <input id="client-website" type="text" placeholder="https://…" disabled="@(!CanEdit || _running)"
+                               value="@_clientWebsite"
+                               @onchange="e => SaveClientResearchAsync(_researchClientName, (string?)e.Value)" />
+                    </div>
                 </div>
-                <div class="gen-field">
-                    <label for="client-website">Client website (optional)</label>
-                    <input id="client-website" type="text" placeholder="https://…" disabled="@(!CanEdit || _running)"
-                           value="@_clientWebsite"
-                           @onchange="e => SaveClientResearchAsync(_researchClientName, (string?)e.Value)" />
-                </div>
-                <div class="form-hint" style="margin-top: 0.15rem;">
-                    What the tool looks the client up as when researching the profile. Web search is not switched
-                    on yet, so the profile is currently written from the uploaded material and general knowledge.
-                </div>
-            </div>
-        }
+            }
 
-        @if (option.Type == ArtifactType.Structure)
-        {
-            <div class="gen-suboptions">
-                <div class="radio-row">
-                    <span class="text-muted" style="margin-right: 0.25rem;">Output format:</span>
-                    <label><input type="radio" checked="@(_format == OutputFormat.PowerPoint)" disabled="@(!CanEdit || _running)"
-                                  @onchange="() => ChangeFormatAsync(OutputFormat.PowerPoint)" /> PowerPoint</label>
-                    <label><input type="radio" checked="@(_format == OutputFormat.Word)" disabled="@(!CanEdit || _running)"
-                                  @onchange="() => ChangeFormatAsync(OutputFormat.Word)" /> Word</label>
+            @if (option.Type == ArtifactType.Structure)
+            {
+                <div class="gen-suboptions">
+                    <div class="radio-row">
+                        <span class="text-muted" style="margin-right: 0.25rem;">Output format:</span>
+                        <label><input type="radio" checked="@(_format == OutputFormat.PowerPoint)" disabled="@(!CanEdit || _running)"
+                                      @onchange="() => ChangeFormatAsync(OutputFormat.PowerPoint)" /> PowerPoint</label>
+                        <label><input type="radio" checked="@(_format == OutputFormat.Word)" disabled="@(!CanEdit || _running)"
+                                      @onchange="() => ChangeFormatAsync(OutputFormat.Word)" /> Word</label>
+                    </div>
                 </div>
-                <div class="form-hint" style="margin-top: 0.15rem;">
-                    Slides and storyline for PowerPoint — sections and written narrative for Word.
-                    This is the same setting as the one on the Structure page.
-                </div>
-            </div>
-        }
+            }
+        </div>
     }
+    </div>
 
     @if (_recommended.Count > 0)
     {
@@ -132,7 +122,6 @@
         new(ArtifactType.Scoping, "Scoping", "Client situation, challenge, aspiration, boundaries."),
         new(ArtifactType.SolutionProposal, "Solution", "Mannaz's proposed solution — the red thread."),
         new(ArtifactType.Structure, "Structure", "Slide or section structure for the chosen format."),
-        new(ArtifactType.Content, "Content", "The actual proposal, written from the structure."),
     ];
 
     private readonly HashSet<ArtifactType> _selected = [];
@@ -169,14 +158,14 @@
     }
 
     /// <summary>
-    /// First visit: everything except Content (the actual proposal text) starts checked,
-    /// so the first generation round runs the whole analysis in one click.
+    /// First visit: everything starts checked, so the first generation round runs the
+    /// whole analysis in one click. The proposal text itself is written on the Content page.
     /// </summary>
     private void ApplyDefaultSelection()
     {
         if (_defaultsApplied) return;
         _defaultsApplied = true;
-        foreach (var option in Options.Where(o => o.Type != ArtifactType.Content))
+        foreach (var option in Options)
         {
             var artifact = _artifacts.FirstOrDefault(a => a.Type == option.Type);
             if (artifact?.IsLocked != true)
@@ -281,16 +270,6 @@
                                 throw new InvalidOperationException("The model did not return a usable structure.");
                             await Generation.ApplyAsync(ProposalId, type, user.Id, null,
                                 new StructurePayload { Items = items }.ToJson());
-                            break;
-
-                        case ArtifactType.Content:
-                            var (_, content) = await ContentGeneration.GenerateAllAsync(ProposalId, user.Id, null,
-                                async p =>
-                                {
-                                    _currentDetail = $"Writing content {p.Unit}/{p.TotalUnits}: {p.Title}";
-                                    await InvokeAsync(StateHasChanged);
-                                });
-                            await Generation.ApplyAsync(ProposalId, type, user.Id, null, content.ToJson());
                             break;
 
                         default:

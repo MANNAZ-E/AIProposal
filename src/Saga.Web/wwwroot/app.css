@@ -308,7 +308,7 @@ a {
 
 .form-field label {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     font-weight: 600;
     margin-bottom: 0.3rem;
 }
@@ -341,6 +341,9 @@ a {
 .radio-row {
     display: flex;
     gap: 1.25rem;
+    /* Radio text used to inherit the 15px body size, which made it look bigger
+       than the labels next to it. Keep the whole row at the form label size. */
+    font-size: 0.95rem;
 }
 
 .format-switch {
@@ -564,10 +567,6 @@ button.upload-area {
     text-decoration: underline;
 }
 
-.material-table {
-    margin-top: 2rem;
-}
-
 .material-heading {
     margin: 2rem 0 0.75rem;
 }
@@ -707,17 +706,23 @@ button.upload-area {
 
 /* ---------- Generate section ---------- */
 
+/* One row per artifact: the checkbox line plus any settings that belong to it.
+   The divider sits on the group so sub-options stay on the same side of the line
+   as the option they configure. */
+.gen-group {
+    padding: 0.9rem 0.5rem;
+    border-bottom: 1px solid var(--saga-border);
+}
+
+.gen-group:last-child {
+    border-bottom: none;
+}
+
 .gen-option {
     display: flex;
     align-items: flex-start;
     gap: 0.7rem;
-    padding: 0.7rem 0.5rem;
-    border-bottom: 1px solid var(--saga-border);
     cursor: pointer;
-}
-
-.gen-option:last-of-type {
-    border-bottom: none;
 }
 
 .gen-option input[type="checkbox"] {
@@ -728,20 +733,25 @@ button.upload-area {
     flex: 1;
 }
 
-/* Per-artifact settings shown under a generation option (format, client research). */
+/* Per-artifact settings shown under a generation option (format, client research),
+   indented to line up with the option's label text. */
 .gen-suboptions {
-    margin: -0.25rem 0 0.6rem 2rem;
+    margin: 0.55rem 0 0 2.2rem;
 }
 
 .gen-field {
     display: flex;
     align-items: baseline;
     gap: 0.6rem;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.4rem;
+}
+
+.gen-field:last-child {
+    margin-bottom: 0;
 }
 
 .gen-field label {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     color: var(--saga-muted);
     min-width: 11rem;
 }
@@ -796,6 +806,18 @@ button.upload-area {
     color: #6fd38a;
     line-height: 1;
     margin-top: 0.15rem;
+}
+
+/* The padlock takes its green from whatever it sits in: the light green above on
+   the dark nav, a darker green on light backgrounds like badges. */
+.lock-icon {
+    color: #2f8f52;
+    vertical-align: -0.15em;
+}
+
+.nav-flag-lock .lock-icon {
+    color: inherit;
+    vertical-align: baseline;
 }
 
 .cursor-blink {

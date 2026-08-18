@@ -12,10 +12,7 @@
 }
 
 <p class="text-muted" style="margin-top: 0;">
-    Upload the proposal you finished outside Saga (PowerPoint, Word, PDF — several files can make up
-    one version) and get it reviewed on three axes: the tender's <strong>criteria</strong>,
-    <strong>language</strong> (spelling errors, weird phrases) and <strong>general quality</strong>.
-    You do the edits in your own files; upload a new version whenever you want a fresh review.
+    Upload your proposal files (PowerPoint, Word, PDF) to review it.
 </p>
 
 @if (CanEdit)
@@ -44,7 +41,7 @@
 else if (_versions.Count == 0)
 {
     <div class="empty-state" style="margin-top: 1rem;">
-        <p>No final proposal uploaded yet. Export the draft, do your editing in PowerPoint or Word, and upload the result here for review.</p>
+        <p>No proposal uploaded yet.</p>
     </div>
 }
 else

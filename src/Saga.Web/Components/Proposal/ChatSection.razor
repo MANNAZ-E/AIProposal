@@ -2,11 +2,6 @@
 @inject CurrentUserService CurrentUser
 
 <h2>Chat</h2>
-<p class="text-muted" style="margin-top: 0;">
-    Ask questions about the proposal. Answers come strictly from the selected context —
-    chat never changes the proposal.
-</p>
-
 <div class="card" style="margin-bottom: 1rem;">
     <label for="chat-context" style="font-size: 0.85rem; font-weight: 600;">The AI answers from</label>
     <select id="chat-context" @bind="_kind" disabled="@_busy" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
@@ -19,7 +14,7 @@
 <div class="chat-thread">
     @if (_messages.Count == 0 && !_busy)
     {
-        <p class="text-muted">No questions yet. Try "What is the submission deadline?" or "Which requirements are we weakest on?"</p>
+        <p class="text-muted">No questions yet.</p>
     }
     @foreach (var message in _messages)
     {

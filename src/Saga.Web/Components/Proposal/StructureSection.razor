@@ -12,7 +12,7 @@
             <span class="badge badge-role" style="margin-left: 0.5rem;">@CountLabel</span>
             @if (_artifact.IsLocked)
             {
-                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+                <span class="badge badge-locked" style="margin-left: 0.3rem;"><LockIcon /> Locked</span>
             }
         }
     </h2>
@@ -38,12 +38,6 @@
     <label><input type="radio" name="structure-format" checked="@(!IsPowerPoint)" disabled="@(!CanEdit || _generating || _busy)"
                   @onchange="() => ChangeFormatAsync(Saga.Core.Domain.OutputFormat.Word)" /> Word</label>
 </div>
-<p class="text-muted" style="margin-top: 0.5rem;">
-    @(IsPowerPoint
-        ? "The slide sequence: storyline and key messages, with the number of slides per entry. Content is written slide by slide from this."
-        : "The section sequence: headings, argumentation and narrative, with a target word count per section. Content is written section by section from this.")
-</p>
-
 @if (_error is not null)
 {
     <p class="error-text">@_error</p>

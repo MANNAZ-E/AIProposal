@@ -10,7 +10,7 @@
             <span class="badge badge-role" style="margin-left: 0.5rem;">@StatusLabel</span>
             @if (_artifact.IsLocked)
             {
-                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+                <span class="badge badge-locked" style="margin-left: 0.3rem;"><LockIcon /> Locked</span>
             }
         }
     </h2>
@@ -34,8 +34,6 @@
         }
     </div>
 </div>
-<p class="text-muted" style="margin-top: 0;">@Description</p>
-
 @if (_error is not null)
 {
     <p class="error-text">@_error</p>
@@ -110,7 +108,6 @@ else if (_mode == Mode.DiffReview)
                 <label for="regen-instruction">Steering instruction (optional)</label>
                 <textarea id="regen-instruction" rows="3" @bind="_instruction"
                           placeholder="e.g. Make it shorter and put more emphasis on change management"></textarea>
-                <div class="form-hint">You'll see the new version side by side with the current one before anything is replaced.</div>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
@@ -201,7 +198,6 @@ else if (_mode == Mode.DiffReview)
     [Parameter, EditorRequired] public Guid ProposalId { get; set; }
     [Parameter, EditorRequired] public ArtifactType Type { get; set; }
     [Parameter, EditorRequired] public required string Title { get; set; }
-    [Parameter] public string? Description { get; set; }
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 

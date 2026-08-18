@@ -41,10 +41,6 @@ else
     @if (_deleted is { Count: > 0 })
     {
         <div class="section-title">Recycle bin</div>
-        <p class="text-muted" style="margin-top: -0.4rem;">
-            Deleted proposals are kept with all their material and history. Restore one to put it back
-            on the dashboard.
-        </p>
         <ProposalTable Items="_deleted" OnRestore="RestoreAsync" />
     }
 }

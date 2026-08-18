@@ -74,7 +74,6 @@ else
                 else if (_section == Section.Summary)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Summary" Title="Summary"
-                                          Description="A concise summary of the client material: what the client asks for, why it matters, central themes, key requirements, and ambiguities."
                                           CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Requirements)
@@ -85,19 +84,16 @@ else
                 else if (_section == Section.ClientProfile)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.ClientProfile" Title="Client profile"
-                                          Description="Optional research-based profile of the client: industry, business model, strategic themes and relevant initiatives. Background only — it never overrides the client's own documents."
                                           CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Scoping)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Scoping" Title="Scoping"
-                                          Description="The professional scoping: client situation and context, business challenge, aspiration, and boundaries and assumptions."
                                           CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.SolutionProposal)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.SolutionProposal" Title="Solution"
-                                          Description="Mannaz's proposed solution: idea, approach, methods, process and deliverables — the red thread through structure and content."
                                           CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Structure)
@@ -125,10 +121,6 @@ else
                 else if (_section == Section.People)
                 {
                     <h2>Team</h2>
-                    <p class="text-muted" style="margin-top: 0;">
-                        Everyone on this list can open the proposal. Add a Mannaz colleague to share it with them.
-                    </p>
-
                     @if (_myRole == ProposalRole.Owner)
                     {
                         <div class="card">
@@ -196,10 +188,6 @@ else
                     }
                     else
                     {
-                        <p class="text-muted" style="margin-top: 0;">
-                            The proposal name and client name are shown in the top line and used in every generation prompt.
-                        </p>
-
                         <div class="card">
                             <div class="form-field">
                                 <label for="settings-title">Proposal name</label>
@@ -342,12 +330,7 @@ else
         if (artifact is null || artifact.Status == ArtifactStatus.Empty) return null;
         if (artifact.IsLocked)
         {
-            return @<span class="nav-flag nav-flag-lock" title="Locked">
-                        <svg width="11" height="13" viewBox="0 0 11 13" aria-hidden="true" focusable="false">
-                            <path d="M3 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" stroke-width="1.4" />
-                            <rect x="1" y="5" width="9" height="7" rx="1.5" fill="currentColor" />
-                        </svg>
-                    </span>;
+            return @<span class="nav-flag nav-flag-lock" title="Locked"><LockIcon /></span>;
         }
         return @<span class="nav-flag nav-flag-ok" title="Created">●</span>;
     }

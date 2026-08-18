@@ -12,7 +12,7 @@
             <span class="badge badge-role" style="margin-left: 0.5rem;">@_items.Count items</span>
             @if (_artifact.IsLocked)
             {
-                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+                <span class="badge badge-locked" style="margin-left: 0.3rem;"><LockIcon /> Locked</span>
             }
         }
     </h2>
@@ -31,11 +31,6 @@
         }
     </div>
 </div>
-<p class="text-muted" style="margin-top: 0;">
-    Everything in the client material the proposal must satisfy or relate to. AI extracts the list;
-    you can edit, add and remove rows. The review step checks the proposal against this list.
-</p>
-
 @if (_error is not null)
 {
     <p class="error-text">@_error</p>

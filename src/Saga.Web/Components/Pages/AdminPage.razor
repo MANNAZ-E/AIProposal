@@ -8,11 +8,6 @@
 <h1>Admin</h1>
 
 <div class="section-title" style="margin-top: 1rem;">Mannaz voice</div>
-<p class="text-muted" style="margin-top: 0;">
-    These settings are injected into every generation prompt so output sounds like Mannaz.
-    Leave a field empty to fall back to the default professional consulting tone.
-</p>
-
 <div class="card" style="max-width: 760px;">
     <div class="form-field">
         <label for="voice-tone">Tone of voice</label>
@@ -20,7 +15,7 @@
                   placeholder="e.g. Confident but not salesy. Concrete and specific. Short sentences. No filler, no hype."></textarea>
     </div>
     <div class="form-field">
-        <label for="voice-about">About Mannaz (boilerplate the AI may draw on)</label>
+        <label for="voice-about">About Mannaz</label>
         <textarea id="voice-about" rows="5" @bind="_about"
                   placeholder="Who Mannaz is, history, size, signature strengths, typical clients…"></textarea>
     </div>
@@ -39,11 +34,6 @@
 </div>
 
 <div class="section-title">Recycle bin</div>
-<p class="text-muted" style="margin-top: 0;">
-    Deleted proposals across all users. Nothing is erased — restoring puts a proposal back on its
-    team's dashboard with all material, artifacts and history intact.
-</p>
-
 @if (_deleted.Count == 0)
 {
     <div class="empty-state"><p>No deleted proposals.</p></div>
@@ -79,11 +69,6 @@ else
 }
 
 <div class="section-title">Usage</div>
-<p class="text-muted" style="margin-top: 0;">
-    AI spend per proposal, across generations, reviews and chat. Costs are estimates from the
-    configured token prices@(_usage.Sum(u => u.EstimatedCost) == 0 ? " (prices not configured yet, so costs show as zero)" : "").
-</p>
-
 @if (_usage.Count == 0)
 {
     <div class="empty-state"><p>No AI runs recorded yet.</p></div>

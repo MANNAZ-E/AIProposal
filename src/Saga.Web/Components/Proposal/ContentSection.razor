@@ -12,7 +12,7 @@
             <span class="badge badge-role" style="margin-left: 0.5rem;">@_units.Count @(IsPowerPoint ? "slides" : "sections")</span>
             @if (_artifact.IsLocked)
             {
-                <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
+                <span class="badge badge-locked" style="margin-left: 0.3rem;"><LockIcon /> Locked</span>
             }
         }
     </h2>
@@ -24,12 +24,6 @@
         }
     </div>
 </div>
-<p class="text-muted" style="margin-top: 0;">
-    The actual proposal, written @(IsPowerPoint ? "slide by slide" : "section by section") from the approved
-    structure. Each @(IsPowerPoint ? "slide" : "section") can be edited, locked and regenerated on its own —
-    locked @(IsPowerPoint ? "slides" : "sections") survive "Regenerate all".
-</p>
-
 @if (_error is not null)
 {
     <p class="error-text">@_error</p>
@@ -55,7 +49,7 @@ else if (_pendingUnits is not null)
                 <strong>@unit.Title</strong>
                 @if (unit.IsLocked)
                 {
-                    <span class="badge badge-locked">🔒 kept</span>
+                    <span class="badge badge-locked"><LockIcon /> kept</span>
                 }
                 <div class="markdown-body">@Markdown.Render(unit.BodyMarkdown)</div>
             </div>
@@ -71,7 +65,7 @@ else if (_units.Count == 0)
     <div class="empty-state">
         @if (!_hasStructure)
         {
-            <p>Content is written from the structure. Generate and approve the structure first.</p>
+            <p>Generate the structure first.</p>
         }
         else
         {
@@ -97,7 +91,7 @@ else
                         <strong>@unit.Title</strong>
                         @if (unit.IsLocked)
                         {
-                            <span class="badge badge-locked">🔒</span>
+                            <span class="badge badge-locked"><LockIcon /></span>
                         }
                     </div>
                     @if (CanEdit && !_artifact!.IsLocked)
@@ -160,7 +154,6 @@ else
     <div class="modal-backdrop" @onclick="() => _showRegenerate = false">
         <div class="modal-panel" @onclick:stopPropagation>
             <h2 class="modal-title">Regenerate all content</h2>
-            <p class="text-muted">Locked @(IsPowerPoint ? "slides" : "sections") are kept unchanged. You review the result before anything is replaced.</p>
             <div class="form-field">
                 <label for="content-instruction">Steering instruction (optional)</label>
                 <textarea id="content-instruction" rows="3" @bind="_instruction"

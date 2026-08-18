@@ -12,7 +12,7 @@
 
 @if (CanEdit)
 {
-    <h3 class="material-heading">Add files</h3>
+    <h3 class="material-heading">Upload files</h3>
     <label class="upload-area">
         <InputFile OnChange="UploadAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
@@ -27,7 +27,7 @@
 
     <h3 class="material-heading">Add note</h3>
     <button type="button" class="upload-area" @onclick="NewNote">
-        <span><strong>Add note</strong> — write down what you know that isn't in a document</span>
+        <span><strong>Add note</strong></span>
     </button>
 }
 
@@ -58,11 +58,12 @@
 }
 else
 {
-    <table class="table material-table">
+    <h3 class="material-heading">Materials</h3>
+    <table class="table">
         <thead>
             <tr>
                 <th>Name</th>
-                <th>Text</th>
+                <th>Length</th>
                 <th>Added</th>
                 <th>Last edited</th>
                 <th></th>
@@ -72,7 +73,7 @@ else
             <tr class="table-group"><td colspan="5">Files</td></tr>
             @if (_uploads.Count == 0)
             {
-                <tr><td colspan="5" class="text-muted">No documents yet. Upload the client's files above.</td></tr>
+                <tr><td colspan="5" class="text-muted">Upload files above</td></tr>
             }
             else
             {
@@ -85,7 +86,7 @@ else
             <tr class="table-group"><td colspan="5">Notes</td></tr>
             @if (_notes.Count == 0)
             {
-                <tr><td colspan="5" class="text-muted">No notes yet. Add what you know that isn't written down anywhere.</td></tr>
+                <tr><td colspan="5" class="text-muted">Add notes above</td></tr>
             }
             else
             {
@@ -120,10 +121,6 @@ else
     <div class="modal-backdrop" @onclick="CloseTextEditor">
         <div class="modal-panel modal-wide" @onclick:stopPropagation>
             <h2 class="modal-title">Edit extracted text — @_textEditDocument.Name</h2>
-            <p class="text-muted" style="margin-top: 0;">
-                Edit or remove sections before AI works from this material. Every save is kept in the
-                document's history, so nothing is lost.
-            </p>
             <div class="form-field">
                 <textarea rows="22" style="width: 100%; font-family: ui-monospace, monospace; font-size: 0.85rem;"
                           @bind="_textEditValue"></textarea>
@@ -147,7 +144,7 @@ else
             }
             else if (_historyVersions.Count == 0)
             {
-                <p class="text-muted">No saved versions yet. The history starts with the first save.</p>
+                <p class="text-muted">No versions yet.</p>
                 <div class="modal-actions">
                     <button class="btn btn-outline" @onclick="CloseTextHistory">Close</button>
                 </div>
@@ -444,11 +441,15 @@ else
         }
     }
 
+    /// <summary>Compact character counts: 740, 1.5k, 74k, 1.5M.</summary>
     private static string FormatLength(string text)
         => text.Length switch
         {
             0 => "no text",
-            < 2000 => $"{text.Length} characters",
-            _ => $"~{text.Length / 1000}k characters",
+            < 1_000 => text.Length.ToString(),
+            < 10_000 => $"{text.Length / 1_000d:0.#}k",
+            < 1_000_000 => $"{text.Length / 1_000d:0}k",
+            < 10_000_000 => $"{text.Length / 1_000_000d:0.#}M",
+            _ => $"{text.Length / 1_000_000d:0}M",
         };
 }

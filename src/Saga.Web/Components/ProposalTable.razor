@@ -9,8 +9,7 @@
             <th>Client</th>
             <th>Owner</th>
             <th>Your role</th>
-            <th></th>
-            <th>@(IsRecycleBin ? "Deleted" : "Last updated")</th>
+            <th>@(IsRecycleBin ? "Deleted" : "Created")</th>
             @if (IsRecycleBin)
             {
                 <th></th>
@@ -25,20 +24,10 @@
                 <td>@item.ClientName</td>
                 <td>@item.OwnerName</td>
                 <td><span class="badge badge-role">@item.MyRole</span></td>
-                <td>
-                    @if (item.IsOwnedByMe)
-                    {
-                        <span class="badge badge-owner">Owner</span>
-                    }
-                    else
-                    {
-                        <span class="badge badge-shared">Shared with you</span>
-                    }
-                </td>
                 <td class="text-muted">
                     @(IsRecycleBin
-                        ? item.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—"
-                        : item.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm"))
+                        ? item.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy") ?? "—"
+                        : item.CreatedAt.LocalDateTime.ToString("dd MMM yyyy"))
                 </td>
                 @if (IsRecycleBin)
                 {
