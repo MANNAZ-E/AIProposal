@@ -1,4 +1,4 @@
-@page "/proposals/{ProposalId:guid}"
+﻿@page "/proposals/{ProposalId:guid}"
 @implements IDisposable
 @inject ProposalService Proposals
 @inject ArtifactService Artifacts
@@ -25,7 +25,7 @@ else
     <div class="workspace">
         <nav class="workspace-nav">
             <button class="nav-item @(_section == Section.Material ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Material)">Material</button>
+                    @onclick="() => SelectSectionAsync(Section.Material)">Materials</button>
             <button class="nav-item @(_section == Section.Generate ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
             <div class="nav-divider"></div>

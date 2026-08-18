@@ -255,6 +255,16 @@ a {
     border-bottom: none;
 }
 
+.table tbody tr.table-group td {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--saga-muted);
+    background: var(--saga-bg);
+    padding: 0.5rem 0.9rem;
+}
+
 .table tbody tr.row-link {
     cursor: pointer;
 }
@@ -552,6 +562,10 @@ button.upload-area {
 
 .link-button:hover {
     text-decoration: underline;
+}
+
+.material-table {
+    margin-top: 2rem;
 }
 
 .material-heading {

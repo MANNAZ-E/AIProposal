@@ -3,11 +3,7 @@
 @inject CurrentUserService CurrentUser
 @inject IDocumentTextExtractor TextExtractor
 
-<h2>Material</h2>
-<p class="text-muted">
-    Upload the client's documents and add your own notes. Everything here becomes the source
-    material AI works from.
-</p>
+<h2>Materials</h2>
 
 @if (_error is not null)
 {
@@ -16,6 +12,7 @@
 
 @if (CanEdit)
 {
+    <h3 class="material-heading">Add files</h3>
     <label class="upload-area">
         <InputFile OnChange="UploadAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
@@ -28,6 +25,7 @@
         }
     </label>
 
+    <h3 class="material-heading">Add note</h3>
     <button type="button" class="upload-area" @onclick="NewNote">
         <span><strong>Add note</strong> — write down what you know that isn't in a document</span>
     </button>
@@ -54,19 +52,13 @@
         </tr>;
 }
 
-<h3 class="material-heading">Materials</h3>
-
 @if (_documents is null)
 {
     <p class="text-muted">Loading…</p>
 }
-else if (_uploads.Count == 0)
-{
-    <p class="text-muted">No documents yet. Upload the client's files above.</p>
-}
 else
 {
-    <table class="table">
+    <table class="table material-table">
         <thead>
             <tr>
                 <th>Name</th>
@@ -77,40 +69,30 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var doc in _uploads)
+            <tr class="table-group"><td colspan="5">Files</td></tr>
+            @if (_uploads.Count == 0)
             {
-                @documentRow(doc)
+                <tr><td colspan="5" class="text-muted">No documents yet. Upload the client's files above.</td></tr>
             }
-        </tbody>
-    </table>
-}
-
-<h3 class="material-heading">Notes</h3>
-
-@if (_documents is null)
-{
-    <p class="text-muted">Loading…</p>
-}
-else if (_notes.Count == 0)
-{
-    <p class="text-muted">No notes yet. Add what you know that isn't written down anywhere.</p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Title</th>
-                <th>Text</th>
-                <th>Added</th>
-                <th>Last edited</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var note in _notes)
+            else
             {
-                @documentRow(note)
+                foreach (var doc in _uploads)
+                {
+                    @documentRow(doc)
+                }
+            }
+
+            <tr class="table-group"><td colspan="5">Notes</td></tr>
+            @if (_notes.Count == 0)
+            {
+                <tr><td colspan="5" class="text-muted">No notes yet. Add what you know that isn't written down anywhere.</td></tr>
+            }
+            else
+            {
+                foreach (var note in _notes)
+                {
+                    @documentRow(note)
+                }
             }
         </tbody>
     </table>
