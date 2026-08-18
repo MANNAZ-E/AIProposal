@@ -144,35 +144,34 @@ public static class ArtifactPrompts
             """,
 
         ArtifactType.Structure when format == OutputFormat.PowerPoint => """
-            Design the slide structure for the PowerPoint proposal: sequence, storyline, key messages and visual flow.
+            Design the slide structure for the PowerPoint proposal: sequence, storyline and key messages.
             Base it on the scoping, the solution proposal, and the requirements and criteria list.
 
-            Return ONLY a JSON array (no markdown fences, no commentary). One element per slide, in presentation order:
+            Return ONLY a JSON array (no markdown fences, no commentary). One element per entry, in presentation order:
             {
               "title": "slide title (in the proposal's language)",
               "purpose": "what this slide is for in the storyline",
               "keyMessage": "the one thing the audience must take away",
-              "estimatedLength": "e.g. '1 slide'",
-              "visualSuggestion": "suggested visual treatment (diagram, timeline, photo, table...)",
-              "addresses": "which requirements or themes this slide addresses"
+              "slideCount": 1
             }
-            Typically 10–16 slides: opening, understanding of the client's situation, approach/solution,
+            "slideCount" is a whole number: how many slides this entry needs (usually 1, more only when the
+            point genuinely does not fit on one slide).
+            Typically 10–16 slides in total: opening, understanding of the client's situation, approach/solution,
             process, deliverables, why Mannaz, practical matters, closing.
             """,
 
         ArtifactType.Structure => """
-            Design the chapter structure for the Word proposal: chapters, argumentation and written narrative.
+            Design the section structure for the Word proposal: sections, argumentation and written narrative.
             Base it on the scoping, the solution proposal, and the requirements and criteria list.
 
-            Return ONLY a JSON array (no markdown fences, no commentary). One element per chapter, in document order:
+            Return ONLY a JSON array (no markdown fences, no commentary). One element per section, in document order:
             {
-              "title": "chapter heading (in the proposal's language)",
-              "purpose": "what this chapter is for in the argument",
-              "keyMessage": "the central points of the chapter",
-              "estimatedLength": "recommended length, e.g. '2-3 pages'",
-              "visualSuggestion": null,
-              "addresses": "which requirements or themes this chapter addresses"
+              "title": "section heading (in the proposal's language)",
+              "purpose": "what this section is for in the argument",
+              "keyMessage": "the central points of the section",
+              "wordCount": 400
             }
+            "wordCount" is a whole number: the target length of the section in words.
             """,
 
         _ => throw new NotSupportedException($"No prompt defined yet for {type}."),
@@ -183,10 +182,14 @@ public static class ArtifactPrompts
         Models.StructureItem item, int position, int total, string? instruction = null)
     {
         var basePrompt = BuildSystemPromptCore(proposal, voice);
-        var unitKind = proposal.OutputFormat == OutputFormat.PowerPoint ? "slide" : "section";
-        var bodyRule = proposal.OutputFormat == OutputFormat.PowerPoint
+        var isPowerPoint = proposal.OutputFormat == OutputFormat.PowerPoint;
+        var unitKind = isPowerPoint ? "slide" : "section";
+        var bodyRule = isPowerPoint
             ? "Write the slide body as concise bullet points and short statements (markdown), suitable for a slide — not paragraphs of prose."
             : "Write the section as coherent, well-argued document prose in markdown.";
+        var lengthRule = isPowerPoint
+            ? $"- Length: {item.SlideCount ?? 1} slide(s) worth of material."
+            : $"- Length: about {item.WordCount?.ToString() ?? "400"} words.";
 
         var task = $"""
             ## Task
@@ -196,8 +199,7 @@ public static class ArtifactPrompts
             - Title: {item.Title}
             - Purpose: {item.Purpose}
             - Key message: {item.KeyMessage}
-            - Estimated length: {item.EstimatedLength}
-            - Addresses: {item.Addresses}
+            {lengthRule}
 
             {bodyRule}
             Return ONLY the body content as markdown — no title heading (the title is stored separately), no commentary.

@@ -19,14 +19,6 @@ else if (!_readiness.CanExport)
 }
 else
 {
-    @if (_readiness.StructureStale || _readiness.ContentStale)
-    {
-        <div class="card budget-warning" style="margin-bottom: 1rem;">
-            <strong>Out of date:</strong>
-            @(_readiness.StructureStale ? "the structure" : "the content") was generated before the latest
-            upstream changes. Consider regenerating before exporting.
-        </div>
-    }
     @if (_readiness.MissingUnits > 0)
     {
         <div class="card budget-warning" style="margin-bottom: 1rem;">
@@ -46,7 +38,7 @@ else
         <div class="export-row">
             <div>
                 <strong>Word (.docx)</strong><br />
-                <span class="text-muted">Title page + chapters from the structure, prose from the content units.</span>
+                <span class="text-muted">Title page + sections from the structure, prose from the content units.</span>
             </div>
             <a class="btn btn-primary" href="/proposals/@ProposalId/export?format=docx" target="_blank">Download</a>
         </div>

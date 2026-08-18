@@ -58,6 +58,7 @@ builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
+builder.Services.AddScoped<Saga.Web.Components.Layout.AppHeaderState>();
 
 // Bing-grounded research is wired up with the Foundry project in the deployment milestone.
 builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();

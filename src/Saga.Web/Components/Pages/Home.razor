@@ -37,16 +37,37 @@ else
         <div class="section-title">Archived</div>
         <ProposalTable Items="archived" OnOpen="Open" />
     }
+
+    @if (_deleted is { Count: > 0 })
+    {
+        <div class="section-title">Recycle bin</div>
+        <p class="text-muted" style="margin-top: -0.4rem;">
+            Deleted proposals are kept with all their material and history. Restore one to put it back
+            on the dashboard.
+        </p>
+        <ProposalTable Items="_deleted" OnRestore="RestoreAsync" />
+    }
 }
 
 @code {
     private List<ProposalListItem>? _items;
+    private List<ProposalListItem>? _deleted;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
         var user = await CurrentUser.GetAsync();
         _items = await Proposals.GetDashboardAsync(user.Id);
+        _deleted = await Proposals.GetRecycleBinAsync(user.Id);
     }
 
     private void Open(Guid id) => Nav.NavigateTo($"/proposals/{id}");
+
+    private async Task RestoreAsync(Guid id)
+    {
+        var user = await CurrentUser.GetAsync();
+        await Proposals.RestoreAsync(id, user.Id);
+        await LoadAsync();
+    }
 }

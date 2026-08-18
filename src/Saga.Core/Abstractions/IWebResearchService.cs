@@ -7,13 +7,16 @@ namespace Saga.Core.Abstractions;
 /// </summary>
 public interface IWebResearchService
 {
-    Task<string?> ResearchClientAsync(string clientName, string? assignmentContext,
+    /// <param name="clientName">The name to search for (the proposal's research client name).</param>
+    /// <param name="clientWebsite">Optional client website, used to anchor the search on the right company.</param>
+    /// <param name="assignmentContext">Optional description of the assignment, to focus the findings.</param>
+    Task<string?> ResearchClientAsync(string clientName, string? clientWebsite, string? assignmentContext,
         CancellationToken ct = default);
 }
 
 /// <summary>Used until the Foundry project + Bing connection are configured.</summary>
 public class NullWebResearchService : IWebResearchService
 {
-    public Task<string?> ResearchClientAsync(string clientName, string? assignmentContext,
+    public Task<string?> ResearchClientAsync(string clientName, string? clientWebsite, string? assignmentContext,
         CancellationToken ct = default) => Task.FromResult<string?>(null);
 }

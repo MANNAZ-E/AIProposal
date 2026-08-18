@@ -1,3 +1,7 @@
+@*
+    Shared proposal list. With OnRestore set it renders the recycle-bin variant: rows are not
+    clickable (a deleted proposal cannot be opened) and each row offers Restore instead.
+*@
 <table class="table">
     <thead>
         <tr>
@@ -6,13 +10,17 @@
             <th>Owner</th>
             <th>Your role</th>
             <th></th>
-            <th>Last updated</th>
+            <th>@(IsRecycleBin ? "Deleted" : "Last updated")</th>
+            @if (IsRecycleBin)
+            {
+                <th></th>
+            }
         </tr>
     </thead>
     <tbody>
         @foreach (var item in Items)
         {
-            <tr class="row-link" @onclick="() => OnOpen.InvokeAsync(item.Id)">
+            <tr class="@(IsRecycleBin ? null : "row-link")" @onclick="() => RowClickAsync(item.Id)">
                 <td><strong>@item.Title</strong></td>
                 <td>@item.ClientName</td>
                 <td>@item.OwnerName</td>
@@ -27,7 +35,17 @@
                         <span class="badge badge-shared">Shared with you</span>
                     }
                 </td>
-                <td class="text-muted">@item.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                <td class="text-muted">
+                    @(IsRecycleBin
+                        ? item.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—"
+                        : item.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm"))
+                </td>
+                @if (IsRecycleBin)
+                {
+                    <td style="text-align: right;">
+                        <button class="btn btn-outline btn-sm" @onclick="() => OnRestore.InvokeAsync(item.Id)">Restore</button>
+                    </td>
+                }
             </tr>
         }
     </tbody>
@@ -36,4 +54,11 @@
 @code {
     [Parameter, EditorRequired] public required List<ProposalListItem> Items { get; set; }
     [Parameter] public EventCallback<Guid> OnOpen { get; set; }
+
+    /// <summary>Set to turn the table into the recycle-bin variant.</summary>
+    [Parameter] public EventCallback<Guid> OnRestore { get; set; }
+
+    private bool IsRecycleBin => OnRestore.HasDelegate;
+
+    private Task RowClickAsync(Guid id) => IsRecycleBin ? Task.CompletedTask : OnOpen.InvokeAsync(id);
 }

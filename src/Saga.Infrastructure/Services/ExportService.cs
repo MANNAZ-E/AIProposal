@@ -8,8 +8,7 @@ namespace Saga.Infrastructure.Services;
 
 public record ExportFile(string FileName, string ContentType, byte[] Bytes);
 
-public record ExportReadiness(bool HasStructure, bool HasContent, bool StructureStale, bool ContentStale,
-    int MissingUnits)
+public record ExportReadiness(bool HasStructure, bool HasContent, int MissingUnits)
 {
     public bool CanExport => HasStructure && HasContent;
 }
@@ -27,17 +26,15 @@ public class ExportService(IDbContextFactory<SagaDbContext> dbFactory)
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
         var artifacts = await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
 
-        var structureArtifact = artifacts.FirstOrDefault(a => a.Type == ArtifactType.Structure);
-        var contentArtifact = artifacts.FirstOrDefault(a => a.Type == ArtifactType.Content);
-        var structure = StructurePayload.FromJson(structureArtifact?.ContentJson);
-        var content = ContentPayload.FromJson(contentArtifact?.ContentJson);
+        var structure = StructurePayload.FromJson(
+            artifacts.FirstOrDefault(a => a.Type == ArtifactType.Structure)?.ContentJson);
+        var content = ContentPayload.FromJson(
+            artifacts.FirstOrDefault(a => a.Type == ArtifactType.Content)?.ContentJson);
 
         var covered = content.Units.Select(u => u.StructureItemId).ToHashSet();
         return new ExportReadiness(
             HasStructure: structure.Items.Count > 0,
             HasContent: content.Units.Count > 0,
-            StructureStale: structureArtifact?.IsStale == true,
-            ContentStale: contentArtifact?.IsStale == true,
             MissingUnits: structure.Items.Count(i => !covered.Contains(i.Id)));
     }
 

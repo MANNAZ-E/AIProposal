@@ -150,6 +150,8 @@ public class DocumentService(
             UpdatedAt = now,
         };
         db.Documents.Add(note);
+        // Notes carry the same version history as uploads: the first save is the baseline.
+        db.DocumentVersions.Add(NewVersion(note.Id, text, VersionOrigin.Generated, userId, now));
         await MarkMaterialChangedAsync(db, proposalId, now, ct);
         await db.SaveChangesAsync(ct);
         return note;
@@ -166,6 +168,7 @@ public class DocumentService(
         note.Name = string.IsNullOrWhiteSpace(title) ? "Note" : title.Trim();
         note.ExtractedText = text;
         note.UpdatedAt = now;
+        db.DocumentVersions.Add(NewVersion(note.Id, text, VersionOrigin.Edited, userId, now));
         await MarkMaterialChangedAsync(db, note.ProposalId, now, ct);
         await db.SaveChangesAsync(ct);
     }
@@ -184,19 +187,10 @@ public class DocumentService(
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>
-    /// Client material changed: all generated artifacts are now stale (spec §19) except locked ones,
-    /// which are never flagged for regeneration.
-    /// </summary>
+    /// <summary>The material is the proposal's source, so any change bumps its last-activity stamp.</summary>
     private static async Task MarkMaterialChangedAsync(SagaDbContext db, Guid proposalId, DateTimeOffset now,
         CancellationToken ct)
     {
-        var artifacts = await db.Artifacts
-            .Where(a => a.ProposalId == proposalId && a.Status != ArtifactStatus.Empty && !a.IsLocked)
-            .ToListAsync(ct);
-        foreach (var artifact in artifacts)
-            artifact.IsStale = true;
-
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
         proposal.UpdatedAt = now;
     }

@@ -10,10 +10,6 @@
         @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
         {
             <span class="badge badge-role" style="margin-left: 0.5rem;">@_units.Count @(IsPowerPoint ? "slides" : "sections")</span>
-            @if (_artifact.IsStale)
-            {
-                <span class="badge badge-stale" style="margin-left: 0.3rem;">Regenerate recommended</span>
-            }
             @if (_artifact.IsLocked)
             {
                 <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>

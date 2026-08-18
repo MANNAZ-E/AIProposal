@@ -10,8 +10,21 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
     public async Task<List<ProposalListItem>> GetDashboardAsync(Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await db.ProposalMembers
-            .Where(m => m.UserId == userId)
+        return await ListForUserAsync(db, userId, deleted: false, ct);
+    }
+
+    /// <summary>The recycle bin: soft-deleted proposals this user is a member of, newest deletion first.</summary>
+    public async Task<List<ProposalListItem>> GetRecycleBinAsync(Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var items = await ListForUserAsync(db, userId, deleted: true, ct);
+        return items.OrderByDescending(i => i.DeletedAt).ToList();
+    }
+
+    private static Task<List<ProposalListItem>> ListForUserAsync(SagaDbContext db, Guid userId, bool deleted,
+        CancellationToken ct)
+        => db.ProposalMembers
+            .Where(m => m.UserId == userId && m.Proposal!.IsDeleted == deleted)
             .OrderByDescending(m => m.Proposal!.CreatedAt)
             .Select(m => new ProposalListItem(
                 m.ProposalId,
@@ -22,9 +35,9 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
                 m.Proposal.OwnerId == userId,
                 m.Proposal.IsArchived,
                 m.Proposal.CreatedAt,
-                m.Proposal.UpdatedAt))
+                m.Proposal.UpdatedAt,
+                m.Proposal.DeletedAt))
             .ToListAsync(ct);
-    }
 
     public async Task<Guid> CreateAsync(Guid userId, string title, string clientName, string? description,
         OutputFormat outputFormat, CancellationToken ct = default)
@@ -63,7 +76,10 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
             .Include(m => m.Proposal!).ThenInclude(p => p.Owner)
             .Include(m => m.Proposal!).ThenInclude(p => p.Members).ThenInclude(mm => mm.User)
             .FirstOrDefaultAsync(m => m.ProposalId == proposalId && m.UserId == userId, ct);
-        return membership is null ? null : (membership.Proposal!, membership.Role);
+        // A deleted proposal reads as gone until someone restores it from the recycle bin.
+        return membership is null || membership.Proposal!.IsDeleted
+            ? null
+            : (membership.Proposal!, membership.Role);
     }
 
     public async Task ShareAsync(Guid proposalId, Guid actingUserId, string email, ProposalRole role,
@@ -113,9 +129,48 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>Renames the proposal and/or its client (Settings page). Owner only.</summary>
+    public async Task UpdateDetailsAsync(Guid proposalId, Guid actingUserId, string title, string clientName,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            throw new InvalidOperationException("The proposal needs a name.");
+        if (string.IsNullOrWhiteSpace(clientName))
+            throw new InvalidOperationException("The proposal needs a client name.");
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureRoleAsync(db, proposalId, actingUserId, ProposalRole.Owner, ct);
+        var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
+        proposal.Title = title.Trim();
+        proposal.ClientName = clientName.Trim();
+        proposal.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
+
     /// <summary>
-    /// Changes the output format. Spec §20: the structure was designed for the old format,
-    /// so it (and everything downstream) becomes stale.
+    /// Sets what the client-profile web research should look for. Blank values fall back to
+    /// the proposal's own client name (research name) or to no website anchor.
+    /// </summary>
+    public async Task SetClientResearchAsync(Guid proposalId, Guid actingUserId, string? researchClientName,
+        string? clientWebsite, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureRoleAsync(db, proposalId, actingUserId, ProposalRole.Editor, ct);
+        var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
+
+        var name = string.IsNullOrWhiteSpace(researchClientName) ? null : researchClientName.Trim();
+        var website = string.IsNullOrWhiteSpace(clientWebsite) ? null : clientWebsite.Trim();
+        if (proposal.ResearchClientName == name && proposal.ClientWebsite == website) return;
+
+        proposal.ResearchClientName = name;
+        proposal.ClientWebsite = website;
+        proposal.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Changes the output format. The structure keeps its titles, purposes and key messages;
+    /// only which length column applies changes. Regenerating is left to the consultant.
     /// </summary>
     public async Task SetOutputFormatAsync(Guid proposalId, Guid actingUserId, OutputFormat format,
         CancellationToken ct = default)
@@ -127,15 +182,6 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
 
         proposal.OutputFormat = format;
         proposal.UpdatedAt = DateTimeOffset.UtcNow;
-
-        var affected = new[] { ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review };
-        var artifacts = await db.Artifacts
-            .Where(a => a.ProposalId == proposalId && affected.Contains(a.Type)
-                        && a.Status != ArtifactStatus.Empty && !a.IsLocked)
-            .ToListAsync(ct);
-        foreach (var artifact in artifacts)
-            artifact.IsStale = true;
-
         await db.SaveChangesAsync(ct);
     }
 
@@ -149,12 +195,43 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Soft delete: the proposal and everything under it stay in the database, flagged as deleted,
+    /// and move to the recycle bin. Owner only.
+    /// </summary>
     public async Task DeleteAsync(Guid proposalId, Guid actingUserId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await EnsureRoleAsync(db, proposalId, actingUserId, ProposalRole.Owner, ct);
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
-        db.Proposals.Remove(proposal);
+        if (proposal.IsDeleted) return;
+        proposal.IsDeleted = true;
+        proposal.DeletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Restores a proposal from the recycle bin. Any team member can do this.</summary>
+    public async Task RestoreAsync(Guid proposalId, Guid actingUserId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureRoleAsync(db, proposalId, actingUserId, ProposalRole.Reader, ct);
+        await RestoreCoreAsync(db, proposalId, ct);
+    }
+
+    /// <summary>Restores without a membership check — for the admin recycle bin.</summary>
+    public async Task RestoreAsAdminAsync(Guid proposalId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await RestoreCoreAsync(db, proposalId, ct);
+    }
+
+    private static async Task RestoreCoreAsync(SagaDbContext db, Guid proposalId, CancellationToken ct)
+    {
+        var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
+        if (!proposal.IsDeleted) return;
+        proposal.IsDeleted = false;
+        proposal.DeletedAt = null;
+        proposal.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
     }
 

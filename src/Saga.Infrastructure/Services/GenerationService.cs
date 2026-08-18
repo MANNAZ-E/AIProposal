@@ -49,7 +49,11 @@ public class GenerationService(
         // Client profile: add live web research (Bing grounding via Foundry) when configured.
         if (type == ArtifactType.ClientProfile)
         {
-            var findings = await webResearch.ResearchClientAsync(proposal.ClientName, proposal.Description, ct);
+            var searchName = string.IsNullOrWhiteSpace(proposal.ResearchClientName)
+                ? proposal.ClientName
+                : proposal.ResearchClientName;
+            var findings = await webResearch.ResearchClientAsync(
+                searchName, proposal.ClientWebsite, proposal.Description, ct);
             if (!string.IsNullOrWhiteSpace(findings))
                 context += $"\n<web_research>\nLive web research about the client, with sources. Ground the profile in this.\n{findings}\n</web_research>\n";
         }
@@ -105,7 +109,7 @@ public class GenerationService(
         return new GenerationResult(run.Id, text.ToString().Trim(), run.PromptTokens, run.CompletionTokens, run.Model);
     }
 
-    /// <summary>Accepts a generation: snapshots the artifact, replaces content, propagates staleness.</summary>
+    /// <summary>Accepts a generation: snapshots the previous version, then replaces the content.</summary>
     public async Task<Artifact> ApplyAsync(Guid proposalId, ArtifactType type, Guid userId,
         string? contentMarkdown, string? contentJson, CancellationToken ct = default)
     {
@@ -132,12 +136,10 @@ public class GenerationService(
         artifact.ContentMarkdown = contentMarkdown;
         artifact.ContentJson = contentJson;
         artifact.Status = ArtifactStatus.Generated;
-        artifact.IsStale = false;
         artifact.GeneratedAt = now;
         artifact.UpdatedAt = now;
 
         db.ArtifactVersions.Add(ArtifactService.Snapshot(artifact, VersionOrigin.Generated, userId, now));
-        await ArtifactService.MarkDownstreamStaleAsync(db, proposalId, type, ct);
         await ArtifactService.TouchProposalAsync(db, proposalId, now, ct);
         await db.SaveChangesAsync(ct);
         return artifact;

@@ -1,0 +1,37 @@
+@rendermode InteractiveServer
+@implements IDisposable
+@inject AppHeaderState Header
+
+<header class="app-bar">
+    <a class="app-brand" href="/">
+        <span class="app-logo">Saga</span>
+    </a>
+    <div class="app-context">
+        @if (!string.IsNullOrWhiteSpace(Header.Title))
+        {
+            <span class="app-context-title">@Header.Title</span>
+            @if (!string.IsNullOrWhiteSpace(Header.Subtitle))
+            {
+                <span class="app-context-subtitle">@Header.Subtitle</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Header.Badge))
+            {
+                <span class="app-context-badge">@Header.Badge</span>
+            }
+        }
+    </div>
+    <div class="app-user">
+        <a class="app-nav-link" href="/admin">Admin</a>
+        <AuthorizeView>
+            <Authorized>@context.User.Identity?.Name</Authorized>
+        </AuthorizeView>
+    </div>
+</header>
+
+@code {
+    protected override void OnInitialized() => Header.Changed += OnHeaderChanged;
+
+    public void Dispose() => Header.Changed -= OnHeaderChanged;
+
+    private void OnHeaderChanged() => _ = InvokeAsync(StateHasChanged);
+}

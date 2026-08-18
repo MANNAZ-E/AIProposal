@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     --saga-primary: #5A616D;
     --saga-primary-dark: #464c56;
     --saga-primary-light: #eceef1;
@@ -8,6 +8,9 @@
     --saga-danger: #b32121;
     --saga-warning: #9a6b00;
     --saga-bg: #f6f7f8;
+    /* Workspace nav width, also used to line the app bar's proposal name up with the content. */
+    --saga-nav-width: 250px;
+    --saga-gutter: 1.5rem;
 }
 
 * {
@@ -32,6 +35,11 @@ h1 {
 }
 
 h2 {
+    font-size: 1.44rem;
+    font-weight: 600;
+}
+
+h3 {
     font-size: 1.15rem;
     font-weight: 600;
 }
@@ -55,15 +63,21 @@ a {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 1.5rem;
+    padding: 0 var(--saga-gutter);
     height: 56px;
     flex-shrink: 0;
 }
 
+/*
+   The brand occupies exactly the nav width, so whatever follows it starts at the same x as the
+   workspace content (nav width + the content pane's own gutter).
+*/
 .app-brand {
     display: flex;
     align-items: baseline;
     gap: 0.75rem;
+    width: var(--saga-nav-width);
+    flex-shrink: 0;
     color: #fff;
     text-decoration: none;
 }
@@ -74,9 +88,41 @@ a {
     letter-spacing: 0.02em;
 }
 
-.app-subtitle {
+/* The active proposal's name and client live in the top line, next to the brand. */
+.app-context {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-right: var(--saga-gutter);
+    overflow: hidden;
+}
+
+.app-context-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-context-subtitle {
     font-size: 0.85rem;
-    opacity: 0.85;
+    opacity: 0.8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-context-badge {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 999px;
+    padding: 0.05rem 0.5rem;
+    white-space: nowrap;
 }
 
 .app-user {
@@ -287,6 +333,12 @@ a {
     gap: 1.25rem;
 }
 
+.format-switch {
+    align-items: center;
+    gap: 1rem;
+    margin-top: 0.25rem;
+}
+
 .radio-row label {
     display: inline-flex;
     align-items: center;
@@ -379,7 +431,7 @@ a {
 
 .workspace {
     display: grid;
-    grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-columns: var(--saga-nav-width) minmax(0, 1fr);
     /* Break out of the .app-main padding so the nav sits flush against the app bar
        and the viewport edge. */
     margin: -1.5rem;
@@ -400,7 +452,7 @@ a {
 
 .workspace-main {
     min-width: 0;
-    padding: 1.5rem;
+    padding: var(--saga-gutter);
     overflow-y: auto;
 }
 
@@ -442,6 +494,19 @@ a {
     min-width: 0;
 }
 
+/* ---------- Team & settings ---------- */
+
+.team-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+}
+
+.danger-zone {
+    border-color: #e8c4c4;
+}
+
 /* ---------- Material ---------- */
 
 .upload-area {
@@ -461,12 +526,36 @@ a {
     border-color: var(--saga-primary);
 }
 
+button.upload-area {
+    width: 100%;
+    font: inherit;
+}
+
 .upload-area input[type="file"] {
     position: absolute;
     inset: 0;
     opacity: 0;
     cursor: pointer;
     width: 100%;
+}
+
+.link-button {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--saga-primary-dark);
+    text-align: left;
+    cursor: pointer;
+}
+
+.link-button:hover {
+    text-decoration: underline;
+}
+
+.material-heading {
+    margin: 2rem 0 0.75rem;
 }
 
 .modal-wide {
@@ -584,6 +673,12 @@ a {
     font-size: 0.88rem;
 }
 
+/* Slide/word counts are short numbers; the wide default would stretch the column. */
+.req-input-count {
+    min-width: 0;
+    width: 4.5rem;
+}
+
 .req-input {
     width: 100%;
     min-width: 130px;
@@ -619,6 +714,35 @@ a {
     flex: 1;
 }
 
+/* Per-artifact settings shown under a generation option (format, client research). */
+.gen-suboptions {
+    margin: -0.25rem 0 0.6rem 2rem;
+}
+
+.gen-field {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.35rem;
+}
+
+.gen-field label {
+    font-size: 0.85rem;
+    color: var(--saga-muted);
+    min-width: 11rem;
+}
+
+.gen-field input {
+    flex: 1;
+    max-width: 26rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--saga-border);
+    border-radius: 5px;
+    font: inherit;
+    font-size: 0.9rem;
+    background: #fff;
+}
+
 .gen-status {
     font-size: 0.85rem;
     color: var(--saga-muted);
@@ -649,12 +773,15 @@ a {
     line-height: 1.5;
 }
 
-.nav-flag-stale {
-    color: #ffd166;
+/* Created but unlocked: a plain white dot. Locked: a green padlock. */
+.nav-flag-ok {
+    color: #fff;
 }
 
-.nav-flag-ok {
-    color: #8fdca8;
+.nav-flag-lock {
+    color: #6fd38a;
+    line-height: 1;
+    margin-top: 0.15rem;
 }
 
 .cursor-blink {

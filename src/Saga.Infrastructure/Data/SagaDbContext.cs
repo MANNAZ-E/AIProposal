@@ -35,6 +35,8 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.Property(p => p.Title).HasMaxLength(500);
             b.Property(p => p.ClientName).HasMaxLength(500);
             b.Property(p => p.ContentLanguage).HasMaxLength(16);
+            b.Property(p => p.ResearchClientName).HasMaxLength(500);
+            b.Property(p => p.ClientWebsite).HasMaxLength(500);
             b.HasOne(p => p.Owner).WithMany().HasForeignKey(p => p.OwnerId).OnDelete(DeleteBehavior.Restrict);
         });
 

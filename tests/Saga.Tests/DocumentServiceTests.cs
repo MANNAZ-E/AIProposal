@@ -103,16 +103,10 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => service.UpdateExtractedTextAsync(document.Id, sda, "hacked"));
 
-        await using (var setup = db.CreateDbContext())
-        {
-            setup.Artifacts.Add(new Artifact { Id = Guid.NewGuid(), ProposalId = proposalId, Type = ArtifactType.Summary, Status = ArtifactStatus.Generated, UpdatedAt = DateTimeOffset.UtcNow });
-            await setup.SaveChangesAsync();
-        }
-
         await service.UpdateExtractedTextAsync(document.Id, elv, "edited");
 
         await using var check = db.CreateDbContext();
-        Assert.True(check.Artifacts.Single(a => a.ProposalId == proposalId && a.Type == ArtifactType.Summary).IsStale);
+        Assert.Equal("edited", check.Documents.Single(d => d.Id == document.Id).ExtractedText);
     }
 
     [Fact]
@@ -152,26 +146,24 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
     }
 
     [Fact]
-    public async Task Material_change_marks_generated_artifacts_stale_but_not_locked_ones()
+    public async Task Notes_carry_the_same_text_history_as_uploads()
     {
         var (elv, _, proposalId) = await SetupAsync();
         var service = CreateService();
 
-        await using (var setup = db.CreateDbContext())
-        {
-            setup.Artifacts.AddRange(
-                new Artifact { Id = Guid.NewGuid(), ProposalId = proposalId, Type = ArtifactType.Summary, Status = ArtifactStatus.Generated, UpdatedAt = DateTimeOffset.UtcNow },
-                new Artifact { Id = Guid.NewGuid(), ProposalId = proposalId, Type = ArtifactType.Scoping, Status = ArtifactStatus.Generated, IsLocked = true, UpdatedAt = DateTimeOffset.UtcNow });
-            await setup.SaveChangesAsync();
-        }
+        var note = await service.AddNoteAsync(proposalId, elv, "Kickoff", "First take");
+        await service.UpdateNoteAsync(note.Id, elv, "Kickoff", "Second take");
 
-        await service.AddNoteAsync(proposalId, elv, "n", "x");
+        var versions = await service.GetVersionsAsync(note.Id, elv);
+        Assert.Equal(2, versions.Count);
+        Assert.Equal(VersionOrigin.Edited, versions[0].Origin);   // Newest first.
+        Assert.Equal(VersionOrigin.Generated, versions[1].Origin);
 
-        await using var check = db.CreateDbContext();
-        var summary = check.Artifacts.Single(a => a.ProposalId == proposalId && a.Type == ArtifactType.Summary);
-        var scoping = check.Artifacts.Single(a => a.ProposalId == proposalId && a.Type == ArtifactType.Scoping);
-        Assert.True(summary.IsStale);
-        Assert.False(scoping.IsStale);
+        await service.RestoreVersionAsync(versions[1].Id, elv);
+
+        var restored = Assert.Single(await service.GetForProposalAsync(proposalId, elv));
+        Assert.Equal("First take", restored.ExtractedText);
+        Assert.Equal(3, (await service.GetVersionsAsync(note.Id, elv)).Count);
     }
 
     private sealed class TempDirStorage(string root) : IFileStorage

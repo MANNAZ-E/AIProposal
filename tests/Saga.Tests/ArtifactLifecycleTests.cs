@@ -50,7 +50,6 @@ public class ArtifactLifecycleTests(LocalDbFixture db) : IClassFixture<LocalDbFi
         var artifact = await _artifacts.GetAsync(proposalId, ArtifactType.Summary, elv);
         Assert.Equal(ArtifactStatus.Generated, artifact!.Status);
         Assert.Equal(result.Text, artifact.ContentMarkdown);
-        Assert.False(artifact.IsStale);
 
         var versions = await _artifacts.GetVersionsAsync(proposalId, ArtifactType.Summary, elv);
         Assert.Single(versions);
@@ -113,7 +112,7 @@ public class ArtifactLifecycleTests(LocalDbFixture db) : IClassFixture<LocalDbFi
     }
 
     [Fact]
-    public async Task Edit_marks_downstream_stale_and_restore_recovers_old_content()
+    public async Task Edit_leaves_downstream_alone_and_restore_recovers_old_content()
     {
         var (elv, _, proposalId) = await SetupWithMaterialAsync();
         var result = await _generation.GenerateAsync(proposalId, ArtifactType.Summary, elv, null, null);
@@ -125,8 +124,9 @@ public class ArtifactLifecycleTests(LocalDbFixture db) : IClassFixture<LocalDbFi
         var artifact = await _artifacts.GetAsync(proposalId, ArtifactType.Summary, elv);
         await _artifacts.SaveEditAsync(proposalId, ArtifactType.Summary, elv, "edited summary", null, artifact!.RowVersion);
 
+        // Editing upstream never touches downstream artifacts - regenerating is the consultant's call.
         var scoping = await _artifacts.GetAsync(proposalId, ArtifactType.Scoping, elv);
-        Assert.True(scoping!.IsStale);
+        Assert.Equal("scoping content", scoping!.ContentMarkdown);
 
         // Restore the original generated version.
         var versions = await _artifacts.GetVersionsAsync(proposalId, ArtifactType.Summary, elv);

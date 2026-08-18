@@ -3,8 +3,8 @@ using Saga.Core.Domain;
 namespace Saga.Core.Pipeline;
 
 /// <summary>
-/// The proposal's artifact dependency graph (spec §9/§19). Changing an artifact makes
-/// everything downstream of it stale; generating an artifact requires its prerequisites.
+/// The proposal's artifact dependency graph (spec §9): generating an artifact requires
+/// its prerequisites. Regeneration is the consultant's call, so nothing is flagged automatically.
 /// </summary>
 public static class ArtifactDependencies
 {
@@ -19,23 +19,6 @@ public static class ArtifactDependencies
         ArtifactType.Structure => [ArtifactType.SolutionProposal, ArtifactType.Requirements],
         ArtifactType.Content => [ArtifactType.Structure],
         ArtifactType.Review => [ArtifactType.Content, ArtifactType.Requirements],
-        _ => [],
-    };
-
-    /// <summary>All artifacts that become stale when the given type changes (spec §19).</summary>
-    public static IReadOnlyList<ArtifactType> DownstreamOf(ArtifactType type) => type switch
-    {
-        // Analysis-layer changes ripple through everything that builds on the analysis.
-        ArtifactType.ClientProfile or ArtifactType.Summary or ArtifactType.Requirements =>
-            [ArtifactType.Scoping, ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review],
-        ArtifactType.Scoping =>
-            [ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review],
-        ArtifactType.SolutionProposal =>
-            [ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review],
-        ArtifactType.Structure =>
-            [ArtifactType.Content, ArtifactType.Review],
-        ArtifactType.Content =>
-            [ArtifactType.Review],
         _ => [],
     };
 

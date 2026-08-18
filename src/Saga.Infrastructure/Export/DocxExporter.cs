@@ -32,7 +32,7 @@ public static class DocxExporter
             body.AppendChild(Paragraph($"Mannaz · {DateTime.Today:d MMMM yyyy}", "SagaSubtitle"));
             body.AppendChild(new Paragraph(new Run(new Break { Type = BreakValues.Page })));
 
-            // Chapters follow the approved structure; bodies come from the content units.
+            // Sections follow the approved structure; bodies come from the content units.
             var unitsByStructureId = content.Units
                 .Where(u => u.StructureItemId != Guid.Empty)
                 .GroupBy(u => u.StructureItemId)

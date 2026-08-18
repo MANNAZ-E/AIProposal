@@ -42,10 +42,6 @@
                 {
                     <span class="badge badge-locked" style="margin-left: 0.5rem;">🔒 locked — skipped</span>
                 }
-                else if (artifact?.IsStale == true)
-                {
-                    <span class="badge badge-stale" style="margin-left: 0.5rem;">regenerate recommended</span>
-                }
                 else if (hasContent)
                 {
                     <span class="badge badge-role" style="margin-left: 0.5rem;">exists — will be replaced</span>
@@ -56,9 +52,31 @@
             <span class="gen-status">@StatusFor(option.Type)</span>
         </label>
 
+        @if (option.Type == ArtifactType.ClientProfile)
+        {
+            <div class="gen-suboptions">
+                <div class="gen-field">
+                    <label for="research-client-name">Client name</label>
+                    <input id="research-client-name" type="text" disabled="@(!CanEdit || _running)"
+                           value="@_researchClientName"
+                           @onchange="e => SaveClientResearchAsync((string?)e.Value, _clientWebsite)" />
+                </div>
+                <div class="gen-field">
+                    <label for="client-website">Client website (optional)</label>
+                    <input id="client-website" type="text" placeholder="https://…" disabled="@(!CanEdit || _running)"
+                           value="@_clientWebsite"
+                           @onchange="e => SaveClientResearchAsync(_researchClientName, (string?)e.Value)" />
+                </div>
+                <div class="form-hint" style="margin-top: 0.15rem;">
+                    What the tool looks the client up as when researching the profile. Web search is not switched
+                    on yet, so the profile is currently written from the uploaded material and general knowledge.
+                </div>
+            </div>
+        }
+
         @if (option.Type == ArtifactType.Structure)
         {
-            <div style="margin: -0.25rem 0 0.5rem 2rem;">
+            <div class="gen-suboptions">
                 <div class="radio-row">
                     <span class="text-muted" style="margin-right: 0.25rem;">Output format:</span>
                     <label><input type="radio" checked="@(_format == OutputFormat.PowerPoint)" disabled="@(!CanEdit || _running)"
@@ -67,8 +85,8 @@
                                   @onchange="() => ChangeFormatAsync(OutputFormat.Word)" /> Word</label>
                 </div>
                 <div class="form-hint" style="margin-top: 0.15rem;">
-                    Slides, storyline and visual flow for PowerPoint — chapters and written narrative for Word.
-                    Changing it later marks the structure (and downstream artifacts) as needing regeneration.
+                    Slides and storyline for PowerPoint — sections and written narrative for Word.
+                    This is the same setting as the one on the Structure page.
                 </div>
             </div>
         }
@@ -113,7 +131,7 @@
         new(ArtifactType.Requirements, "Requirements & criteria", "Extracted list of everything the proposal must satisfy."),
         new(ArtifactType.Scoping, "Scoping", "Client situation, challenge, aspiration, boundaries."),
         new(ArtifactType.SolutionProposal, "Solution", "Mannaz's proposed solution — the red thread."),
-        new(ArtifactType.Structure, "Structure", "Slide or chapter structure for the chosen format."),
+        new(ArtifactType.Structure, "Structure", "Slide or section structure for the chosen format."),
         new(ArtifactType.Content, "Content", "The actual proposal, written from the structure."),
     ];
 
@@ -122,6 +140,8 @@
     private readonly Dictionary<ArtifactType, string> _status = [];
     private List<Artifact> _artifacts = [];
     private OutputFormat _format;
+    private string _researchClientName = "";
+    private string _clientWebsite = "";
     private BudgetStatus? _budget;
     private bool _running;
     private string? _error;
@@ -136,7 +156,13 @@
         var user = await CurrentUser.GetAsync();
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
         var proposal = await Proposals.GetForUserAsync(ProposalId, user.Id);
-        if (proposal is not null) _format = proposal.Value.Proposal.OutputFormat;
+        if (proposal is not null)
+        {
+            _format = proposal.Value.Proposal.OutputFormat;
+            // The research name defaults to the proposal's client name until it is overridden.
+            _researchClientName = proposal.Value.Proposal.ResearchClientName ?? proposal.Value.Proposal.ClientName;
+            _clientWebsite = proposal.Value.Proposal.ClientWebsite ?? "";
+        }
         _budget = await WorkingContext.AssessAsync(ProposalId);
         ApplyDefaultSelection();
         UpdateRecommendations();
@@ -183,6 +209,14 @@
         foreach (var type in _recommended)
             _selected.Add(type);
         UpdateRecommendations();
+    }
+
+    private async Task SaveClientResearchAsync(string? clientName, string? website)
+    {
+        _researchClientName = clientName?.Trim() ?? "";
+        _clientWebsite = website?.Trim() ?? "";
+        var user = await CurrentUser.GetAsync();
+        await Proposals.SetClientResearchAsync(ProposalId, user.Id, _researchClientName, _clientWebsite);
     }
 
     private async Task ChangeFormatAsync(OutputFormat format)

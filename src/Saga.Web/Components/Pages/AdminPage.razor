@@ -1,5 +1,6 @@
 @page "/admin"
 @inject AdminService Admin
+@inject ProposalService Proposals
 @rendermode InteractiveServer
 
 <PageTitle>Saga — Admin</PageTitle>
@@ -36,6 +37,46 @@
         }
     </div>
 </div>
+
+<div class="section-title">Recycle bin</div>
+<p class="text-muted" style="margin-top: 0;">
+    Deleted proposals across all users. Nothing is erased — restoring puts a proposal back on its
+    team's dashboard with all material, artifacts and history intact.
+</p>
+
+@if (_deleted.Count == 0)
+{
+    <div class="empty-state"><p>No deleted proposals.</p></div>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Proposal</th>
+                <th>Client</th>
+                <th>Owner</th>
+                <th>Deleted</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _deleted)
+            {
+                <tr>
+                    <td><strong>@row.Title</strong></td>
+                    <td>@row.ClientName</td>
+                    <td>@row.OwnerName</td>
+                    <td class="text-muted">@(row.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-outline btn-sm" @onclick="() => RestoreAsync(row.ProposalId)"
+                                disabled="@_restoring">Restore</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
 
 <div class="section-title">Usage</div>
 <p class="text-muted" style="margin-top: 0;">
@@ -95,13 +136,30 @@ else
     private string _terminology = "";
     private bool _saving;
     private bool _saved;
+    private bool _restoring;
     private List<ProposalUsage> _usage = [];
+    private List<DeletedProposal> _deleted = [];
 
     protected override async Task OnInitializedAsync()
     {
         var voice = await Admin.GetVoiceAsync();
         (_tone, _about, _terminology) = (voice.ToneOfVoice, voice.AboutMannaz, voice.Terminology);
         _usage = await Admin.GetUsageAsync();
+        _deleted = await Admin.GetDeletedProposalsAsync();
+    }
+
+    private async Task RestoreAsync(Guid proposalId)
+    {
+        _restoring = true;
+        try
+        {
+            await Proposals.RestoreAsAdminAsync(proposalId);
+            _deleted = await Admin.GetDeletedProposalsAsync();
+        }
+        finally
+        {
+            _restoring = false;
+        }
     }
 
     private async Task SaveAsync()

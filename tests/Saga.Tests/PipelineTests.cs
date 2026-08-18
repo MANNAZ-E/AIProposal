@@ -5,20 +5,6 @@ namespace Saga.Tests;
 
 public class PipelineTests
 {
-    [Theory]
-    // Spec §19 staleness table.
-    [InlineData(ArtifactType.Summary, new[] { ArtifactType.Scoping, ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
-    [InlineData(ArtifactType.Requirements, new[] { ArtifactType.Scoping, ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
-    [InlineData(ArtifactType.Scoping, new[] { ArtifactType.SolutionProposal, ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
-    [InlineData(ArtifactType.SolutionProposal, new[] { ArtifactType.Structure, ArtifactType.Content, ArtifactType.Review })]
-    [InlineData(ArtifactType.Structure, new[] { ArtifactType.Content, ArtifactType.Review })]
-    [InlineData(ArtifactType.Content, new[] { ArtifactType.Review })]
-    [InlineData(ArtifactType.Review, new ArtifactType[0])]
-    public void Downstream_matches_spec(ArtifactType changed, ArtifactType[] expected)
-    {
-        Assert.Equal(expected, ArtifactDependencies.DownstreamOf(changed));
-    }
-
     [Fact]
     public void Missing_prerequisites_recommends_only_what_is_absent()
     {

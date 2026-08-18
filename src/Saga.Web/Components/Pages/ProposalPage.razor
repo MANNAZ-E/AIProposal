@@ -1,7 +1,9 @@
 @page "/proposals/{ProposalId:guid}"
+@implements IDisposable
 @inject ProposalService Proposals
 @inject ArtifactService Artifacts
 @inject CurrentUserService CurrentUser
+@inject AppHeaderState Header
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -54,35 +56,11 @@ else
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.People)">Team</button>
+            <button class="nav-item @(_section == Section.Settings ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Settings)">Settings</button>
         </nav>
 
         <div class="workspace-main">
-            <div class="page-header">
-                <div>
-                    <h1 style="margin: 0 0 0.2rem;">@_proposal.Title</h1>
-                    <span class="text-muted">@_proposal.ClientName · @_proposal.OutputFormat</span>
-                    @if (_proposal.IsArchived)
-                    {
-                        <span class="badge badge-shared" style="margin-left: 0.5rem;">Archived</span>
-                    }
-                </div>
-                <div style="display: flex; gap: 0.5rem;">
-                    @if (_myRole == ProposalRole.Owner)
-                    {
-                        <button class="btn btn-outline" @onclick="() => _showShare = true">Share</button>
-                        @if (_proposal.IsArchived)
-                        {
-                            <button class="btn btn-outline" @onclick="() => SetArchivedAsync(false)">Unarchive</button>
-                        }
-                        else
-                        {
-                            <button class="btn btn-outline" @onclick="() => SetArchivedAsync(true)">Archive</button>
-                        }
-                        <button class="btn btn-danger" @onclick="() => _showDelete = true">Delete</button>
-                    }
-                </div>
-            </div>
-
             <div class="workspace-content">
                 @if (_section == Section.Material)
                 {
@@ -97,39 +75,40 @@ else
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Summary" Title="Summary"
                                           Description="A concise summary of the client material: what the client asks for, why it matters, central themes, key requirements, and ambiguities."
-                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                                          CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Requirements)
                 {
-                    <RequirementsSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor" />
+                    <RequirementsSection ProposalId="ProposalId" CanEdit="_myRole >= ProposalRole.Editor"
+                                         OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.ClientProfile)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.ClientProfile" Title="Client profile"
                                           Description="Optional research-based profile of the client: industry, business model, strategic themes and relevant initiatives. Background only — it never overrides the client's own documents."
-                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                                          CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Scoping)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.Scoping" Title="Scoping"
                                           Description="The professional scoping: client situation and context, business challenge, aspiration, and boundaries and assumptions."
-                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                                          CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.SolutionProposal)
                 {
                     <ProseArtifactSection ProposalId="ProposalId" Type="ArtifactType.SolutionProposal" Title="Solution"
                                           Description="Mannaz's proposed solution: idea, approach, methods, process and deliverables — the red thread through structure and content."
-                                          CanEdit="_myRole >= ProposalRole.Editor" />
+                                          CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Structure)
                 {
                     <StructureSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
-                                      CanEdit="_myRole >= ProposalRole.Editor" />
+                                      CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Content)
                 {
                     <ContentSection ProposalId="ProposalId" OutputFormat="_proposal.OutputFormat"
-                                    CanEdit="_myRole >= ProposalRole.Editor" />
+                                    CanEdit="_myRole >= ProposalRole.Editor" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Review)
                 {
@@ -146,6 +125,35 @@ else
                 else if (_section == Section.People)
                 {
                     <h2>Team</h2>
+                    <p class="text-muted" style="margin-top: 0;">
+                        Everyone on this list can open the proposal. Add a Mannaz colleague to share it with them.
+                    </p>
+
+                    @if (_myRole == ProposalRole.Owner)
+                    {
+                        <div class="card">
+                            <div class="section-title" style="margin-top: 0;">Add team member</div>
+                            <div class="team-add-row">
+                                <div class="form-field" style="flex: 2; min-width: 220px; margin-bottom: 0;">
+                                    <label for="share-email">Mannaz user email</label>
+                                    <input id="share-email" type="email" @bind="_shareEmail" placeholder="name@mannaz.com" />
+                                </div>
+                                <div class="form-field" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                                    <label for="share-role">Role</label>
+                                    <select id="share-role" @bind="_shareRole">
+                                        <option value="@ProposalRole.Editor">Editor</option>
+                                        <option value="@ProposalRole.Reader">Reader</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-primary" @onclick="ShareAsync" disabled="@_busy">Add</button>
+                            </div>
+                            @if (_shareError is not null)
+                            {
+                                <p class="error-text" style="margin-bottom: 0;">@_shareError</p>
+                            }
+                        </div>
+                    }
+
                     <table class="table">
                         <thead>
                             <tr>
@@ -179,47 +187,92 @@ else
                         </tbody>
                     </table>
                 }
+                else if (_section == Section.Settings)
+                {
+                    <h2>Settings</h2>
+                    @if (_myRole != ProposalRole.Owner)
+                    {
+                        <p class="text-muted">Only the owner can change the proposal's settings.</p>
+                    }
+                    else
+                    {
+                        <p class="text-muted" style="margin-top: 0;">
+                            The proposal name and client name are shown in the top line and used in every generation prompt.
+                        </p>
+
+                        <div class="card">
+                            <div class="form-field">
+                                <label for="settings-title">Proposal name</label>
+                                <input id="settings-title" type="text" @bind="_settingsTitle" />
+                            </div>
+                            <div class="form-field">
+                                <label for="settings-client">Client name</label>
+                                <input id="settings-client" type="text" @bind="_settingsClientName" />
+                            </div>
+                            @if (_settingsError is not null)
+                            {
+                                <p class="error-text">@_settingsError</p>
+                            }
+                            <div class="modal-actions" style="justify-content: flex-start; margin-top: 0.75rem;">
+                                <button class="btn btn-primary" @onclick="SaveSettingsAsync" disabled="@_busy">Save changes</button>
+                                @if (_settingsSaved)
+                                {
+                                    <span class="text-muted" style="align-self: center;">Saved.</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="section-title">Archive</div>
+                        <div class="card">
+                            <p style="margin-top: 0;">
+                                @(_proposal.IsArchived
+                                    ? "This proposal is archived. It stays fully readable and is listed under Archived on the dashboard."
+                                    : "Archiving moves the proposal out of the active list on the dashboard. Nothing is deleted.")
+                            </p>
+                            @if (_proposal.IsArchived)
+                            {
+                                <button class="btn btn-outline" @onclick="() => SetArchivedAsync(false)">Unarchive proposal</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-outline" @onclick="() => SetArchivedAsync(true)">Archive proposal</button>
+                            }
+                        </div>
+
+                        <div class="section-title">Delete</div>
+                        <div class="card danger-zone">
+                            <p style="margin-top: 0;">
+                                Deleting moves the proposal to the recycle bin on the dashboard. Nothing is erased —
+                                you or any other team member can restore it from there.
+                            </p>
+                            <button class="btn btn-danger" @onclick="OpenDelete">Delete proposal</button>
+                        </div>
+                    }
+                }
             </div>
         </div>
     </div>
-
-    @if (_showShare)
-    {
-        <div class="modal-backdrop" @onclick="() => _showShare = false">
-            <div class="modal-panel" @onclick:stopPropagation>
-                <h2 class="modal-title">Share proposal</h2>
-                <div class="form-field">
-                    <label for="share-email">Mannaz user email</label>
-                    <input id="share-email" type="email" @bind="_shareEmail" placeholder="name@mannaz.com" />
-                </div>
-                <div class="form-field">
-                    <label for="share-role">Role</label>
-                    <select id="share-role" @bind="_shareRole">
-                        <option value="@ProposalRole.Editor">Editor — can edit, generate and export</option>
-                        <option value="@ProposalRole.Reader">Reader — can view, chat and export</option>
-                    </select>
-                </div>
-                @if (_shareError is not null)
-                {
-                    <p class="error-text">@_shareError</p>
-                }
-                <div class="modal-actions">
-                    <button class="btn btn-outline" @onclick="() => _showShare = false">Cancel</button>
-                    <button class="btn btn-primary" @onclick="ShareAsync" disabled="@_busy">Share</button>
-                </div>
-            </div>
-        </div>
-    }
 
     @if (_showDelete)
     {
         <div class="modal-backdrop" @onclick="() => _showDelete = false">
             <div class="modal-panel" @onclick:stopPropagation>
                 <h2 class="modal-title">Delete proposal</h2>
-                <p>Delete <strong>@_proposal.Title</strong> permanently, including all material and artifacts? This cannot be undone.</p>
+                <p>
+                    Move <strong>@_proposal.Title</strong> to the recycle bin? It disappears from the dashboard
+                    and can no longer be opened, but all material, artifacts and history are kept and any team
+                    member can restore it.
+                </p>
+                <div class="form-field">
+                    <label for="delete-confirm">Type <strong>Yes</strong> to confirm</label>
+                    <input id="delete-confirm" type="text" autocomplete="off" value="@_deleteConfirm"
+                           @oninput="e => _deleteConfirm = (string?)e.Value ?? string.Empty" />
+                </div>
                 <div class="modal-actions">
                     <button class="btn btn-outline" @onclick="() => _showDelete = false">Cancel</button>
-                    <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@_busy">Delete permanently</button>
+                    <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@(_busy || !DeleteConfirmed)">
+                        Delete proposal
+                    </button>
                 </div>
             </div>
         </div>
@@ -229,21 +282,30 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, Export, People }
+    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, Export, People, Settings }
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
     private ProposalRole _myRole;
     private Section _section = Section.Material;
     private bool _notFound;
-    private bool _showShare;
     private bool _showDelete;
     private bool _busy;
     private string _shareEmail = "";
     private ProposalRole _shareRole = ProposalRole.Editor;
     private string? _shareError;
 
+    private string _settingsTitle = "";
+    private string _settingsClientName = "";
+    private string? _settingsError;
+    private bool _settingsSaved;
+    private string _deleteConfirm = "";
+
+    private bool DeleteConfirmed => string.Equals(_deleteConfirm.Trim(), "Yes", StringComparison.OrdinalIgnoreCase);
+
     protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    public void Dispose() => Header.Clear();
 
     private async Task LoadAsync()
     {
@@ -252,16 +314,25 @@ else
         if (result is null)
         {
             _notFound = true;
+            Header.Clear();
             return;
         }
         (_proposal, _myRole) = result.Value;
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
+        Header.Set(_proposal.Title, _proposal.ClientName, _proposal.IsArchived ? "Archived" : null);
     }
 
     private async Task SelectSectionAsync(Section section)
     {
         _section = section;
-        // Refresh nav badges: edits inside the previous section may have changed staleness.
+        if (section == Section.Settings)
+        {
+            _settingsTitle = _proposal!.Title;
+            _settingsClientName = _proposal.ClientName;
+            _settingsError = null;
+            _settingsSaved = false;
+        }
+        // Refresh nav badges: edits inside the previous section may have changed the artifacts.
         await LoadAsync();
     }
 
@@ -269,9 +340,16 @@ else
     {
         var artifact = _artifacts.FirstOrDefault(a => a.Type == type);
         if (artifact is null || artifact.Status == ArtifactStatus.Empty) return null;
-        if (artifact.IsLocked) return @<span class="nav-flag" title="Locked">🔒</span>;
-        if (artifact.IsStale) return @<span class="nav-flag nav-flag-stale" title="Upstream changed — regeneration recommended">●</span>;
-        return @<span class="nav-flag nav-flag-ok" title="@artifact.Status.ToString()">●</span>;
+        if (artifact.IsLocked)
+        {
+            return @<span class="nav-flag nav-flag-lock" title="Locked">
+                        <svg width="11" height="13" viewBox="0 0 11 13" aria-hidden="true" focusable="false">
+                            <path d="M3 5V3.5a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="currentColor" stroke-width="1.4" />
+                            <rect x="1" y="5" width="9" height="7" rx="1.5" fill="currentColor" />
+                        </svg>
+                    </span>;
+        }
+        return @<span class="nav-flag nav-flag-ok" title="Created">●</span>;
     }
 
     private async Task ShareAsync()
@@ -282,7 +360,6 @@ else
         {
             var user = await CurrentUser.GetAsync();
             await Proposals.ShareAsync(ProposalId, user.Id, _shareEmail, _shareRole);
-            _showShare = false;
             _shareEmail = "";
             await LoadAsync();
         }
@@ -303,6 +380,28 @@ else
         await LoadAsync();
     }
 
+    private async Task SaveSettingsAsync()
+    {
+        _busy = true;
+        _settingsError = null;
+        _settingsSaved = false;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Proposals.UpdateDetailsAsync(ProposalId, user.Id, _settingsTitle, _settingsClientName);
+            await LoadAsync();
+            _settingsSaved = true;
+        }
+        catch (Exception ex)
+        {
+            _settingsError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
     private async Task SetArchivedAsync(bool archived)
     {
         var user = await CurrentUser.GetAsync();
@@ -310,11 +409,19 @@ else
         await LoadAsync();
     }
 
+    private void OpenDelete()
+    {
+        _deleteConfirm = "";
+        _showDelete = true;
+    }
+
     private async Task DeleteAsync()
     {
+        if (!DeleteConfirmed) return;
         _busy = true;
         var user = await CurrentUser.GetAsync();
         await Proposals.DeleteAsync(ProposalId, user.Id);
+        Header.Clear();
         Nav.NavigateTo("/");
     }
 }

@@ -6,7 +6,7 @@ using Saga.Infrastructure.Services;
 namespace Saga.Tests;
 
 /// <summary>
-/// DB-backed tests for the M6 pipeline policies: output-format staleness and the
+/// DB-backed tests for the M6 pipeline policies: the output-format setting and the
 /// token-budget condensation fallback.
 /// </summary>
 public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
@@ -39,7 +39,7 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
     }
 
     [Fact]
-    public async Task Output_format_change_marks_structure_and_downstream_stale_but_not_locked_or_upstream()
+    public async Task Output_format_change_keeps_every_artifact_untouched()
     {
         var (elv, proposalId) = await SetupAsync();
         await AddArtifactAsync(proposalId, ArtifactType.Summary);
@@ -51,24 +51,9 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
         await using var check = db.CreateDbContext();
         var artifacts = await check.Artifacts.Where(a => a.ProposalId == proposalId)
             .ToDictionaryAsync(a => a.Type);
-        Assert.True(artifacts[ArtifactType.Structure].IsStale);
-        Assert.False(artifacts[ArtifactType.Content].IsStale); // Locked artifacts are never flagged.
-        Assert.False(artifacts[ArtifactType.Summary].IsStale); // Upstream of the structure.
+        Assert.All(artifacts.Values, a => Assert.Equal("content", a.ContentMarkdown));
+        Assert.True(artifacts[ArtifactType.Content].IsLocked);
         Assert.Equal(OutputFormat.Word, (await check.Proposals.FirstAsync(p => p.Id == proposalId)).OutputFormat);
-    }
-
-    [Fact]
-    public async Task Setting_the_same_output_format_changes_nothing()
-    {
-        var (elv, proposalId) = await SetupAsync();
-        await AddArtifactAsync(proposalId, ArtifactType.Structure);
-
-        await _proposals.SetOutputFormatAsync(proposalId, elv, OutputFormat.PowerPoint);
-
-        await using var check = db.CreateDbContext();
-        var structure = await check.Artifacts.FirstAsync(
-            a => a.ProposalId == proposalId && a.Type == ArtifactType.Structure);
-        Assert.False(structure.IsStale);
     }
 
     [Fact]

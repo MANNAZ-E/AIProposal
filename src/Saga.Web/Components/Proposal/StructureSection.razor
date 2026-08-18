@@ -1,6 +1,7 @@
 @using Saga.Core.Models
 @inject ArtifactService Artifacts
 @inject GenerationService Generation
+@inject ProposalService Proposals
 @inject CurrentUserService CurrentUser
 
 <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
@@ -8,11 +9,7 @@
         Structure
         @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
         {
-            <span class="badge badge-role" style="margin-left: 0.5rem;">@_items.Count @(IsPowerPoint ? "slides" : "chapters")</span>
-            @if (_artifact.IsStale)
-            {
-                <span class="badge badge-stale" style="margin-left: 0.3rem;">Regenerate recommended</span>
-            }
+            <span class="badge badge-role" style="margin-left: 0.5rem;">@CountLabel</span>
             @if (_artifact.IsLocked)
             {
                 <span class="badge badge-locked" style="margin-left: 0.3rem;">🔒 Locked</span>
@@ -34,10 +31,17 @@
         }
     </div>
 </div>
-<p class="text-muted" style="margin-top: 0;">
+<div class="radio-row format-switch">
+    <span class="text-muted">Format:</span>
+    <label><input type="radio" name="structure-format" checked="@IsPowerPoint" disabled="@(!CanEdit || _generating || _busy)"
+                  @onchange="() => ChangeFormatAsync(Saga.Core.Domain.OutputFormat.PowerPoint)" /> PowerPoint</label>
+    <label><input type="radio" name="structure-format" checked="@(!IsPowerPoint)" disabled="@(!CanEdit || _generating || _busy)"
+                  @onchange="() => ChangeFormatAsync(Saga.Core.Domain.OutputFormat.Word)" /> Word</label>
+</div>
+<p class="text-muted" style="margin-top: 0.5rem;">
     @(IsPowerPoint
-        ? "The slide sequence: storyline, key messages and visual flow. Content is written slide by slide from this."
-        : "The chapter sequence: headings, argumentation and narrative. Content is written section by section from this.")
+        ? "The slide sequence: storyline and key messages, with the number of slides per entry. Content is written slide by slide from this."
+        : "The section sequence: headings, argumentation and narrative, with a target word count per section. Content is written section by section from this.")
 </p>
 
 @if (_error is not null)
@@ -47,7 +51,7 @@
 
 @if (_generating)
 {
-    <div class="card"><p style="margin: 0;"><span class="cursor-blink">▌</span> Designing the @(IsPowerPoint ? "slide" : "chapter") structure…</p></div>
+    <div class="card"><p style="margin: 0;"><span class="cursor-blink">▌</span> Designing the @(IsPowerPoint ? "slide" : "section") structure…</p></div>
 }
 else if (_pendingItems is not null)
 {
@@ -74,7 +78,7 @@ else
     @if (CanEdit && !_artifact.IsLocked)
     {
         <div class="modal-actions" style="justify-content: flex-start;">
-            <button class="btn btn-outline" @onclick="AddRow">+ Add @(IsPowerPoint ? "slide" : "chapter")</button>
+            <button class="btn btn-outline" @onclick="AddRow">+ Add @(IsPowerPoint ? "slide" : "section")</button>
             <button class="btn btn-primary" @onclick="SaveAsync" disabled="@(!_dirty || _busy)">@(_dirty ? "Save changes" : "Saved")</button>
         </div>
     }
@@ -105,6 +109,12 @@ else
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private bool IsPowerPoint => OutputFormat == OutputFormat.PowerPoint;
+
+    /// <summary>PowerPoint counts slides (an entry may span several); Word counts sections and words.</summary>
+    private string CountLabel
+        => IsPowerPoint
+            ? $"{_items.Sum(i => i.SlideCount ?? 1)} slides"
+            : $"{_items.Count} sections · ~{_items.Sum(i => i.WordCount ?? 0):N0} words";
 
     private Artifact? _artifact;
     private List<StructureItem> _items = [];
@@ -217,6 +227,31 @@ else
         catch (Saga.Core.Models.ConcurrencyConflictException)
         {
             _error = "Someone else changed the structure while you were editing. Reload the page to see their version.";
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// The format lives on the proposal, so the Generate page's switch and this one are the same
+    /// setting. Titles, purposes and key messages survive the switch; only the length column changes.
+    /// </summary>
+    private async Task ChangeFormatAsync(OutputFormat format)
+    {
+        if (format == OutputFormat) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Proposals.SetOutputFormatAsync(ProposalId, user.Id, format);
+            await OnChanged.InvokeAsync();
         }
         catch (Exception ex)
         {

@@ -13,10 +13,28 @@ public class Proposal
     /// </summary>
     public string? ContentLanguage { get; set; }
 
+    /// <summary>
+    /// Client name to search for when researching the client profile. Null = use <see cref="ClientName"/>.
+    /// The legal or trading name is often more searchable than the name used on the proposal.
+    /// </summary>
+    public string? ResearchClientName { get; set; }
+
+    /// <summary>Optional client website, used to anchor the client-profile web search.</summary>
+    public string? ClientWebsite { get; set; }
+
     public Guid OwnerId { get; set; }
     public User? Owner { get; set; }
 
     public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// Soft delete: the proposal leaves the dashboard but stays in the database, so any team
+    /// member (or an admin) can restore it from the recycle bin.
+    /// </summary>
+    public bool IsDeleted { get; set; }
+
+    public DateTimeOffset? DeletedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

@@ -17,9 +17,6 @@ public class Artifact
     public ArtifactStatus Status { get; set; } = ArtifactStatus.Empty;
     public bool IsLocked { get; set; }
 
-    /// <summary>Set when an upstream artifact or document changed after this was generated/edited.</summary>
-    public bool IsStale { get; set; }
-
     public DateTimeOffset? GeneratedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 

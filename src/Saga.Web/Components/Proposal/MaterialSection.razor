@@ -1,4 +1,4 @@
-@using Saga.Core.Abstractions
+﻿@using Saga.Core.Abstractions
 @inject DocumentService Documents
 @inject CurrentUserService CurrentUser
 @inject IDocumentTextExtractor TextExtractor
@@ -14,8 +14,6 @@
     <p class="error-text">@_error</p>
 }
 
-<div class="section-title" style="margin-top: 1rem;">Client documents</div>
-
 @if (CanEdit)
 {
     <label class="upload-area">
@@ -29,89 +27,93 @@
             <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, Excel, images, text</span>
         }
     </label>
+
+    <button type="button" class="upload-area" @onclick="NewNote">
+        <span><strong>Add note</strong> — write down what you know that isn't in a document</span>
+    </button>
 }
+
+@{
+    RenderFragment<Document> documentRow = doc =>
+        @<tr>
+            <td><button type="button" class="link-button" @onclick="() => _previewDocument = doc">@doc.Name</button></td>
+            <td class="text-muted">@FormatLength(doc.ExtractedText)</td>
+            <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+            <td class="text-muted">@(doc.UpdatedAt > doc.CreatedAt ? doc.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm") : "—")</td>
+            <td style="text-align: right; white-space: nowrap;">
+                @if (CanEdit)
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="() => BeginEdit(doc)">Edit</button>
+                }
+                <button class="btn btn-outline btn-sm" @onclick="() => OpenTextHistoryAsync(doc)">History</button>
+                @if (CanEdit)
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="() => _deleteDocument = doc">Delete</button>
+                }
+            </td>
+        </tr>;
+}
+
+<h3 class="material-heading">Materials</h3>
 
 @if (_documents is null)
 {
     <p class="text-muted">Loading…</p>
 }
+else if (_uploads.Count == 0)
+{
+    <p class="text-muted">No documents yet. Upload the client's files above.</p>
+}
 else
 {
-    var uploads = _documents.Where(d => d.Kind == DocumentKind.Upload).ToList();
-    var notes = _documents.Where(d => d.Kind == DocumentKind.Note).ToList();
-
-    @if (uploads.Count == 0)
-    {
-        <p class="text-muted">No client documents uploaded yet.</p>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Document</th>
-                    <th>Extracted</th>
-                    <th>Uploaded</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var doc in uploads)
-                {
-                    <tr>
-                        <td><strong>@doc.Name</strong></td>
-                        <td class="text-muted">@FormatLength(doc.ExtractedText)</td>
-                        <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
-                        <td style="text-align: right; white-space: nowrap;">
-                            <button class="btn btn-outline btn-sm" @onclick="() => _previewDocument = doc">View text</button>
-                            @if (CanEdit)
-                            {
-                                <button class="btn btn-outline btn-sm" @onclick="() => BeginEditText(doc)">Edit text</button>
-                            }
-                            <button class="btn btn-outline btn-sm" @onclick="() => OpenTextHistoryAsync(doc)">History</button>
-                            @if (CanEdit)
-                            {
-                                <button class="btn btn-outline btn-sm" @onclick="() => _deleteDocument = doc">Delete</button>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-
-    <div class="section-title">Notes</div>
-
-    @if (CanEdit)
-    {
-        <button class="btn btn-outline" @onclick="NewNote">+ Add note</button>
-    }
-
-    @if (notes.Count == 0)
-    {
-        <p class="text-muted" style="margin-top: 0.75rem;">No notes yet. Notes are treated as source material alongside client documents.</p>
-    }
-    else
-    {
-        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem;">
-            @foreach (var note in notes)
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Text</th>
+                <th>Added</th>
+                <th>Last edited</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var doc in _uploads)
             {
-                <div class="card">
-                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                        <strong>@note.Name</strong>
-                        <span style="white-space: nowrap;">
-                            @if (CanEdit)
-                            {
-                                <button class="btn btn-outline btn-sm" @onclick="() => EditNote(note)">Edit</button>
-                                <button class="btn btn-outline btn-sm" @onclick="() => _deleteDocument = note">Delete</button>
-                            }
-                        </span>
-                    </div>
-                    <p style="white-space: pre-wrap; margin-bottom: 0;">@Truncate(note.ExtractedText, 400)</p>
-                </div>
+                @documentRow(doc)
             }
-        </div>
-    }
+        </tbody>
+    </table>
+}
+
+<h3 class="material-heading">Notes</h3>
+
+@if (_documents is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (_notes.Count == 0)
+{
+    <p class="text-muted">No notes yet. Add what you know that isn't written down anywhere.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Text</th>
+                <th>Added</th>
+                <th>Last edited</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var note in _notes)
+            {
+                @documentRow(note)
+            }
+        </tbody>
+    </table>
 }
 
 @if (_previewDocument is not null)
@@ -122,6 +124,10 @@ else
             <div class="preview-text">@_previewDocument.ExtractedText</div>
             <div class="modal-actions">
                 <button class="btn btn-outline" @onclick="() => _previewDocument = null">Close</button>
+                @if (CanEdit)
+                {
+                    <button class="btn btn-primary" @onclick="() => BeginEdit(_previewDocument!)">Edit</button>
+                }
             </div>
         </div>
     </div>
@@ -159,7 +165,7 @@ else
             }
             else if (_historyVersions.Count == 0)
             {
-                <p class="text-muted">No saved versions yet. The history starts with the first edit.</p>
+                <p class="text-muted">No saved versions yet. The history starts with the first save.</p>
                 <div class="modal-actions">
                     <button class="btn btn-outline" @onclick="CloseTextHistory">Close</button>
                 </div>
@@ -236,8 +242,8 @@ else
         <div class="modal-panel" @onclick:stopPropagation>
             <h2 class="modal-title">Delete @(_deleteDocument.Kind == DocumentKind.Note ? "note" : "document")</h2>
             <p>
-                Delete <strong>@_deleteDocument.Name</strong>? Artifacts generated from this material
-                will be marked as needing regeneration.
+                Delete <strong>@_deleteDocument.Name</strong>? It is removed from the proposal's source
+                material, along with its text history.
             </p>
             <div class="modal-actions">
                 <button class="btn btn-outline" @onclick="() => _deleteDocument = null">Cancel</button>
@@ -255,6 +261,8 @@ else
 
     private string _acceptTypes = "";
     private List<Document>? _documents;
+    private List<Document> _uploads = [];
+    private List<Document> _notes = [];
     private Document? _previewDocument;
     private Document? _deleteDocument;
     private bool _uploading;
@@ -281,6 +289,8 @@ else
     {
         var user = await CurrentUser.GetAsync();
         _documents = await Documents.GetForProposalAsync(ProposalId, user.Id);
+        _uploads = _documents.Where(d => d.Kind != DocumentKind.Note).ToList();
+        _notes = _documents.Where(d => d.Kind == DocumentKind.Note).ToList();
     }
 
     private async Task UploadAsync(InputFileChangeEventArgs e)
@@ -307,8 +317,15 @@ else
         }
     }
 
-    private void BeginEditText(Document document)
+    /// <summary>Notes are edited as title + text; uploads as their extracted text.</summary>
+    private void BeginEdit(Document document)
     {
+        _previewDocument = null;
+        if (document.Kind == DocumentKind.Note)
+        {
+            EditNote(document);
+            return;
+        }
         _textEditDocument = document;
         _textEditValue = document.ExtractedText;
     }
@@ -374,9 +391,9 @@ else
         }
     }
 
-    private static string OriginLabel(VersionOrigin origin) => origin switch
+    private string OriginLabel(VersionOrigin origin) => origin switch
     {
-        VersionOrigin.Generated => "Extracted",
+        VersionOrigin.Generated => _historyDocument?.Kind == DocumentKind.Note ? "Created" : "Extracted",
         VersionOrigin.Edited => "Edited",
         _ => "Restored",
     };
@@ -452,7 +469,4 @@ else
             < 2000 => $"{text.Length} characters",
             _ => $"~{text.Length / 1000}k characters",
         };
-
-    private static string Truncate(string text, int max)
-        => text.Length <= max ? text : text[..max] + "…";
 }

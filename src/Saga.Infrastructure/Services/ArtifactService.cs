@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Domain;
 using Saga.Core.Models;
-using Saga.Core.Pipeline;
 using Saga.Infrastructure.Data;
 
 namespace Saga.Infrastructure.Services;
@@ -44,12 +43,10 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
         artifact.ContentMarkdown = contentMarkdown;
         artifact.ContentJson = contentJson;
         artifact.Status = ArtifactStatus.Edited;
-        artifact.IsStale = false;
         artifact.UpdatedAt = now;
         db.Entry(artifact).Property(a => a.RowVersion).OriginalValue = expectedRowVersion;
 
         db.ArtifactVersions.Add(Snapshot(artifact, VersionOrigin.Edited, userId, now));
-        await MarkDownstreamStaleAsync(db, proposalId, type, ct);
         await TouchProposalAsync(db, proposalId, now, ct);
 
         try
@@ -72,8 +69,6 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Editor, ct);
         var artifact = await db.Artifacts.FirstAsync(a => a.ProposalId == proposalId && a.Type == type, ct);
         artifact.IsLocked = locked;
-        if (locked)
-            artifact.IsStale = false;
         await db.SaveChangesAsync(ct);
     }
 
@@ -104,11 +99,9 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
         artifact.ContentMarkdown = version.ContentMarkdown;
         artifact.ContentJson = version.ContentJson;
         artifact.Status = ArtifactStatus.Edited;
-        artifact.IsStale = false;
         artifact.UpdatedAt = now;
 
         db.ArtifactVersions.Add(Snapshot(artifact, VersionOrigin.Restored, userId, now));
-        await MarkDownstreamStaleAsync(db, artifact.ProposalId, artifact.Type, ct);
         await TouchProposalAsync(db, artifact.ProposalId, now, ct);
         await db.SaveChangesAsync(ct);
         return artifact;
@@ -125,20 +118,6 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
             CreatedById = userId,
             CreatedAt = now,
         };
-
-    /// <summary>Spec §19: a change makes downstream artifacts stale, except locked ones.</summary>
-    internal static async Task MarkDownstreamStaleAsync(SagaDbContext db, Guid proposalId, ArtifactType changed,
-        CancellationToken ct)
-    {
-        var downstream = ArtifactDependencies.DownstreamOf(changed);
-        if (downstream.Count == 0) return;
-        var artifacts = await db.Artifacts
-            .Where(a => a.ProposalId == proposalId && downstream.Contains(a.Type)
-                        && a.Status != ArtifactStatus.Empty && !a.IsLocked)
-            .ToListAsync(ct);
-        foreach (var artifact in artifacts)
-            artifact.IsStale = true;
-    }
 
     internal static async Task TouchProposalAsync(SagaDbContext db, Guid proposalId, DateTimeOffset now,
         CancellationToken ct)

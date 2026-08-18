@@ -5,15 +5,10 @@
         <thead>
             <tr>
                 <th>#</th>
-                <th style="min-width: 160px;">@(IsPowerPoint ? "Slide title" : "Chapter heading")</th>
-                <th style="min-width: 160px;">Purpose</th>
-                <th style="min-width: 160px;">@(IsPowerPoint ? "Key message" : "Central points")</th>
-                <th>Length</th>
-                @if (IsPowerPoint)
-                {
-                    <th style="min-width: 120px;">Visual</th>
-                }
-                <th style="min-width: 130px;">Addresses</th>
+                <th style="min-width: 180px;">@(IsPowerPoint ? "Slide title" : "Section heading")</th>
+                <th style="min-width: 180px;">Purpose</th>
+                <th style="min-width: 180px;">@(IsPowerPoint ? "Key message" : "Central points")</th>
+                <th style="width: 90px;">@(IsPowerPoint ? "Slides" : "Words")</th>
                 @if (CanEdit)
                 {
                     <th></th>
@@ -61,39 +56,19 @@
                         }
                     </td>
                     <td>
-                        @if (CanEdit)
+                        @if (CanEdit && IsPowerPoint)
                         {
-                            <input type="text" class="req-input" style="min-width: 70px;" value="@item.EstimatedLength"
-                                   @onchange="e => Set(() => item.EstimatedLength = (string?)e.Value)" />
+                            <input type="number" min="1" step="1" class="req-input req-input-count" value="@item.SlideCount"
+                                   @onchange="e => Set(() => item.SlideCount = ParseCount(e.Value))" />
+                        }
+                        else if (CanEdit)
+                        {
+                            <input type="number" min="0" step="50" class="req-input req-input-count" value="@item.WordCount"
+                                   @onchange="e => Set(() => item.WordCount = ParseCount(e.Value))" />
                         }
                         else
                         {
-                            @item.EstimatedLength
-                        }
-                    </td>
-                    @if (IsPowerPoint)
-                    {
-                        <td>
-                            @if (CanEdit)
-                            {
-                                <input type="text" class="req-input" value="@item.VisualSuggestion"
-                                       @onchange="e => Set(() => item.VisualSuggestion = (string?)e.Value)" />
-                            }
-                            else
-                            {
-                                @item.VisualSuggestion
-                            }
-                        </td>
-                    }
-                    <td>
-                        @if (CanEdit)
-                        {
-                            <textarea rows="2" class="req-input" value="@item.Addresses"
-                                      @onchange="e => Set(() => item.Addresses = (string?)e.Value)"></textarea>
-                        }
-                        else
-                        {
-                            @item.Addresses
+                            @(IsPowerPoint ? item.SlideCount?.ToString() : item.WordCount?.ToString())
                         }
                     </td>
                     @if (CanEdit)
@@ -117,6 +92,10 @@
     [Parameter] public bool IsPowerPoint { get; set; }
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
+
+    /// <summary>Blank clears the count; anything unparseable leaves it blank rather than guessing.</summary>
+    private static int? ParseCount(object? value)
+        => int.TryParse(value?.ToString(), out var parsed) && parsed >= 0 ? parsed : null;
 
     private void Set(Action apply)
     {

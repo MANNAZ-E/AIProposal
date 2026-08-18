@@ -113,7 +113,7 @@ public class ProposalServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
     }
 
     [Fact]
-    public async Task Delete_removes_proposal_and_memberships()
+    public async Task Delete_hides_the_proposal_but_keeps_it_in_the_recycle_bin()
     {
         var (elv, sda) = await GetSeededUsersAsync();
         var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
@@ -123,6 +123,89 @@ public class ProposalServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         Assert.Null(await _proposals.GetForUserAsync(id, elv));
         Assert.DoesNotContain(await _proposals.GetDashboardAsync(sda), p => p.Id == id);
+
+        // Both members see it in the recycle bin, with the deletion timestamp.
+        var bin = await _proposals.GetRecycleBinAsync(sda);
+        var item = Assert.Single(bin, p => p.Id == id);
+        Assert.NotNull(item.DeletedAt);
+    }
+
+    [Fact]
+    public async Task Any_team_member_can_restore_from_the_recycle_bin()
+    {
+        var (elv, sda) = await GetSeededUsersAsync();
+        var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
+        await _proposals.ShareAsync(id, elv, "sda@mannaz.com", ProposalRole.Reader);
+        await _proposals.DeleteAsync(id, elv);
+
+        await _proposals.RestoreAsync(id, sda);
+
+        Assert.NotNull(await _proposals.GetForUserAsync(id, elv));
+        Assert.Contains(await _proposals.GetDashboardAsync(elv), p => p.Id == id);
+        Assert.DoesNotContain(await _proposals.GetRecycleBinAsync(elv), p => p.Id == id);
+    }
+
+    [Fact]
+    public async Task Delete_requires_owner()
+    {
+        var (elv, sda) = await GetSeededUsersAsync();
+        var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
+        await _proposals.ShareAsync(id, elv, "sda@mannaz.com", ProposalRole.Editor);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _proposals.DeleteAsync(id, sda));
+    }
+
+    [Fact]
+    public async Task Settings_rename_updates_title_and_client()
+    {
+        var (elv, _) = await GetSeededUsersAsync();
+        var id = await _proposals.CreateAsync(elv, "Old name", "Old client", null, OutputFormat.PowerPoint);
+
+        await _proposals.UpdateDetailsAsync(id, elv, "  New name  ", "  New client  ");
+
+        var (proposal, _) = (await _proposals.GetForUserAsync(id, elv))!.Value;
+        Assert.Equal("New name", proposal.Title);
+        Assert.Equal("New client", proposal.ClientName);
+    }
+
+    [Fact]
+    public async Task Settings_rename_requires_owner()
+    {
+        var (elv, sda) = await GetSeededUsersAsync();
+        var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
+        await _proposals.ShareAsync(id, elv, "sda@mannaz.com", ProposalRole.Editor);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _proposals.UpdateDetailsAsync(id, sda, "Hijacked", "Client"));
+    }
+
+    [Fact]
+    public async Task Settings_rename_rejects_blank_names()
+    {
+        var (elv, _) = await GetSeededUsersAsync();
+        var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _proposals.UpdateDetailsAsync(id, elv, "   ", "C"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _proposals.UpdateDetailsAsync(id, elv, "P", "   "));
+    }
+
+    [Fact]
+    public async Task Client_research_settings_round_trip_and_blank_clears()
+    {
+        var (elv, _) = await GetSeededUsersAsync();
+        var id = await _proposals.CreateAsync(elv, "P", "Acme A/S", null, OutputFormat.PowerPoint);
+
+        await _proposals.SetClientResearchAsync(id, elv, "  Acme Group A/S  ", "  https://acme.example  ");
+        var (proposal, _) = (await _proposals.GetForUserAsync(id, elv))!.Value;
+        Assert.Equal("Acme Group A/S", proposal.ResearchClientName);
+        Assert.Equal("https://acme.example", proposal.ClientWebsite);
+
+        await _proposals.SetClientResearchAsync(id, elv, "  ", null);
+        (proposal, _) = (await _proposals.GetForUserAsync(id, elv))!.Value;
+        Assert.Null(proposal.ResearchClientName);
+        Assert.Null(proposal.ClientWebsite);
     }
 
     [Fact]
