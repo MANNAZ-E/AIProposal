@@ -53,7 +53,12 @@ public class ChatService(
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                OwnerId = userId,
+                Title = ChatTitle.FromQuestion(question),
+                Visibility = ChatVisibility.Private,
+                WorkingContext = kind,
                 CreatedAt = DateTimeOffset.UtcNow,
+                LastMessageAt = DateTimeOffset.UtcNow,
             };
             db.ChatSessions.Add(session);
         }
@@ -115,6 +120,7 @@ public class ChatService(
             CreatedAt = DateTimeOffset.UtcNow,
         };
         db.ChatMessages.Add(answer);
+        session.LastMessageAt = answer.CreatedAt;
         await db.SaveChangesAsync(CancellationToken.None);
         return answer;
     }

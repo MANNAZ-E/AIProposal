@@ -51,12 +51,22 @@ public enum WorkingContextKind
     SourceMaterial = 0,
     Analysis = 1,
     FullProject = 2,
+
+    /// <summary>A chat whose material was picked by hand instead of from one of the presets.</summary>
+    Custom = 3,
 }
 
 public enum ChatRole
 {
     User = 0,
     Assistant = 1,
+}
+
+/// <summary>Who can see a chat: its owner only, or everyone on the proposal.</summary>
+public enum ChatVisibility
+{
+    Private = 0,
+    Shared = 1,
 }
 
 public enum GenerationOutcome

@@ -14,6 +14,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<ArtifactVersion> ArtifactVersions => Set<ArtifactVersion>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
+    public DbSet<ChatSeen> ChatSeen => Set<ChatSeen>();
     public DbSet<AiUsageRecord> AiUsage => Set<AiUsageRecord>();
     public DbSet<MannazVoiceSettings> MannazVoiceSettings => Set<MannazVoiceSettings>();
     public DbSet<FinalProposalVersion> FinalProposalVersions => Set<FinalProposalVersion>();
@@ -92,7 +93,21 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
 
         modelBuilder.Entity<ChatSession>(b =>
         {
+            b.Property(s => s.Title).HasMaxLength(200);
+            // MaterialSelectionJson/ContextSnapshot stay nvarchar(max), like AiUsageRecord's
+            // request text: they are replayed whole and never queried into.
+            b.HasIndex(s => new { s.ProposalId, s.LastMessageAt });
             b.HasOne(s => s.Proposal).WithMany(p => p.ChatSessions).HasForeignKey(s => s.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(s => s.Owner).WithMany().HasForeignKey(s => s.OwnerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ChatSeen>(b =>
+        {
+            b.HasIndex(s => new { s.ChatSessionId, s.UserId }).IsUnique();
+            b.HasOne(s => s.ChatSession).WithMany(c => c.Seen).HasForeignKey(s => s.ChatSessionId).OnDelete(DeleteBehavior.Cascade);
+            // Cascades from two roots (Proposal, ChatSession, ChatSeen and User, ChatSeen).
+            // ProposalMember already has exactly this shape and SQL Server accepts it.
+            b.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ChatMessage>(b =>
