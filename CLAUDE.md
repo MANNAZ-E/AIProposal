@@ -31,3 +31,25 @@ dotnet run --launch-profile http --no-build   # after an initial `dotnet build`
 - Run in the background (e.g. `run_in_background` in Claude Code) since it's a
   long-lived server; stop it by killing the process (Ctrl+C interactively, or kill
   the backgrounded shell).
+
+## AI usage and cost tracking
+
+Every paid call — LLM prompt or Content Understanding extraction — writes one `AiUsageRecord`
+row (`AiUsage` table), including the full request and response text so a call can be
+reconstructed later.
+
+- Capture happens in decorators, **not** in the services: `UsageTrackingAiService` wraps
+  `IAiService` and `UsageTrackingTextExtractor` wraps the billed extractor, both registered in
+  `Program.cs`. Services attribute a call by attaching an `AiCallContext`
+  (`src/Saga.Core/Abstractions/AiCallContext.cs`) to the `AiRequest` — never by writing rows
+  themselves. A request with no context passes through unmetered.
+- One row per *call*; an `OperationId` groups the calls of one user-visible operation (content
+  generation runs one call per unit, requirements extraction one per chunk). Rejecting a
+  generation marks every row of its operation.
+- Rates live in the `Pricing` config section, keyed by deployment name, **in USD** (what Azure
+  publishes); `Pricing:UsdToDkk` converts for display only. Cost is frozen on the row at write
+  time. `PricingService` returns 0 for an unpriced model rather than throwing — metering must
+  never break a generation.
+- Visible per proposal on the workspace **Usage** tab (`UsageSection.razor`) and across all
+  proposals on `/admin`. Dev prices for `fake-model` are set in `appsettings.Development.json`
+  so local numbers are non-zero.

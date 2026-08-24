@@ -15,8 +15,8 @@ public class ProposalReviewServiceTests(LocalDbFixture db) : IClassFixture<Local
     private readonly UserService _users = new(db);
 
     private ProposalReviewService CreateService()
-        => new(db, new TempDirStorage(_storageDir), new FakeExtractor(), new FakeAiService(),
-            new ConfigurationBuilder().Build());
+        => new(db, new TempDirStorage(_storageDir),
+            TestServices.Extractor(db, new FakeExtractor()), TestServices.Ai(db));
 
     public void Dispose()
     {
@@ -150,34 +150,12 @@ public class ProposalReviewServiceTests(LocalDbFixture db) : IClassFixture<Local
         Assert.Empty(Directory.GetFiles(_storageDir, "*", SearchOption.AllDirectories));
     }
 
-    private sealed class TempDirStorage(string root) : IFileStorage
-    {
-        public async Task<string> SaveAsync(Guid proposalId, string fileName, Stream content, CancellationToken ct = default)
-        {
-            var relative = Path.Combine(proposalId.ToString("N"), $"{Guid.NewGuid():N}_{Path.GetFileName(fileName)}");
-            var fullPath = Path.Combine(root, relative);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            await using var file = System.IO.File.Create(fullPath);
-            await content.CopyToAsync(file, ct);
-            return relative.Replace('\\', '/');
-        }
-
-        public Task<Stream> OpenReadAsync(string path, CancellationToken ct = default)
-            => Task.FromResult<Stream>(System.IO.File.OpenRead(Path.Combine(root, path)));
-
-        public Task DeleteAsync(string path, CancellationToken ct = default)
-        {
-            var fullPath = Path.Combine(root, path);
-            if (System.IO.File.Exists(fullPath)) System.IO.File.Delete(fullPath);
-            return Task.CompletedTask;
-        }
-    }
-
     private sealed class FakeExtractor : IDocumentTextExtractor
     {
         public IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string> { ".pdf", ".docx", ".pptx", ".xlsx" };
 
-        public Task<ExtractionResult> ExtractAsync(Stream content, string fileName, CancellationToken ct = default)
-            => Task.FromResult(new ExtractionResult($"extracted: {fileName}", [new PageSpan(1, 0, 10)]));
+        public Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
+            AiCallContext? context = null, CancellationToken ct = default)
+            => Task.FromResult(new ExtractionResult($"extracted: {fileName}", [new PageSpan(1, 0, 10)], PageCount: 3));
     }
 }

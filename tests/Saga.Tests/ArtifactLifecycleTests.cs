@@ -56,9 +56,9 @@ public class ArtifactLifecycleTests(LocalDbFixture db) : IClassFixture<LocalDbFi
         Assert.Equal(VersionOrigin.Generated, versions[0].Origin);
 
         await using var check = db.CreateDbContext();
-        var run = Assert.Single(check.GenerationRuns.Where(r => r.ProposalId == proposalId));
+        var run = Assert.Single(check.AiUsage.Where(r => r.ProposalId == proposalId));
         Assert.Equal(GenerationOutcome.Succeeded, run.Outcome);
-        Assert.True(run.PromptTokens > 0);
+        Assert.True(run.InputTokens > 0);
     }
 
     [Fact]

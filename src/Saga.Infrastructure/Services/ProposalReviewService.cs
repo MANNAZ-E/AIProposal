@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Models;
@@ -21,8 +19,7 @@ public class ProposalReviewService(
     IDbContextFactory<SagaDbContext> dbFactory,
     IFileStorage fileStorage,
     IDocumentTextExtractor textExtractor,
-    IAiService ai,
-    IConfiguration configuration)
+    IAiService ai)
 {
     private sealed class CriteriaRow
     {
@@ -80,6 +77,8 @@ public class ProposalReviewService(
         };
 
         var storedPaths = new List<string>();
+        // One operation covers the version's files; each file is a separate extraction call.
+        var extractionOperationId = Guid.NewGuid();
         try
         {
             foreach (var (fileName, content) in files)
@@ -93,7 +92,9 @@ public class ProposalReviewService(
                 storedPaths.Add(storagePath);
 
                 buffer.Position = 0;
-                var extraction = await textExtractor.ExtractAsync(buffer, fileName, ct);
+                var extraction = await textExtractor.ExtractAsync(buffer, fileName,
+                    new AiCallContext(extractionOperationId, AiOperation.ExtractDocument, proposalId, userId,
+                        Label: Path.GetFileName(fileName)), ct);
 
                 version.Files.Add(new FinalProposalFile
                 {
@@ -153,54 +154,18 @@ public class ProposalReviewService(
         var systemPrompt = ProposalReviewPrompts.BuildSystemPrompt(proposal, requirements);
         var context = ProposalReviewPrompts.BuildFilesContext(
             version.Files.OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase));
-        var request = new AiRequest(systemPrompt, [AiMessage.User(context)]);
+        var request = new AiRequest(systemPrompt, [AiMessage.User(context)],
+            Context: new AiCallContext(Guid.NewGuid(), AiOperation.ReviewProposal, version.ProposalId,
+                userId, ArtifactType: ArtifactType.Review,
+                Label: version.Label ?? $"Version {version.Number}"));
 
-        var run = new GenerationRun
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = version.ProposalId,
-            ArtifactType = ArtifactType.Review,
-            Model = "",
-            StartedById = userId,
-            StartedAt = DateTimeOffset.UtcNow,
-            Outcome = GenerationOutcome.Failed,
-        };
+        if (onProgress is not null)
+            await onProgress($"Reviewing version {version.Number} ({version.Files.Count} file{(version.Files.Count == 1 ? "" : "s")}) on criteria, language and quality…");
 
-        var stopwatch = Stopwatch.StartNew();
         var text = new System.Text.StringBuilder();
-        try
-        {
-            if (onProgress is not null)
-                await onProgress($"Reviewing version {version.Number} ({version.Files.Count} file{(version.Files.Count == 1 ? "" : "s")}) on criteria, language and quality…");
-            await foreach (var evt in ai.StreamAsync(request, ct))
-            {
-                switch (evt)
-                {
-                    case AiStreamEvent.Delta d:
-                        text.Append(d.Text);
-                        break;
-                    case AiStreamEvent.Completed c:
-                        run.PromptTokens = c.PromptTokens;
-                        run.CompletionTokens = c.CompletionTokens;
-                        run.Model = c.Model;
-                        run.EstimatedCost = UsageCost.Estimate(configuration, request.Tier,
-                            c.PromptTokens, c.CompletionTokens);
-                        run.Outcome = GenerationOutcome.Succeeded;
-                        break;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
-        }
+        await foreach (var evt in ai.StreamAsync(request, ct))
+            if (evt is AiStreamEvent.Delta d)
+                text.Append(d.Text);
 
         var response = ModelJson.ParseObject<ReviewResponse>(text.ToString())
             ?? throw new InvalidOperationException("The model did not return a usable review.");

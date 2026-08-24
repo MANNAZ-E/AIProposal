@@ -13,10 +13,12 @@ public record AiMessage(string Role, string Content)
     public static AiMessage Assistant(string content) => new("assistant", content);
 }
 
+/// <param name="Context">Attribution for usage logging; null means the call is not metered.</param>
 public record AiRequest(
     string SystemPrompt,
     IReadOnlyList<AiMessage> Messages,
-    AiModelTier Tier = AiModelTier.Strong);
+    AiModelTier Tier = AiModelTier.Strong,
+    AiCallContext? Context = null);
 
 public abstract record AiStreamEvent
 {
@@ -24,7 +26,9 @@ public abstract record AiStreamEvent
     public sealed record Delta(string Text) : AiStreamEvent;
 
     /// <summary>Emitted once at the end with usage for cost logging.</summary>
-    public sealed record Completed(int PromptTokens, int CompletionTokens, string Model) : AiStreamEvent;
+    /// <param name="CachedPromptTokens">Prompt tokens served from the provider's cache, where reported.</param>
+    public sealed record Completed(int PromptTokens, int CompletionTokens, string Model,
+        int CachedPromptTokens = 0) : AiStreamEvent;
 }
 
 public interface IAiService

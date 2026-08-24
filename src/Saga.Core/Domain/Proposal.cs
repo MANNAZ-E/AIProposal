@@ -42,6 +42,6 @@ public class Proposal
     public ICollection<Document> Documents { get; set; } = [];
     public ICollection<Artifact> Artifacts { get; set; } = [];
     public ICollection<ChatSession> ChatSessions { get; set; } = [];
-    public ICollection<GenerationRun> GenerationRuns { get; set; } = [];
+    public ICollection<AiUsageRecord> AiUsage { get; set; } = [];
     public ICollection<FinalProposalVersion> FinalProposalVersions { get; set; } = [];
 }

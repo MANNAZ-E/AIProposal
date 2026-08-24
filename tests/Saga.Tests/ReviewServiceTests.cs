@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Models;
 using Saga.Infrastructure.Ai;
@@ -11,8 +11,8 @@ public class ReviewServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixtur
 {
     private readonly ProposalService _proposals = new(db);
     private readonly UserService _users = new(db);
-    private readonly ReviewService _review = new(db, new FakeAiService(),
-        TestServices.WorkingContext(db), new ConfigurationBuilder().Build());
+    private readonly ReviewService _review = new(db, TestServices.Ai(db),
+        TestServices.WorkingContext(db));
 
     private async Task<(Guid ElvId, Guid ProposalId, RequirementsPayload Requirements)> SetupAsync(
         bool withRequirements = true, bool withContent = true)
@@ -68,7 +68,7 @@ public class ReviewServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixtur
     {
         var (elv, proposalId, requirements) = await SetupAsync();
 
-        var (runId, payload) = await _review.GenerateAsync(proposalId, elv);
+        var (operationId, payload) = await _review.GenerateAsync(proposalId, elv);
 
         Assert.Equal(requirements.Items.Count, payload.Items.Count);
         Assert.Equal(
@@ -80,8 +80,9 @@ public class ReviewServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixtur
         Assert.Contains(payload.Items, i => i.Coverage == ReviewCoverage.NotAddressed);
 
         await using var check = db.CreateDbContext();
-        var run = check.GenerationRuns.Single(r => r.Id == runId);
+        var run = check.AiUsage.Single(r => r.OperationId == operationId);
         Assert.Equal(ArtifactType.Review, run.ArtifactType);
+        Assert.Equal(AiOperation.ReviewDraft, run.Operation);
         Assert.Equal(GenerationOutcome.Succeeded, run.Outcome);
     }
 

@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Models;
@@ -19,8 +17,7 @@ namespace Saga.Infrastructure.Services;
 public class ReviewService(
     IDbContextFactory<SagaDbContext> dbFactory,
     IAiService ai,
-    WorkingContextService contextService,
-    IConfiguration configuration)
+    WorkingContextService contextService)
 {
     private sealed class ReviewRow
     {
@@ -31,14 +28,14 @@ public class ReviewService(
         public string? Risk { get; set; }
     }
 
-    public async Task<(Guid RunId, ReviewPayload Payload)> GenerateAsync(Guid proposalId, Guid userId,
+    public async Task<(Guid OperationId, ReviewPayload Payload)> GenerateAsync(Guid proposalId, Guid userId,
         Func<string, Task>? onProgress = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Editor, ct);
 
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
-        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var loaded = await contextService.LoadAsync(proposalId, userId, null, ct);
 
         var requirementsArtifact = loaded.Artifacts.FirstOrDefault(a => a.Type == ArtifactType.Requirements);
         var requirements = RequirementsPayload.FromJson(requirementsArtifact?.ContentJson);
@@ -54,54 +51,18 @@ public class ReviewService(
             loaded.Documents, loaded.Artifacts,
             excludeArtifact: ArtifactType.Review, useCondensedDocuments: loaded.UseCondensed);
 
-        var request = new AiRequest(systemPrompt, [AiMessage.User(context)]);
+        var operationId = Guid.NewGuid();
+        var request = new AiRequest(systemPrompt, [AiMessage.User(context)],
+            Context: new AiCallContext(operationId, AiOperation.ReviewDraft, proposalId, userId,
+                ArtifactType: ArtifactType.Review));
 
-        var run = new GenerationRun
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = proposalId,
-            ArtifactType = ArtifactType.Review,
-            Model = "",
-            StartedById = userId,
-            StartedAt = DateTimeOffset.UtcNow,
-            Outcome = GenerationOutcome.Failed,
-        };
+        if (onProgress is not null)
+            await onProgress($"Reviewing {requirements.Items.Count} requirements against the proposal…");
 
-        var stopwatch = Stopwatch.StartNew();
         var text = new System.Text.StringBuilder();
-        try
-        {
-            if (onProgress is not null)
-                await onProgress($"Reviewing {requirements.Items.Count} requirements against the proposal…");
-            await foreach (var evt in ai.StreamAsync(request, ct))
-            {
-                switch (evt)
-                {
-                    case AiStreamEvent.Delta d:
-                        text.Append(d.Text);
-                        break;
-                    case AiStreamEvent.Completed c:
-                        run.PromptTokens = c.PromptTokens;
-                        run.CompletionTokens = c.CompletionTokens;
-                        run.Model = c.Model;
-                        run.EstimatedCost = UsageCost.Estimate(configuration, request.Tier,
-                            c.PromptTokens, c.CompletionTokens);
-                        run.Outcome = GenerationOutcome.Succeeded;
-                        break;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
-        }
+        await foreach (var evt in ai.StreamAsync(request, ct))
+            if (evt is AiStreamEvent.Delta d)
+                text.Append(d.Text);
 
         var rows = ModelJson.ParseArray<ReviewRow>(text.ToString());
         if (rows.Count == 0)
@@ -129,6 +90,6 @@ public class ReviewService(
                 Risk = row?.Risk,
             });
         }
-        return (run.Id, payload);
+        return (operationId, payload);
     }
 }

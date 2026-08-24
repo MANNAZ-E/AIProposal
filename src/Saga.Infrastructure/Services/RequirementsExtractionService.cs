@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
@@ -26,7 +25,7 @@ public class RequirementsExtractionService(
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
     };
 
-    public async Task<(Guid RunId, RequirementsPayload Payload)> ExtractAsync(Guid proposalId, Guid userId,
+    public async Task<(Guid OperationId, RequirementsPayload Payload)> ExtractAsync(Guid proposalId, Guid userId,
         Func<ExtractionProgress, Task>? onProgress = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -42,67 +41,41 @@ public class RequirementsExtractionService(
         if (!documents.Any(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
             throw new InvalidOperationException("Upload client documents or add notes before extracting requirements.");
 
-        var run = new GenerationRun
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = proposalId,
-            ArtifactType = ArtifactType.Requirements,
-            Model = "",
-            StartedById = userId,
-            StartedAt = DateTimeOffset.UtcNow,
-            Outcome = GenerationOutcome.Failed,
-        };
-        var stopwatch = Stopwatch.StartNew();
+        // One operation, one AI call per chunk — each chunk gets its own usage row.
+        var operationId = Guid.NewGuid();
         var payload = new RequirementsPayload();
 
-        try
+        foreach (var document in documents.Where(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
         {
-            foreach (var document in documents.Where(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
+            var pageMap = ParsePageMap(document.PageMapJson);
+            var chunks = DocumentChunker.Chunk(document.ExtractedText, pageMap);
+            for (var i = 0; i < chunks.Count; i++)
             {
-                var pageMap = ParsePageMap(document.PageMapJson);
-                var chunks = DocumentChunker.Chunk(document.ExtractedText, pageMap);
-                for (var i = 0; i < chunks.Count; i++)
+                ct.ThrowIfCancellationRequested();
+                if (onProgress is not null)
+                    await onProgress(new ExtractionProgress(document.Name, i + 1, chunks.Count));
+
+                var chunk = chunks[i];
+                var request = new AiRequest(
+                    RequirementsPrompts.BuildSystemPrompt(document.Name, chunk.LocationLabel),
+                    [AiMessage.User(chunk.Text)],
+                    AiModelTier.Light,
+                    new AiCallContext(operationId, AiOperation.ExtractRequirements, proposalId, userId,
+                        ArtifactType: ArtifactType.Requirements,
+                        Label: $"{document.Name} — {chunk.LocationLabel}"));
+                var completion = await ai.CompleteAsync(request, ct);
+
+                foreach (var item in ParseItems(completion.Text))
                 {
-                    ct.ThrowIfCancellationRequested();
-                    if (onProgress is not null)
-                        await onProgress(new ExtractionProgress(document.Name, i + 1, chunks.Count));
-
-                    var chunk = chunks[i];
-                    var request = new AiRequest(
-                        RequirementsPrompts.BuildSystemPrompt(document.Name, chunk.LocationLabel),
-                        [AiMessage.User(chunk.Text)],
-                        AiModelTier.Light);
-                    var completion = await ai.CompleteAsync(request, ct);
-
-                    run.PromptTokens += completion.PromptTokens;
-                    run.CompletionTokens += completion.CompletionTokens;
-                    run.Model = completion.Model;
-
-                    foreach (var item in ParseItems(completion.Text))
-                    {
-                        item.SourceDocument = document.Name;
-                        item.SourceLocation = chunk.LocationLabel;
-                        payload.Items.Add(item);
-                    }
+                    item.SourceDocument = document.Name;
+                    item.SourceLocation = chunk.LocationLabel;
+                    payload.Items.Add(item);
                 }
             }
-
-            Deduplicate(payload);
-            run.Outcome = GenerationOutcome.Succeeded;
-        }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
         }
 
-        return (run.Id, payload);
+        Deduplicate(payload);
+        return (operationId, payload);
     }
 
     private static List<PageSpan>? ParsePageMap(string? json)

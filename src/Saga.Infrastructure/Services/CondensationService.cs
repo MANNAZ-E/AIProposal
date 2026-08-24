@@ -23,7 +23,7 @@ public class CondensationService(IDbContextFactory<SagaDbContext> dbFactory, IAi
         """;
 
     /// <summary>Condenses uploads that don't have a current condensed version yet.</summary>
-    public async Task EnsureCondensedAsync(Guid proposalId,
+    public async Task EnsureCondensedAsync(Guid proposalId, Guid? userId = null,
         Func<string, Task>? onProgress = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -31,6 +31,9 @@ public class CondensationService(IDbContextFactory<SagaDbContext> dbFactory, IAi
             .Where(d => d.ProposalId == proposalId && d.Kind == DocumentKind.Upload
                         && d.CondensedText == null && d.ExtractedText != "")
             .ToListAsync(ct);
+
+        // One operation covers the whole condensation pass; each document chunk is its own call.
+        var operationId = Guid.NewGuid();
 
         foreach (var document in documents)
         {
@@ -44,7 +47,9 @@ public class CondensationService(IDbContextFactory<SagaDbContext> dbFactory, IAi
             foreach (var chunk in chunks)
             {
                 var completion = await ai.CompleteAsync(
-                    new AiRequest(SystemPrompt, [AiMessage.User(chunk.Text)], AiModelTier.Light), ct);
+                    new AiRequest(SystemPrompt, [AiMessage.User(chunk.Text)], AiModelTier.Light,
+                        new AiCallContext(operationId, AiOperation.CondenseDocument, proposalId, userId,
+                            Label: document.Name)), ct);
                 parts.Add(completion.Text.Trim());
             }
             document.CondensedText = string.Join("\n\n", parts);

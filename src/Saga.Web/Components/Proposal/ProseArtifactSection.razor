@@ -211,7 +211,7 @@ else if (_mode == Mode.DiffReview)
     private string _editText = "";
     private string _streamText = "";
     private string _pendingText = "";
-    private Guid _pendingRunId;
+    private Guid _pendingOperationId;
     private string _instruction = "";
     private bool _showRegenerate;
 
@@ -259,7 +259,7 @@ else if (_mode == Mode.DiffReview)
             {
                 // Existing content: the user reviews the diff before anything is replaced.
                 _pendingText = result.Text;
-                _pendingRunId = result.RunId;
+                _pendingOperationId = result.OperationId;
                 _mode = Mode.DiffReview;
             }
             else
@@ -300,7 +300,7 @@ else if (_mode == Mode.DiffReview)
 
     private async Task RejectGenerationAsync()
     {
-        await Generation.MarkRejectedAsync(_pendingRunId);
+        await Generation.MarkRejectedAsync(_pendingOperationId);
         _pendingText = "";
         _mode = Mode.View;
     }

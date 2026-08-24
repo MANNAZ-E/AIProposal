@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
@@ -24,7 +23,7 @@ public class ContentGenerationService(
     /// Generates all units from the structure. Existing locked units are carried over
     /// untouched. Returns the staged payload — caller applies via GenerationService.ApplyAsync.
     /// </summary>
-    public async Task<(Guid RunId, ContentPayload Payload)> GenerateAllAsync(Guid proposalId, Guid userId,
+    public async Task<(Guid OperationId, ContentPayload Payload)> GenerateAllAsync(Guid proposalId, Guid userId,
         string? instruction, Func<ContentProgress, Task>? onProgress = null, Func<string, Task>? onDelta = null,
         CancellationToken ct = default)
     {
@@ -33,7 +32,7 @@ public class ContentGenerationService(
 
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
-        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var loaded = await contextService.LoadAsync(proposalId, userId, null, ct);
         var artifacts = loaded.Artifacts;
 
         var contentArtifact = artifacts.FirstOrDefault(a => a.Type == ArtifactType.Content);
@@ -49,56 +48,42 @@ public class ContentGenerationService(
         var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, loaded.Documents, artifacts,
             excludeArtifact: ArtifactType.Content, useCondensedDocuments: loaded.UseCondensed);
 
-        var run = NewRun(proposalId, ArtifactType.Content, userId, instruction);
-        var stopwatch = Stopwatch.StartNew();
+        // One operation, one AI call per unit — each unit gets its own usage row.
+        var operationId = Guid.NewGuid();
         var payload = new ContentPayload();
 
-        try
+        for (var i = 0; i < structure.Items.Count; i++)
         {
-            for (var i = 0; i < structure.Items.Count; i++)
+            ct.ThrowIfCancellationRequested();
+            var item = structure.Items[i];
+            if (onProgress is not null)
+                await onProgress(new ContentProgress(i + 1, structure.Items.Count, item.Title));
+
+            // A locked unit for this structure item survives regeneration untouched.
+            var locked = existing.Units.FirstOrDefault(u => u.StructureItemId == item.Id && u.IsLocked);
+            if (locked is not null)
             {
-                ct.ThrowIfCancellationRequested();
-                var item = structure.Items[i];
-                if (onProgress is not null)
-                    await onProgress(new ContentProgress(i + 1, structure.Items.Count, item.Title));
-
-                // A locked unit for this structure item survives regeneration untouched.
-                var locked = existing.Units.FirstOrDefault(u => u.StructureItemId == item.Id && u.IsLocked);
-                if (locked is not null)
-                {
-                    payload.Units.Add(locked);
-                    continue;
-                }
-
-                var body = await GenerateUnitBodyAsync(proposal, voice, item, i + 1, structure.Items.Count,
-                    context, instruction, run, onDelta, ct);
-                payload.Units.Add(new ContentUnit
-                {
-                    StructureItemId = item.Id,
-                    Title = item.Title,
-                    KeyMessage = item.KeyMessage,
-                    BodyMarkdown = body,
-                });
+                payload.Units.Add(locked);
+                continue;
             }
-            run.Outcome = GenerationOutcome.Succeeded;
-        }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
+
+            var body = await GenerateUnitBodyAsync(proposal, voice, item, i + 1, structure.Items.Count,
+                context, instruction, UnitContext(operationId, proposalId, userId, instruction, item.Title),
+                onDelta, ct);
+            payload.Units.Add(new ContentUnit
+            {
+                StructureItemId = item.Id,
+                Title = item.Title,
+                KeyMessage = item.KeyMessage,
+                BodyMarkdown = body,
+            });
         }
 
-        return (run.Id, payload);
+        return (operationId, payload);
     }
 
     /// <summary>Regenerates one unit; returns the staged body for diff review.</summary>
-    public async Task<(Guid RunId, string Body)> RegenerateUnitAsync(Guid proposalId, Guid unitId, Guid userId,
+    public async Task<(Guid OperationId, string Body)> RegenerateUnitAsync(Guid proposalId, Guid unitId, Guid userId,
         string? instruction, Func<string, Task>? onDelta = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -106,7 +91,7 @@ public class ContentGenerationService(
 
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
-        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var loaded = await contextService.LoadAsync(proposalId, userId, null, ct);
         var artifacts = loaded.Artifacts;
 
         var contentArtifact = artifacts.FirstOrDefault(a => a.Type == ArtifactType.Content)
@@ -127,62 +112,36 @@ public class ContentGenerationService(
         var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject, loaded.Documents, artifacts,
             useCondensedDocuments: loaded.UseCondensed);
 
-        var run = NewRun(proposalId, ArtifactType.Content, userId, instruction);
-        var stopwatch = Stopwatch.StartNew();
-        try
-        {
-            var body = await GenerateUnitBodyAsync(proposal, voice, item, position, total,
-                context, instruction, run, onDelta, ct);
-            run.Outcome = GenerationOutcome.Succeeded;
-            return (run.Id, body);
-        }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
-        }
+        var operationId = Guid.NewGuid();
+        var body = await GenerateUnitBodyAsync(proposal, voice, item, position, total,
+            context, instruction, UnitContext(operationId, proposalId, userId, instruction, item.Title),
+            onDelta, ct);
+        return (operationId, body);
     }
 
     private async Task<string> GenerateUnitBodyAsync(Proposal proposal, MannazVoiceSettings voice,
         StructureItem item, int position, int total, string context, string? instruction,
-        GenerationRun run, Func<string, Task>? onDelta, CancellationToken ct)
+        AiCallContext callContext, Func<string, Task>? onDelta, CancellationToken ct)
     {
         var prompt = ArtifactPrompts.BuildContentUnitPrompt(proposal, voice, item, position, total, instruction);
         var text = new System.Text.StringBuilder();
-        await foreach (var evt in ai.StreamAsync(new AiRequest(prompt, [AiMessage.User(context)]), ct))
+        await foreach (var evt in ai.StreamAsync(
+            new AiRequest(prompt, [AiMessage.User(context)], Context: callContext), ct))
         {
-            switch (evt)
+            if (evt is AiStreamEvent.Delta d)
             {
-                case AiStreamEvent.Delta d:
-                    text.Append(d.Text);
-                    if (onDelta is not null) await onDelta(d.Text);
-                    break;
-                case AiStreamEvent.Completed c:
-                    run.PromptTokens += c.PromptTokens;
-                    run.CompletionTokens += c.CompletionTokens;
-                    run.Model = c.Model;
-                    break;
+                text.Append(d.Text);
+                if (onDelta is not null) await onDelta(d.Text);
             }
         }
         return text.ToString().Trim();
     }
 
-    private static GenerationRun NewRun(Guid proposalId, ArtifactType type, Guid userId, string? instruction)
-        => new()
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = proposalId,
-            ArtifactType = type,
-            Model = "",
-            InstructionText = string.IsNullOrWhiteSpace(instruction) ? null : instruction.Trim(),
-            StartedById = userId,
-            StartedAt = DateTimeOffset.UtcNow,
-            Outcome = GenerationOutcome.Failed,
-        };
+    /// <summary>Attribution for one unit's call; every unit of a run shares the operation id.</summary>
+    private static AiCallContext UnitContext(Guid operationId, Guid proposalId, Guid userId,
+        string? instruction, string title)
+        => new(operationId, AiOperation.GenerateContentUnit, proposalId, userId,
+            ArtifactType: ArtifactType.Content,
+            InstructionText: string.IsNullOrWhiteSpace(instruction) ? null : instruction.Trim(),
+            Label: title);
 }

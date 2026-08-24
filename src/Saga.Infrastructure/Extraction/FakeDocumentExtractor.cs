@@ -11,7 +11,8 @@ public class FakeDocumentExtractor : IDocumentTextExtractor
 {
     public IReadOnlySet<string> SupportedExtensions => ContentUnderstandingExtractor.Extensions;
 
-    public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName, CancellationToken ct = default)
+    public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
+        AiCallContext? context = null, CancellationToken ct = default)
     {
         // Drain the stream so upload behaves like the real extractor (and reports a size).
         long size = 0;
@@ -37,6 +38,7 @@ public class FakeDocumentExtractor : IDocumentTextExtractor
             Questions can be submitted in writing. The placeholder ends here — edit this text via
             "Edit text" if you want to work with real content before Azure is wired up.
             """;
-        return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)]);
+        // Reports one page so the usage decorator has a plausible billing unit to record.
+        return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)], PageCount: 1);
     }
 }

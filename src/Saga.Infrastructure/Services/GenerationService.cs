@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Pipeline;
@@ -9,20 +7,20 @@ using Saga.Infrastructure.Data;
 
 namespace Saga.Infrastructure.Services;
 
-public record GenerationResult(Guid RunId, string Text, int PromptTokens, int CompletionTokens, string Model);
+public record GenerationResult(Guid OperationId, string Text, int PromptTokens, int CompletionTokens, string Model);
 
 public class GenerationService(
     IDbContextFactory<SagaDbContext> dbFactory,
     IAiService ai,
     IWebResearchService webResearch,
     WorkingContextService contextService,
-    IConfiguration configuration)
+    AiUsageService usage)
 {
     /// <summary>
     /// Generates content for an artifact, streaming deltas via <paramref name="onDelta"/>.
     /// The result is NOT applied to the artifact — the caller shows a diff and calls
     /// <see cref="ApplyAsync"/> to accept or <see cref="MarkRejectedAsync"/> to discard.
-    /// Every run is logged to GenerationRuns for the usage page.
+    /// The call is logged to AiUsage by the usage decorator — see <see cref="AiCallContext"/>.
     /// </summary>
     public async Task<GenerationResult> GenerateAsync(Guid proposalId, ArtifactType type, Guid userId,
         string? instruction, Func<string, Task>? onDelta, CancellationToken ct = default)
@@ -36,7 +34,7 @@ public class GenerationService(
             throw new InvalidOperationException("The artifact is locked. Unlock it before regenerating.");
 
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
-        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var loaded = await contextService.LoadAsync(proposalId, userId, null, ct);
 
         if (!loaded.Documents.Any(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
             throw new InvalidOperationException("Upload client documents or add notes before generating.");
@@ -58,55 +56,31 @@ public class GenerationService(
                 context += $"\n<web_research>\nLive web research about the client, with sources. Ground the profile in this.\n{findings}\n</web_research>\n";
         }
 
-        var request = new AiRequest(systemPrompt, [AiMessage.User(context)], TierFor(type));
+        var operationId = Guid.NewGuid();
+        var request = new AiRequest(systemPrompt, [AiMessage.User(context)], TierFor(type),
+            new AiCallContext(operationId, AiOperation.GenerateArtifact, proposalId, userId,
+                ArtifactType: type,
+                InstructionText: string.IsNullOrWhiteSpace(instruction) ? null : instruction.Trim()));
 
-        var run = new GenerationRun
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = proposalId,
-            ArtifactType = type,
-            Model = "",
-            InstructionText = string.IsNullOrWhiteSpace(instruction) ? null : instruction.Trim(),
-            StartedById = userId,
-            StartedAt = DateTimeOffset.UtcNow,
-            Outcome = GenerationOutcome.Failed,
-        };
-
-        var stopwatch = Stopwatch.StartNew();
         var text = new System.Text.StringBuilder();
-        try
+        var promptTokens = 0;
+        var completionTokens = 0;
+        var model = "";
+        await foreach (var evt in ai.StreamAsync(request, ct))
         {
-            await foreach (var evt in ai.StreamAsync(request, ct))
+            switch (evt)
             {
-                switch (evt)
-                {
-                    case AiStreamEvent.Delta d:
-                        text.Append(d.Text);
-                        if (onDelta is not null) await onDelta(d.Text);
-                        break;
-                    case AiStreamEvent.Completed c:
-                        run.PromptTokens = c.PromptTokens;
-                        run.CompletionTokens = c.CompletionTokens;
-                        run.Model = c.Model;
-                        run.EstimatedCost = Ai.UsageCost.Estimate(configuration, request.Tier, c.PromptTokens, c.CompletionTokens);
-                        run.Outcome = GenerationOutcome.Succeeded;
-                        break;
-                }
+                case AiStreamEvent.Delta d:
+                    text.Append(d.Text);
+                    if (onDelta is not null) await onDelta(d.Text);
+                    break;
+                case AiStreamEvent.Completed c:
+                    (promptTokens, completionTokens, model) = (c.PromptTokens, c.CompletionTokens, c.Model);
+                    break;
             }
         }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
-        }
 
-        return new GenerationResult(run.Id, text.ToString().Trim(), run.PromptTokens, run.CompletionTokens, run.Model);
+        return new GenerationResult(operationId, text.ToString().Trim(), promptTokens, completionTokens, model);
     }
 
     /// <summary>Accepts a generation: snapshots the previous version, then replaces the content.</summary>
@@ -146,14 +120,8 @@ public class GenerationService(
     }
 
     /// <summary>The user rejected the generated result in the diff review.</summary>
-    public async Task MarkRejectedAsync(Guid runId, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var run = await db.GenerationRuns.FirstOrDefaultAsync(r => r.Id == runId, ct);
-        if (run is null) return;
-        run.Outcome = GenerationOutcome.Rejected;
-        await db.SaveChangesAsync(ct);
-    }
+    public Task MarkRejectedAsync(Guid operationId, CancellationToken ct = default)
+        => usage.MarkOperationRejectedAsync(operationId, ct);
 
     private static AiModelTier TierFor(ArtifactType type)
         => type == ArtifactType.Requirements ? AiModelTier.Light : AiModelTier.Strong;

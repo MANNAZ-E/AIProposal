@@ -14,7 +14,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<ArtifactVersion> ArtifactVersions => Set<ArtifactVersion>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
-    public DbSet<GenerationRun> GenerationRuns => Set<GenerationRun>();
+    public DbSet<AiUsageRecord> AiUsage => Set<AiUsageRecord>();
     public DbSet<MannazVoiceSettings> MannazVoiceSettings => Set<MannazVoiceSettings>();
     public DbSet<FinalProposalVersion> FinalProposalVersions => Set<FinalProposalVersion>();
     public DbSet<FinalProposalFile> FinalProposalFiles => Set<FinalProposalFile>();
@@ -102,11 +102,17 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.HasOne(m => m.Author).WithMany().HasForeignKey(m => m.AuthorId).OnDelete(DeleteBehavior.SetNull);
         });
 
-        modelBuilder.Entity<GenerationRun>(b =>
+        modelBuilder.Entity<AiUsageRecord>(b =>
         {
             b.Property(r => r.Model).HasMaxLength(100);
-            b.Property(r => r.EstimatedCost).HasPrecision(18, 6);
-            b.HasOne(r => r.Proposal).WithMany(p => p.GenerationRuns).HasForeignKey(r => r.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            b.Property(r => r.Label).HasMaxLength(256);
+            b.Property(r => r.ErrorMessage).HasMaxLength(1024);
+            b.Property(r => r.EstimatedCostUsd).HasPrecision(18, 6);
+            // RequestText/ResponseText stay unconstrained (nvarchar(max)); SQL Server keeps
+            // them off-row, and the aggregation queries project scalars only.
+            b.HasIndex(r => new { r.ProposalId, r.StartedAt });
+            b.HasIndex(r => r.OperationId);
+            b.HasOne(r => r.Proposal).WithMany(p => p.AiUsage).HasForeignKey(r => r.ProposalId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(r => r.StartedBy).WithMany().HasForeignKey(r => r.StartedById).OnDelete(DeleteBehavior.SetNull);
         });
 

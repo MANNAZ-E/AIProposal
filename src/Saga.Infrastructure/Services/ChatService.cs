@@ -1,6 +1,4 @@
-using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Pipeline;
@@ -11,14 +9,13 @@ namespace Saga.Infrastructure.Services;
 
 /// <summary>
 /// Proposal chat (spec: Q&amp;A only in v1). Answers stream against the user-selected
-/// Working Context; every exchange is persisted and every run logged for the usage page.
+/// Working Context; every exchange is persisted and every call logged for the usage page.
 /// Readers can chat — chatting never modifies the proposal.
 /// </summary>
 public class ChatService(
     IDbContextFactory<SagaDbContext> dbFactory,
     IAiService ai,
-    WorkingContextService contextService,
-    IConfiguration configuration)
+    WorkingContextService contextService)
 {
     /// <summary>How many previous messages travel with each question as conversation history.</summary>
     private const int HistoryWindow = 20;
@@ -82,7 +79,7 @@ public class ChatService(
         db.ChatMessages.Add(userMessage);
         await db.SaveChangesAsync(ct);
 
-        var loaded = await contextService.LoadAsync(proposalId, null, ct);
+        var loaded = await contextService.LoadAsync(proposalId, userId, null, ct);
         var context = WorkingContextBuilder.Build(kind, loaded.Documents, loaded.Artifacts,
             useCondensedDocuments: loaded.UseCondensed);
 
@@ -95,52 +92,17 @@ public class ChatService(
             messages.Add(m.Role == ChatRole.User ? AiMessage.User(m.Text) : AiMessage.Assistant(m.Text));
         messages.Add(AiMessage.User(userMessage.Text));
 
-        var request = new AiRequest(ChatPrompts.BuildSystemPrompt(proposal, kind), messages);
+        var request = new AiRequest(ChatPrompts.BuildSystemPrompt(proposal, kind), messages,
+            Context: new AiCallContext(Guid.NewGuid(), AiOperation.Chat, proposalId, userId));
 
-        var run = new GenerationRun
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = proposalId,
-            ArtifactType = null,
-            Model = "",
-            StartedById = userId,
-            StartedAt = DateTimeOffset.UtcNow,
-            Outcome = GenerationOutcome.Failed,
-        };
-
-        var stopwatch = Stopwatch.StartNew();
         var text = new System.Text.StringBuilder();
-        try
+        await foreach (var evt in ai.StreamAsync(request, ct))
         {
-            await foreach (var evt in ai.StreamAsync(request, ct))
+            if (evt is AiStreamEvent.Delta d)
             {
-                switch (evt)
-                {
-                    case AiStreamEvent.Delta d:
-                        text.Append(d.Text);
-                        if (onDelta is not null) await onDelta(d.Text);
-                        break;
-                    case AiStreamEvent.Completed c:
-                        run.PromptTokens = c.PromptTokens;
-                        run.CompletionTokens = c.CompletionTokens;
-                        run.Model = c.Model;
-                        run.EstimatedCost = Ai.UsageCost.Estimate(configuration, request.Tier,
-                            c.PromptTokens, c.CompletionTokens);
-                        run.Outcome = GenerationOutcome.Succeeded;
-                        break;
-                }
+                text.Append(d.Text);
+                if (onDelta is not null) await onDelta(d.Text);
             }
-        }
-        catch (OperationCanceledException)
-        {
-            run.Outcome = GenerationOutcome.Cancelled;
-            throw;
-        }
-        finally
-        {
-            run.Duration = stopwatch.Elapsed;
-            db.GenerationRuns.Add(run);
-            await db.SaveChangesAsync(CancellationToken.None);
         }
 
         var answer = new ChatMessage

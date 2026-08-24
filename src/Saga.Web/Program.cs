@@ -58,17 +58,26 @@ builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
+builder.Services.AddScoped<AiUsageService>();
 builder.Services.AddScoped<Saga.Web.Components.Layout.AppHeaderState>();
 
 // Bing-grounded research is wired up with the Foundry project in the deployment milestone.
 builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();
 
+builder.Services.AddSingleton<PricingService>();
+
+// Every LLM call goes through the usage decorator — the fake included, so a dev session
+// produces the same usage rows as production.
 builder.Services.AddSingleton<IAiService>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
-    return string.IsNullOrEmpty(config["AzureOpenAI:Endpoint"])
+    IAiService inner = string.IsNullOrEmpty(config["AzureOpenAI:Endpoint"])
         ? new FakeAiService()
         : new AzureOpenAiService(config);
+    return new UsageTrackingAiService(inner,
+        sp.GetRequiredService<IDbContextFactory<SagaDbContext>>(),
+        sp.GetRequiredService<PricingService>(),
+        sp.GetService<ILogger<UsageTrackingAiService>>());
 });
 
 // Azure Blob (Managed Identity) when configured; local disk otherwise (dev).
@@ -80,13 +89,19 @@ else
 builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
+    // Offline stand-in accepts the same file types, so uploads work without Azure.
+    IDocumentTextExtractor billed = string.IsNullOrEmpty(config["ContentUnderstanding:Endpoint"])
+        ? new FakeDocumentExtractor()
+        : new ContentUnderstandingExtractor(config);
+
     var extractors = new List<IDocumentTextExtractor>
     {
+        // PlainTextExtractor reads local files and costs nothing, so it stays unmetered.
         new PlainTextExtractor(),
-        // Offline stand-in accepts the same file types, so uploads work without Azure.
-        string.IsNullOrEmpty(config["ContentUnderstanding:Endpoint"])
-            ? new FakeDocumentExtractor()
-            : new ContentUnderstandingExtractor(config),
+        new UsageTrackingTextExtractor(billed, ContentUnderstandingExtractor.AnalyzerId,
+            sp.GetRequiredService<IDbContextFactory<SagaDbContext>>(),
+            sp.GetRequiredService<PricingService>(),
+            sp.GetService<ILogger<UsageTrackingTextExtractor>>()),
     };
     return new CompositeTextExtractor(extractors);
 });

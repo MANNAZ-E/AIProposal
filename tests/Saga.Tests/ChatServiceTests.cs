@@ -26,7 +26,10 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     private readonly UserService _users = new(db);
 
     private ChatService NewChat(IAiService ai)
-        => new(db, ai, TestServices.WorkingContext(db), new ConfigurationBuilder().Build());
+    {
+        var metered = TestServices.Ai(db, ai);
+        return new(db, metered, TestServices.WorkingContext(db, metered));
+    }
 
     private async Task<(Guid ElvId, Guid SdaId, Guid ProposalId)> SetupAsync()
     {
@@ -78,10 +81,11 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         Assert.Equal(WorkingContextKind.FullProject, messages[1].WorkingContext);
 
         await using var check = db.CreateDbContext();
-        var run = check.GenerationRuns.Single(r => r.ProposalId == proposalId);
-        Assert.Null(run.ArtifactType); // Chat runs are not tied to an artifact.
+        var run = check.AiUsage.Single(r => r.ProposalId == proposalId);
+        Assert.Null(run.ArtifactType); // Chat calls are not tied to an artifact.
+        Assert.Equal(AiOperation.Chat, run.Operation);
         Assert.Equal(GenerationOutcome.Succeeded, run.Outcome);
-        Assert.True(run.CompletionTokens > 0);
+        Assert.True(run.OutputTokens > 0);
     }
 
     [Fact]

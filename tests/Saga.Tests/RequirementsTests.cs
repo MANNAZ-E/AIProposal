@@ -101,9 +101,9 @@ public class RequirementsTests(LocalDbFixture db) : IClassFixture<LocalDbFixture
             await setup.SaveChangesAsync();
         }
 
-        var extraction = new RequirementsExtractionService(db, new FakeAiService());
+        var extraction = new RequirementsExtractionService(db, TestServices.Ai(db));
         var progress = new List<ExtractionProgress>();
-        var (runId, payload) = await extraction.ExtractAsync(proposalId, elv,
+        var (operationId, payload) = await extraction.ExtractAsync(proposalId, elv,
             p => { progress.Add(p); return Task.CompletedTask; });
 
         Assert.NotEmpty(payload.Items);
@@ -111,9 +111,12 @@ public class RequirementsTests(LocalDbFixture db) : IClassFixture<LocalDbFixture
         Assert.NotEmpty(progress);
 
         await using var check = db.CreateDbContext();
-        var run = check.GenerationRuns.Single(r => r.Id == runId);
-        Assert.Equal(GenerationOutcome.Succeeded, run.Outcome);
-        Assert.Equal(ArtifactType.Requirements, run.ArtifactType);
+        // One call per chunk, all sharing the operation id.
+        var runs = check.AiUsage.Where(r => r.OperationId == operationId).ToList();
+        Assert.NotEmpty(runs);
+        Assert.All(runs, r => Assert.Equal(GenerationOutcome.Succeeded, r.Outcome));
+        Assert.All(runs, r => Assert.Equal(ArtifactType.Requirements, r.ArtifactType));
+        Assert.All(runs, r => Assert.Equal(AiOperation.ExtractRequirements, r.Operation));
 
         // Round-trip through the artifact JSON payload.
         var generation = TestServices.Generation(db);

@@ -190,7 +190,7 @@ else
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
-    private sealed record UnitDiff(Guid UnitId, Guid RunId, string NewBody);
+    private sealed record UnitDiff(Guid UnitId, Guid OperationId, string NewBody);
 
     private bool IsPowerPoint => OutputFormat == OutputFormat.PowerPoint;
 
@@ -206,7 +206,7 @@ else
     private bool _showRegenerate;
 
     private List<ContentUnit>? _pendingUnits;
-    private Guid _pendingRunId;
+    private Guid _pendingOperationId;
 
     private Guid? _editUnitId;
     private string _editText = "";
@@ -235,7 +235,7 @@ else
         try
         {
             var user = await CurrentUser.GetAsync();
-            var (runId, payload) = await ContentGeneration.GenerateAllAsync(ProposalId, user.Id, instruction,
+            var (operationId, payload) = await ContentGeneration.GenerateAllAsync(ProposalId, user.Id, instruction,
                 async p =>
                 {
                     _progress = p;
@@ -257,7 +257,7 @@ else
             else
             {
                 _pendingUnits = payload.Units;
-                _pendingRunId = runId;
+                _pendingOperationId = operationId;
             }
         }
         catch (Exception ex)
@@ -297,7 +297,7 @@ else
 
     private async Task RejectAllAsync()
     {
-        await Generation.MarkRejectedAsync(_pendingRunId);
+        await Generation.MarkRejectedAsync(_pendingOperationId);
         _pendingUnits = null;
     }
 
@@ -333,14 +333,14 @@ else
         try
         {
             var user = await CurrentUser.GetAsync();
-            var (runId, body) = await ContentGeneration.RegenerateUnitAsync(ProposalId, unit.Id, user.Id,
+            var (operationId, body) = await ContentGeneration.RegenerateUnitAsync(ProposalId, unit.Id, user.Id,
                 string.IsNullOrWhiteSpace(_instruction) ? null : _instruction,
                 async delta =>
                 {
                     _streamText += delta;
                     await InvokeAsync(StateHasChanged);
                 });
-            _unitDiff = new UnitDiff(unit.Id, runId, body);
+            _unitDiff = new UnitDiff(unit.Id, operationId, body);
         }
         catch (Exception ex)
         {
@@ -366,7 +366,7 @@ else
     private async Task RejectUnitAsync()
     {
         if (_unitDiff is not null)
-            await Generation.MarkRejectedAsync(_unitDiff.RunId);
+            await Generation.MarkRejectedAsync(_unitDiff.OperationId);
         _unitDiff = null;
     }
 

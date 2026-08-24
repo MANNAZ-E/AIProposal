@@ -36,9 +36,10 @@ against LocalDB and the offline stand-in AI (no Azure endpoints configured local
 6. **Real-model quality pass** — once the Foundry endpoint is configured, tune prompts
    and requirements-extraction chunking against a golden (anonymized) tender; keep it
    as the standing quality benchmark.
-7. **Token prices** — enter current €/1M token prices in configuration
-   (`AzureOpenAI:StrongPrice` / `LightPrice`) so the Admin usage page shows real costs
-   instead of zeros.
+7. **Token prices** — enter current **USD** prices in configuration (`Pricing:Models:<deployment>`
+   per 1M tokens, `Pricing:ContentUnderstanding:prebuilt-layout:Per1000Pages`) plus
+   `Pricing:UsdToDkk` for the DKK display, so the Usage tab and Admin page show real costs
+   instead of zeros. Costs are frozen per call, so rows recorded before this stay at zero.
 8. **Production EF migrations** — migrations auto-apply only in Development; decide the
    prod approach for first deploy (run `dotnet ef database update` as the Entra admin,
    or temporarily set the environment to Development — see checklist step 8).

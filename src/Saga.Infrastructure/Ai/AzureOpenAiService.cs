@@ -48,6 +48,7 @@ public class AzureOpenAiService : IAiService
         var options = new ChatCompletionOptions();
         var promptTokens = 0;
         var completionTokens = 0;
+        var cachedPromptTokens = 0;
 
         await foreach (var update in chatClient.CompleteChatStreamingAsync(messages, options, ct))
         {
@@ -60,9 +61,12 @@ public class AzureOpenAiService : IAiService
             {
                 promptTokens = update.Usage.InputTokenCount;
                 completionTokens = update.Usage.OutputTokenCount;
+                // Cached input is billed at a lower rate; recorded so the gap between our
+                // estimate and the Azure invoice is explainable.
+                cachedPromptTokens = update.Usage.InputTokenDetails?.CachedTokenCount ?? 0;
             }
         }
 
-        yield return new AiStreamEvent.Completed(promptTokens, completionTokens, deployment);
+        yield return new AiStreamEvent.Completed(promptTokens, completionTokens, deployment, cachedPromptTokens);
     }
 }

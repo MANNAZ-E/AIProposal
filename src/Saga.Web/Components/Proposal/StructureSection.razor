@@ -113,7 +113,7 @@ else
     private Artifact? _artifact;
     private List<StructureItem> _items = [];
     private List<StructureItem>? _pendingItems;
-    private Guid _pendingRunId;
+    private Guid _pendingOperationId;
     private bool _generating;
     private bool _busy;
     private bool _dirty;
@@ -155,7 +155,7 @@ else
             else
             {
                 _pendingItems = items;
-                _pendingRunId = result.RunId;
+                _pendingOperationId = result.OperationId;
             }
         }
         catch (Exception ex)
@@ -193,7 +193,7 @@ else
 
     private async Task RejectAsync()
     {
-        await Generation.MarkRejectedAsync(_pendingRunId);
+        await Generation.MarkRejectedAsync(_pendingOperationId);
         _pendingItems = null;
     }
 

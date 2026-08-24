@@ -86,7 +86,7 @@ else
     private Artifact? _artifact;
     private List<RequirementItem> _items = [];
     private List<RequirementItem>? _pendingItems;
-    private Guid _pendingRunId;
+    private Guid _pendingOperationId;
     private ExtractionProgress? _progress;
     private bool _extracting;
     private bool _busy;
@@ -110,7 +110,7 @@ else
         try
         {
             var user = await CurrentUser.GetAsync();
-            var (runId, payload) = await Extraction.ExtractAsync(ProposalId, user.Id,
+            var (operationId, payload) = await Extraction.ExtractAsync(ProposalId, user.Id,
                 async p =>
                 {
                     _progress = p;
@@ -127,7 +127,7 @@ else
             else
             {
                 _pendingItems = payload.Items;
-                _pendingRunId = runId;
+                _pendingOperationId = operationId;
             }
         }
         catch (Exception ex)
@@ -166,7 +166,7 @@ else
 
     private async Task RejectExtractionAsync()
     {
-        await Generation.MarkRejectedAsync(_pendingRunId);
+        await Generation.MarkRejectedAsync(_pendingOperationId);
         _pendingItems = null;
     }
 

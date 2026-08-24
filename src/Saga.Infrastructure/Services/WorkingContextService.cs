@@ -20,7 +20,11 @@ public class WorkingContextService(
 {
     public int Budget => configuration.GetValue("AzureOpenAI:ContextTokenBudget", TokenBudget.DefaultBudget);
 
-    public async Task<LoadedContext> LoadAsync(Guid proposalId,
+    /// <param name="userId">
+    /// Who triggered the load. Condensation is an implicit AI call, so it needs an owner in the
+    /// usage log; null when nothing user-initiated is behind it.
+    /// </param>
+    public async Task<LoadedContext> LoadAsync(Guid proposalId, Guid? userId = null,
         Func<string, Task>? onCondenseProgress = null, CancellationToken ct = default)
     {
         var (documents, artifacts) = await LoadRawAsync(proposalId, ct);
@@ -29,7 +33,7 @@ public class WorkingContextService(
         if (!status.OverBudget)
             return new LoadedContext(documents, artifacts, UseCondensed: false);
 
-        await condensation.EnsureCondensedAsync(proposalId, onCondenseProgress, ct);
+        await condensation.EnsureCondensedAsync(proposalId, userId, onCondenseProgress, ct);
         (documents, artifacts) = await LoadRawAsync(proposalId, ct);
         return new LoadedContext(documents, artifacts, UseCondensed: true);
     }

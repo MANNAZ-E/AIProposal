@@ -39,7 +39,9 @@ public class DocumentService(
         try
         {
             buffer.Position = 0;
-            var extraction = await textExtractor.ExtractAsync(buffer, fileName, ct);
+            var extraction = await textExtractor.ExtractAsync(buffer, fileName,
+                new AiCallContext(Guid.NewGuid(), AiOperation.ExtractDocument, proposalId, userId,
+                    Label: Path.GetFileName(fileName)), ct);
             extractedText = extraction.Text;
             pageMapJson = JsonSerializer.Serialize(extraction.Pages);
         }

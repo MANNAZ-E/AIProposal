@@ -4,8 +4,9 @@ using Saga.Infrastructure.Data;
 
 namespace Saga.Infrastructure.Services;
 
-public record ProposalUsage(Guid ProposalId, string Title, string ClientName, int Runs,
-    long PromptTokens, long CompletionTokens, decimal EstimatedCost, DateTimeOffset? LastRunAt);
+/// <summary>Spend for one proposal, as shown on the admin roll-up.</summary>
+public record ProposalSpend(Guid ProposalId, string Title, string ClientName, int Calls,
+    long InputTokens, long OutputTokens, long PageCount, decimal CostUsd, DateTimeOffset? LastCallAt);
 
 /// <summary>One row in the admin recycle bin.</summary>
 public record DeletedProposal(Guid ProposalId, string Title, string ClientName, string OwnerName,
@@ -43,28 +44,30 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
             .ToListAsync(ct);
     }
 
-    /// <summary>Spend per proposal, newest activity first. Includes archived and chat runs.</summary>
-    public async Task<List<ProposalUsage>> GetUsageAsync(CancellationToken ct = default)
+    /// <summary>Spend per proposal, newest activity first. Includes archived proposals and chat.</summary>
+    public async Task<List<ProposalSpend>> GetUsageAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var rows = await db.GenerationRuns
+        var rows = await db.AiUsage
+            .Where(r => r.ProposalId != null)
             .GroupBy(r => new { r.ProposalId, r.Proposal!.Title, r.Proposal.ClientName })
             .Select(g => new
             {
                 g.Key.ProposalId,
                 g.Key.Title,
                 g.Key.ClientName,
-                Runs = g.Count(),
-                PromptTokens = g.Sum(r => (long)r.PromptTokens),
-                CompletionTokens = g.Sum(r => (long)r.CompletionTokens),
-                Cost = g.Sum(r => r.EstimatedCost),
-                LastRunAt = g.Max(r => (DateTimeOffset?)r.StartedAt),
+                Calls = g.Count(),
+                InputTokens = g.Sum(r => (long)r.InputTokens),
+                OutputTokens = g.Sum(r => (long)r.OutputTokens),
+                PageCount = g.Sum(r => (long)r.PageCount),
+                CostUsd = g.Sum(r => r.EstimatedCostUsd),
+                LastCallAt = g.Max(r => (DateTimeOffset?)r.StartedAt),
             })
             .ToListAsync(ct);
         return rows
-            .OrderByDescending(r => r.LastRunAt)
-            .Select(r => new ProposalUsage(r.ProposalId, r.Title, r.ClientName, r.Runs,
-                r.PromptTokens, r.CompletionTokens, r.Cost, r.LastRunAt))
+            .OrderByDescending(r => r.LastCallAt)
+            .Select(r => new ProposalSpend(r.ProposalId!.Value, r.Title, r.ClientName, r.Calls,
+                r.InputTokens, r.OutputTokens, r.PageCount, r.CostUsd, r.LastCallAt))
             .ToList();
     }
 }

@@ -100,11 +100,22 @@ App Service → **Environment variables / App settings** (colon `:` becomes doub
 | `AzureOpenAI__Endpoint` | Foundry endpoint from step 4 |
 | `AzureOpenAI__StrongDeployment` | `gpt-5.4` |
 | `AzureOpenAI__LightDeployment` | `gpt-5.4-mini` |
-| `AzureOpenAI__StrongPrice__InputPer1M` | current €/1M input tokens (usage page estimates) |
-| `AzureOpenAI__StrongPrice__OutputPer1M` | current €/1M output tokens |
-| `AzureOpenAI__LightPrice__InputPer1M` | current €/1M input tokens (mini) |
-| `AzureOpenAI__LightPrice__OutputPer1M` | current €/1M output tokens (mini) |
 | `ContentUnderstanding__Endpoint` | Foundry endpoint from step 4 (same value as `AzureOpenAI__Endpoint`) |
+| `Pricing__Models__gpt-5.4__InputPer1M` | current **USD**/1M input tokens |
+| `Pricing__Models__gpt-5.4__OutputPer1M` | current **USD**/1M output tokens |
+| `Pricing__Models__gpt-5.4-mini__InputPer1M` | current USD/1M input tokens (mini) |
+| `Pricing__Models__gpt-5.4-mini__OutputPer1M` | current USD/1M output tokens (mini) |
+| `Pricing__ContentUnderstanding__prebuilt-layout__Per1000Pages` | current USD per 1000 pages analysed |
+| `Pricing__UsdToDkk` | DKK per USD, for display only (leave unset to show USD) |
+
+Prices are entered in **USD** because that is what Microsoft publishes, so they can be copied
+from the Azure pricing pages without conversion; the app converts to DKK when rendering. Rates are
+keyed by **deployment name** — adding a third model means adding a `Pricing__Models__<name>__*`
+pair, not changing code. A model with no configured rate is still logged, at zero cost, with a
+warning in the app log.
+
+Cost is calculated when the call happens and frozen on the row, so changing a rate later does not
+rewrite history — and calls made before rates were configured stay at zero.
 
 Leave `AzureOpenAI__Key` **unset** — empty key = managed identity. Content Understanding has no
 key setting at all.
@@ -119,4 +130,6 @@ key setting at all.
 3. Create a test proposal → upload a PDF (Content Understanding path) → generate the chain
    (real GPT 5.4) → chat → review → export both formats and open them in Office.
 4. Share the proposal with sda@mannaz.com and verify role behavior.
-5. Check the Admin page: usage rows with non-zero tokens, and set the Mannaz voice.
+5. Check the Admin page: usage rows with non-zero tokens and cost, broken down by service and
+   model, and set the Mannaz voice. The proposal's own **Usage** tab shows the same for that
+   proposal, with the per-call log.

@@ -21,7 +21,7 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
     /// Layout is pure content extraction — no language or embedding model deployment is needed
     /// on the Foundry resource, unlike the RAG analyzers (prebuilt-documentSearch and friends).
     /// </summary>
-    private const string AnalyzerId = "prebuilt-layout";
+    public const string AnalyzerId = "prebuilt-layout";
 
     private readonly ContentUnderstandingClient _client;
 
@@ -46,7 +46,8 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
 
     public IReadOnlySet<string> SupportedExtensions => Extensions;
 
-    public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName, CancellationToken ct = default)
+    public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
+        AiCallContext? context = null, CancellationToken ct = default)
     {
         using var ms = new MemoryStream();
         await content.CopyToAsync(ms, ct);
@@ -61,6 +62,7 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
 
         var markdown = new StringBuilder();
         var pages = new List<PageSpan>();
+        var pageCount = 0;
 
         // A single file normally yields one document content; loop anyway so nothing is dropped
         // silently, shifting each part's spans by where its Markdown lands in the combined text.
@@ -70,6 +72,8 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
                 markdown.Append("\n\n");
             var baseOffset = markdown.Length;
 
+            // Pages are what Content Understanding bills by, so the count is recorded too.
+            pageCount += document.Pages.Count;
             foreach (var page in document.Pages)
                 foreach (var span in page.Spans)
                     pages.Add(new PageSpan(page.PageNumber, baseOffset + span.Offset, span.Length));
@@ -81,7 +85,7 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
             throw new InvalidOperationException(
                 $"Content Understanding returned no document content for '{Path.GetFileName(fileName)}'.");
 
-        return new ExtractionResult(markdown.ToString(), pages);
+        return new ExtractionResult(markdown.ToString(), pages, pageCount);
     }
 
     /// <summary>

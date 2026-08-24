@@ -93,7 +93,7 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
         var contextService = TestServices.WorkingContext(db, config: config);
 
         var condensedFor = new List<string>();
-        var loaded = await contextService.LoadAsync(proposalId, name =>
+        var loaded = await contextService.LoadAsync(proposalId, null, name =>
         {
             condensedFor.Add(name);
             return Task.CompletedTask;
@@ -110,7 +110,7 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
 
         // A second load reuses the stored condensed text instead of condensing again.
         condensedFor.Clear();
-        var second = await contextService.LoadAsync(proposalId, name =>
+        var second = await contextService.LoadAsync(proposalId, null, name =>
         {
             condensedFor.Add(name);
             return Task.CompletedTask;

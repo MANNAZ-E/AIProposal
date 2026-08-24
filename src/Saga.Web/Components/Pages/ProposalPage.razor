@@ -54,6 +54,8 @@ else
             <button class="nav-item @(_section == Section.Review ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Review)">Review</button>
             <div class="nav-divider"></div>
+            <button class="nav-item @(_section == Section.Usage ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Usage)">Usage</button>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.People)">Team</button>
             <button class="nav-item @(_section == Section.Settings ? "active" : null)"
@@ -117,6 +119,10 @@ else
                 else if (_section == Section.Export)
                 {
                     <ExportSection ProposalId="ProposalId" />
+                }
+                else if (_section == Section.Usage)
+                {
+                    <UsageSection ProposalId="ProposalId" />
                 }
                 else if (_section == Section.People)
                 {
@@ -270,7 +276,7 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, Export, People, Settings }
+    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, Export, Usage, People, Settings }
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];

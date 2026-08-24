@@ -7,10 +7,12 @@ public class PlainTextExtractor : IDocumentTextExtractor
 {
     public IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string> { ".txt", ".md" };
 
-    public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName, CancellationToken ct = default)
+    public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
+        AiCallContext? context = null, CancellationToken ct = default)
     {
         using var reader = new StreamReader(content);
         var text = await reader.ReadToEndAsync(ct);
+        // PageCount stays 0: reading a local file costs nothing, so there is nothing to bill.
         return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)]);
     }
 }
