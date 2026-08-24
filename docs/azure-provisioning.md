@@ -43,12 +43,14 @@ Plan's region). Names are suggestions — adjust to Mannaz conventions.
 ## 4. Azure AI Foundry (models + document parsing)
 
 1. **Azure AI Foundry** → create a resource/project `saga-ai-mannaz` in **West Europe**.
-   *Check GPT 5.4 availability in West Europe first — if unavailable, use the nearest EU
+   *Check GPT-5.6 availability in West Europe first — if unavailable, use the nearest EU
    region (e.g. Sweden Central); the resource region may differ from the app's.*
 2. Deploy two models (Deployments → Deploy model):
-   - **gpt-5.4** — deployment name `gpt-5.4` (analysis, generation, chat, review).
-   - **gpt-5.4-mini** — deployment name `gpt-5.4-mini` (requirements extraction, condensation).
+   - **GPT-5.6 Terra** — deployment name `gpt-5.6-terra` (analysis, generation, chat, review).
+   - **GPT-5.6 Luna** — deployment name `gpt-5.6-luna` (requirements extraction, condensation).
    Deployment names must match `AzureOpenAI:StrongDeployment` / `LightDeployment` app settings.
+   Both are deployed, but **both settings currently point at `gpt-5.6-luna`** — Terra is kept
+   deployed and priced so the Strong tier can be moved back with one app setting.
 3. **Access control (IAM)** → Role: **Cognitive Services OpenAI User** → assign to the
    **saga-mannaz** managed identity.
 4. Note the endpoint (e.g. `https://saga-ai-mannaz.openai.azure.com/`). Leave `AzureOpenAI:Key`
@@ -97,14 +99,18 @@ App Service → **Environment variables / App settings** (colon `:` becomes doub
 | `AzureAd__ClientId` | client id from step 6 |
 | `AzureAd__ClientSecret` | secret from step 6 (or reference a Key Vault secret) |
 | `Storage__BlobServiceUri` | `https://sagamannazstorage.blob.core.windows.net` |
-| `AzureOpenAI__Endpoint` | Foundry endpoint from step 4 |
-| `AzureOpenAI__StrongDeployment` | `gpt-5.4` |
-| `AzureOpenAI__LightDeployment` | `gpt-5.4-mini` |
+| `AzureOpenAI__Endpoint` | Foundry endpoint from step 4, the `*.openai.azure.com` form |
+| `AzureOpenAI__StrongDeployment` | `gpt-5.6-luna` (`gpt-5.6-terra` to put the Strong tier back on Terra) |
+| `AzureOpenAI__LightDeployment` | `gpt-5.6-luna` |
 | `ContentUnderstanding__Endpoint` | Foundry endpoint from step 4 (same value as `AzureOpenAI__Endpoint`) |
-| `Pricing__Models__gpt-5.4__InputPer1M` | current **USD**/1M input tokens |
-| `Pricing__Models__gpt-5.4__OutputPer1M` | current **USD**/1M output tokens |
-| `Pricing__Models__gpt-5.4-mini__InputPer1M` | current USD/1M input tokens (mini) |
-| `Pricing__Models__gpt-5.4-mini__OutputPer1M` | current USD/1M output tokens (mini) |
+| `Ai__UseFakeAi` | `false` |
+| `Ai__UseFakeExtractor` | `false` |
+| `Pricing__Models__gpt-5.6-terra__InputPer1M` | current **USD**/1M input tokens |
+| `Pricing__Models__gpt-5.6-terra__CachedInputPer1M` | current USD/1M cached input tokens |
+| `Pricing__Models__gpt-5.6-terra__OutputPer1M` | current **USD**/1M output tokens |
+| `Pricing__Models__gpt-5.6-luna__InputPer1M` | current USD/1M input tokens (Luna) |
+| `Pricing__Models__gpt-5.6-luna__CachedInputPer1M` | current USD/1M cached input tokens (Luna) |
+| `Pricing__Models__gpt-5.6-luna__OutputPer1M` | current USD/1M output tokens (Luna) |
 | `Pricing__ContentUnderstanding__prebuilt-layout__Per1000Pages` | current USD per 1000 pages analysed |
 | `Pricing__UsdToDkk` | DKK per USD, for display only (leave unset to show USD) |
 
@@ -112,7 +118,13 @@ Prices are entered in **USD** because that is what Microsoft publishes, so they 
 from the Azure pricing pages without conversion; the app converts to DKK when rendering. Rates are
 keyed by **deployment name** — adding a third model means adding a `Pricing__Models__<name>__*`
 pair, not changing code. A model with no configured rate is still logged, at zero cost, with a
-warning in the app log.
+warning in the app log. Enter the **short-context** rates: the working context is capped at
+`AzureOpenAI__ContextTokenBudget`, so calls stay below the long-context threshold. Cached input is
+priced separately at `CachedInputPer1M` and only the uncached remainder at `InputPer1M`; omit the
+cached key and everything bills at the full input rate.
+
+Set both `Ai__*` flags to `false` in production — either one forces an offline stand-in that
+returns canned text instead of calling the model.
 
 Cost is calculated when the call happens and frozen on the row, so changing a rate later does not
 rewrite history — and calls made before rates were configured stay at zero.
@@ -128,7 +140,7 @@ key setting at all.
    machine signed in as the Entra admin, or temporarily set `ASPNETCORE_ENVIRONMENT=Development`.
 2. Browse the site → Entra sign-in should challenge → sign in with a Mannaz account.
 3. Create a test proposal → upload a PDF (Content Understanding path) → generate the chain
-   (real GPT 5.4) → chat → review → export both formats and open them in Office.
+   (real GPT-5.6 Terra) → chat → review → export both formats and open them in Office.
 4. Share the proposal with sda@mannaz.com and verify role behavior.
 5. Check the Admin page: usage rows with non-zero tokens and cost, broken down by service and
    model, and set the Mannaz voice. The proposal's own **Usage** tab shows the same for that

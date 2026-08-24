@@ -5,8 +5,9 @@ description: Build, launch, and stop the Saga Blazor Server app locally on http:
 
 # Run Saga locally
 
-Saga is an ASP.NET Core Blazor Server app (.NET 10). It runs entirely offline: no
-Azure resources and no real Entra ID login are needed in Development.
+Saga is an ASP.NET Core Blazor Server app (.NET 10). No real Entra ID login is
+needed in Development, but AI calls and uploads now hit real Azure and cost money
+— see "What costs money" below.
 
 ## Prereqs (check once, only if launch fails)
 
@@ -48,15 +49,23 @@ visit `http://localhost:5033`, or open it yourself:
 - To click through or screenshot: use the `claude-in-chrome` skill and navigate a
   new tab to `http://localhost:5033`.
 
-## What works without Azure
+## What still works without Azure
 
 - **Auth** — `Auth:DevAutoSignIn: true` auto-signs in as `elv@mannaz.com`. No
   login screen; you land straight in the app.
-- **AI + document extraction** — the Azure OpenAI and Document Intelligence
-  endpoints are blank in `appsettings.Development.json`, so the app falls back to
-  `FakeAiService` and `FakeDocumentExtractor`. Generation and extraction return
-  canned output, which is fine for exercising UI flows but is *not* a check of
-  real prompt/model behaviour — say so when reporting results.
+## What costs money
+
+- **AI + document extraction no longer run offline.** `appsettings.Development.json`
+  points `AzureOpenAI:Endpoint` and `ContentUnderstanding:Endpoint` at the
+  `MannazAIProposal` Foundry resource with both `Ai:UseFake*` flags false, so
+  generations call `gpt-5.6-luna` and uploads call `prebuilt-layout` for real.
+  Auth is the developer's `az login` (no key), so `az account show` must succeed
+  or every call fails with a 401.
+- To exercise the UI without spending: set `Ai:UseFakeAi: true` (and
+  `Ai:UseFakeExtractor: true` for uploads) and restart — the flags are read once
+  at startup and force `FakeAiService` / `FakeDocumentExtractor` even with the
+  endpoints configured. Their output is canned, so it is *not* a check of real
+  prompt/model behaviour — say so when reporting results.
 
 ## Stop it
 

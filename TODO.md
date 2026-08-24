@@ -14,8 +14,8 @@ against LocalDB and the offline stand-in AI (no Azure endpoints configured local
    written 2026-07-03, reviewed but NOT yet executed). Before running, edit the
    variables at the top:
    - `$AppServicePlan` (+ `$PlanResourceGroup`) — the existing West Europe plan's name.
-   - `$StrongModelVersion` / `$LightModelVersion` — look up current gpt-5.4 /
-     gpt-5.4-mini versions (`az cognitiveservices model list`); if unavailable in
+   - `$StrongModelVersion` / `$LightModelVersion` — look up current gpt-5.6-terra /
+     gpt-5.6-luna versions (`az cognitiveservices model list`); if unavailable in
      West Europe, change `$AiLocation` (e.g. `swedencentral`).
    - Resource names (`$WebAppName`, `$SqlServerName`, `$StorageAccount`) — globally unique.
    The Entra app registration IDs are already filled in (client
@@ -36,10 +36,18 @@ against LocalDB and the offline stand-in AI (no Azure endpoints configured local
 6. **Real-model quality pass** — once the Foundry endpoint is configured, tune prompts
    and requirements-extraction chunking against a golden (anonymized) tender; keep it
    as the standing quality benchmark.
-7. **Token prices** — enter current **USD** prices in configuration (`Pricing:Models:<deployment>`
-   per 1M tokens, `Pricing:ContentUnderstanding:prebuilt-layout:Per1000Pages`) plus
-   `Pricing:UsdToDkk` for the DKK display, so the Usage tab and Admin page show real costs
-   instead of zeros. Costs are frozen per call, so rows recorded before this stay at zero.
+7. **Token prices — verify against a real call.** The GPT-5.6 rates are now entered
+   (`Pricing:Models:gpt-5.6-terra` / `gpt-5.6-luna`, input + cached input + output, USD per
+   1M, short-context tier, checked 2026-08-24). Still open:
+   - `Pricing:ContentUnderstanding:prebuilt-layout:Per1000Pages` is still `0` in
+     `appsettings.json`, so extraction records at zero cost in production.
+   - `Pricing:UsdToDkk` is `0` in production (usage pages show USD). Dev uses 6.9. Note that
+     Azure bills DKK at a monthly fixed FX rate, so a hand-set constant is an approximation.
+   - On the first real generation, check the Usage tab shows non-zero input/output tokens **and**
+     a non-zero cached count on the later calls of a run. Zero tokens on a real call means the
+     provider sent no usage data — the app logs a warning for exactly this — and would mean every
+     call silently bills at the full input rate with no cache discount.
+   Costs are frozen per call, so rows recorded before the rates were entered stay at zero.
 8. **Production EF migrations** — migrations auto-apply only in Development; decide the
    prod approach for first deploy (run `dotnet ef database update` as the Entra admin,
    or temporarily set the environment to Development — see checklist step 8).

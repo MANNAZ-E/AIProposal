@@ -23,7 +23,15 @@ public class PricingService(IConfiguration configuration, ILogger<PricingService
     /// <summary>Whether request/response payloads are stored. Off is the escape hatch if the table grows.</summary>
     public bool CapturePayloads => configuration.GetValue("Pricing:CapturePayloads", true);
 
-    public decimal EstimateLlmUsd(string model, int inputTokens, int outputTokens)
+    /// <param name="cachedInputTokens">
+    /// Prompt tokens the provider served from its cache, billed at <c>CachedInputPer1M</c> — a
+    /// fraction of the full input rate. Part of <paramref name="inputTokens"/>, not additional to
+    /// it. Matters here because the system prompt and working context repeat across every call of
+    /// a run. A model with no cached rate configured falls back to the full input rate, so leaving
+    /// the key out prices exactly as before.
+    /// </param>
+    public decimal EstimateLlmUsd(string model, int inputTokens, int outputTokens,
+        int cachedInputTokens = 0)
     {
         if (string.IsNullOrWhiteSpace(model)) return 0m;
 
@@ -31,7 +39,15 @@ public class PricingService(IConfiguration configuration, ILogger<PricingService
         var output = configuration.GetValue<decimal>($"Pricing:Models:{model}:OutputPer1M");
         if (input == 0m && output == 0m) WarnOnce(model);
 
-        return (inputTokens * input + outputTokens * output) / 1_000_000m;
+        var cachedRate = configuration.GetValue<decimal>($"Pricing:Models:{model}:CachedInputPer1M");
+        if (cachedRate == 0m) cachedRate = input;
+
+        // Clamped because the cached count is reported by the provider: a value above the total
+        // input would otherwise make the uncached remainder negative.
+        var cached = Math.Clamp(cachedInputTokens, 0, Math.Max(inputTokens, 0));
+        var uncached = Math.Max(inputTokens, 0) - cached;
+
+        return (uncached * input + cached * cachedRate + outputTokens * output) / 1_000_000m;
     }
 
     public decimal EstimateExtractionUsd(string analyzerId, int pageCount)

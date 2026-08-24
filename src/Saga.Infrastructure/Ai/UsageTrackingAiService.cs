@@ -85,7 +85,8 @@ public class UsageTrackingAiService(
                         record.OutputTokens = c.CompletionTokens;
                         record.CachedInputTokens = c.CachedPromptTokens;
                         record.Model = c.Model;
-                        record.EstimatedCostUsd = pricing.EstimateLlmUsd(c.Model, c.PromptTokens, c.CompletionTokens);
+                        record.EstimatedCostUsd = pricing.EstimateLlmUsd(c.Model, c.PromptTokens,
+                            c.CompletionTokens, c.CachedPromptTokens);
                         record.Outcome = GenerationOutcome.Succeeded;
                         break;
                 }
@@ -99,7 +100,26 @@ public class UsageTrackingAiService(
             record.Duration = stopwatch.Elapsed;
             if (pricing.CapturePayloads)
                 record.ResponseText = text.ToString();
+            WarnIfUsageMissing(record);
             await SaveAsync(record);
+        }
+    }
+
+    /// <summary>
+    /// A succeeded call that reports no tokens means the provider sent no usage data, not that the
+    /// call was free — but it lands as a plausible-looking 0.00 row. Cached tokens read as 0 in the
+    /// same breath, so everything would quietly bill at the full input rate. Say so in the log
+    /// instead. The fake reports non-zero tokens on every path, so this cannot fire in dev.
+    /// </summary>
+    private void WarnIfUsageMissing(AiUsageRecord record)
+    {
+        if (record.Outcome == GenerationOutcome.Succeeded
+            && record.InputTokens == 0 && record.OutputTokens == 0)
+        {
+            logger?.LogWarning(
+                "Model '{Model}' reported no token usage for operation {OperationId}; the call is "
+                + "recorded at zero cost. Token counts are missing, not zero.",
+                record.Model, record.OperationId);
         }
     }
 

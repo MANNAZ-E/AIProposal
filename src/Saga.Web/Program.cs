@@ -71,7 +71,7 @@ builder.Services.AddSingleton<PricingService>();
 builder.Services.AddSingleton<IAiService>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
-    IAiService inner = string.IsNullOrEmpty(config["AzureOpenAI:Endpoint"])
+    IAiService inner = StandInSelection.UseFakeAi(config)
         ? new FakeAiService()
         : new AzureOpenAiService(config);
     return new UsageTrackingAiService(inner,
@@ -90,7 +90,7 @@ builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     // Offline stand-in accepts the same file types, so uploads work without Azure.
-    IDocumentTextExtractor billed = string.IsNullOrEmpty(config["ContentUnderstanding:Endpoint"])
+    IDocumentTextExtractor billed = StandInSelection.UseFakeExtractor(config)
         ? new FakeDocumentExtractor()
         : new ContentUnderstandingExtractor(config);
 

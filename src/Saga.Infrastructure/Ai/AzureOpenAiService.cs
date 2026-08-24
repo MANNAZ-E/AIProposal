@@ -27,8 +27,8 @@ public class AzureOpenAiService : IAiService
         _client = string.IsNullOrEmpty(key)
             ? new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential())
             : new AzureOpenAIClient(new Uri(endpoint), new ApiKeyCredential(key));
-        _strongDeployment = configuration["AzureOpenAI:StrongDeployment"] ?? "gpt-5.4";
-        _lightDeployment = configuration["AzureOpenAI:LightDeployment"] ?? "gpt-5.4-mini";
+        _strongDeployment = configuration["AzureOpenAI:StrongDeployment"] ?? "gpt-5.6-luna";
+        _lightDeployment = configuration["AzureOpenAI:LightDeployment"] ?? "gpt-5.6-luna";
     }
 
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(AiRequest request,
@@ -45,6 +45,10 @@ public class AzureOpenAiService : IAiService
                 : new UserChatMessage(message.Content));
         }
 
+        // Left at defaults deliberately: GPT-5.x reasoning deployments reject temperature, and the
+        // usage opt-in that streaming needs is not ours to set — ChatCompletionOptions.StreamOptions
+        // takes an internal type, so the SDK sends include_usage itself. If a provider ever stops
+        // returning usage, UsageTrackingAiService logs it rather than banking a silent zero.
         var options = new ChatCompletionOptions();
         var promptTokens = 0;
         var completionTokens = 0;
@@ -60,9 +64,11 @@ public class AzureOpenAiService : IAiService
             if (update.Usage is not null)
             {
                 promptTokens = update.Usage.InputTokenCount;
+                // Already the sum of reasoning and displayed output tokens per the SDK's own docs,
+                // so reasoning tokens need no separate handling — they bill as output either way.
                 completionTokens = update.Usage.OutputTokenCount;
-                // Cached input is billed at a lower rate; recorded so the gap between our
-                // estimate and the Azure invoice is explainable.
+                // Cached input is billed at a fraction of the input rate, so PricingService prices
+                // it separately; recorded here to keep our estimate explainable against the bill.
                 cachedPromptTokens = update.Usage.InputTokenDetails?.CachedTokenCount ?? 0;
             }
         }

@@ -1,6 +1,11 @@
 namespace Saga.Core.Abstractions;
 
-/// <summary>Which model deployment to use: Strong (GPT 5.4) or Light (GPT 5.4 mini, extraction).</summary>
+/// <summary>
+/// Which model deployment to use: Strong (analysis, generation, chat, review) or Light
+/// (extraction, condensation). The tier is all a caller picks; the deployment names live in
+/// configuration — today both tiers point at GPT-5.6 Luna, so the split is a cost lever that can
+/// be re-opened by pointing Strong back at a bigger model without touching any call site.
+/// </summary>
 public enum AiModelTier
 {
     Strong = 0,

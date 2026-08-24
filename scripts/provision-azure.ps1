@@ -47,12 +47,12 @@ $AppObjectId     = "6abd8de8-3e74-42eb-aebe-9c6d43c355fa"   # Object ID of the a
 
 # --- Locations ----------------------------------------------------------------
 $Location        = "westeurope"      # everything except (possibly) the AI models
-$AiLocation      = "westeurope"      # CHECK FIRST: if GPT 5.4 / 5.4-mini are not
+$AiLocation      = "westeurope"      # CHECK FIRST: if GPT-5.6 Terra / Luna are not
                                      # available in West Europe, set e.g.
                                      # "swedencentral" — only the AI resource moves,
                                      # the app stays in West Europe.
 # To check model availability before running:
-#   az cognitiveservices model list -l westeurope --query "[?model.name=='gpt-5.4'].model.version" -o tsv
+#   az cognitiveservices model list -l westeurope --query "[?model.name=='gpt-5.6-terra'].model.version" -o tsv
 
 # --- Resource names (adjust to Mannaz conventions) ----------------------------
 $ResourceGroup   = "rg-saga"                 # set to your EXISTING group to reuse one
@@ -78,21 +78,32 @@ $SqlAdminObjectId = az ad signed-in-user show --query id -o tsv
 # --- Model deployments ---------------------------------------------------------
 # Deployment NAMES must match the app settings AzureOpenAI__StrongDeployment /
 # __LightDeployment (the app defaults to exactly these names).
-$StrongModelName    = "gpt-5.4";      $StrongDeployment = "gpt-5.4"
-$LightModelName     = "gpt-5.4-mini"; $LightDeployment  = "gpt-5.4-mini"
+$StrongModelName    = "gpt-5.6-terra"; $StrongDeployment = "gpt-5.6-terra"
+$LightModelName     = "gpt-5.6-luna";  $LightDeployment  = "gpt-5.6-luna"
 # Model VERSION differs per region/date — look it up right before running:
-#   az cognitiveservices model list -l $AiLocation -o table | Select-String "gpt-5.4"
+#   az cognitiveservices model list -l $AiLocation -o table | Select-String "gpt-5.6"
 $StrongModelVersion = "<CHECK-AND-SET>"      # e.g. "2026-05-01"
 $LightModelVersion  = "<CHECK-AND-SET>"
 # Capacity = throughput units (TPM in thousands for Standard). 50 is a sane start.
 $ModelCapacity      = 50
 
-# --- Token prices for the usage page (optional, can set later in the portal) --
-# Whatever currency you enter here is the currency the Admin usage page shows.
-$StrongPriceInPer1M  = "0"   # e.g. "2.50"
-$StrongPriceOutPer1M = "0"   # e.g. "10.00"
-$LightPriceInPer1M   = "0"
-$LightPriceOutPer1M  = "0"
+# --- Token prices for the usage page ------------------------------------------
+# USD per 1M tokens, because that is what Microsoft publishes; $UsdToDkk below
+# converts for display only. Use the SHORT-CONTEXT rates: the working context is
+# capped at ContextTokenBudget, so calls stay below the long-context threshold.
+# Cached input is billed at a fraction of the input rate and priced separately;
+# leave a cached rate at "0" and that model's cached tokens bill at the full rate.
+# Rates as published for GPT-5.6, checked 2026-08-24 — re-check before running.
+$StrongPriceInPer1M       = "4.40"
+$StrongPriceCachedInPer1M = "0.44"
+$StrongPriceOutPer1M      = "26.40"
+$LightPriceInPer1M        = "1.10"
+$LightPriceCachedInPer1M  = "0.11"
+$LightPriceOutPer1M       = "6.60"
+# Content Understanding, USD per 1000 pages analysed, and the DKK display rate
+# ("0" leaves the usage pages in USD).
+$ExtractionPricePer1000Pages = "0"
+$UsdToDkk                    = "0"
 
 Write-Host "Subscription: $(az account show --query name -o tsv)"
 Write-Host "About to provision into resource group '$ResourceGroup' ($Location)."
@@ -219,8 +230,8 @@ az cognitiveservices account create `
     --custom-domain $AiAccountName | Out-Null
 
 # The two deployments the app expects (names must match app settings):
-#   gpt-5.4      -> analysis, generation, chat, review   (Strong)
-#   gpt-5.4-mini -> requirements extraction, condensation (Light)
+#   gpt-5.6-terra -> analysis, generation, chat, review   (Strong)
+#   gpt-5.6-luna  -> requirements extraction, condensation (Light)
 az cognitiveservices account deployment create `
     --name $AiAccountName --resource-group $ResourceGroup `
     --deployment-name $StrongDeployment `
@@ -307,6 +318,11 @@ az webapp config connection-string set `
 # App settings ("__" is the ':' hierarchy separator). AzureOpenAI__Key is
 # intentionally NOT set: an empty key makes the app authenticate with its managed
 # identity instead. Content Understanding is managed-identity only.
+#
+# Pricing keys are keyed by DEPLOYMENT NAME, which is why they interpolate
+# $StrongDeployment / $LightDeployment rather than hardcoding: the app prices a call
+# by the deployment name the model reports back, so a key that does not match the
+# deployment exactly records that call at zero cost (with a warning in the app log).
 az webapp config appsettings set `
     --name $WebAppName --resource-group $ResourceGroup `
     --settings `
@@ -321,10 +337,16 @@ az webapp config appsettings set `
         "AzureOpenAI__StrongDeployment=$StrongDeployment" `
         "AzureOpenAI__LightDeployment=$LightDeployment" `
         "AzureOpenAI__ContextTokenBudget=100000" `
-        "AzureOpenAI__StrongPrice__InputPer1M=$StrongPriceInPer1M" `
-        "AzureOpenAI__StrongPrice__OutputPer1M=$StrongPriceOutPer1M" `
-        "AzureOpenAI__LightPrice__InputPer1M=$LightPriceInPer1M" `
-        "AzureOpenAI__LightPrice__OutputPer1M=$LightPriceOutPer1M" `
+        "Ai__UseFakeAi=false" `
+        "Ai__UseFakeExtractor=false" `
+        "Pricing__Models__${StrongDeployment}__InputPer1M=$StrongPriceInPer1M" `
+        "Pricing__Models__${StrongDeployment}__CachedInputPer1M=$StrongPriceCachedInPer1M" `
+        "Pricing__Models__${StrongDeployment}__OutputPer1M=$StrongPriceOutPer1M" `
+        "Pricing__Models__${LightDeployment}__InputPer1M=$LightPriceInPer1M" `
+        "Pricing__Models__${LightDeployment}__CachedInputPer1M=$LightPriceCachedInPer1M" `
+        "Pricing__Models__${LightDeployment}__OutputPer1M=$LightPriceOutPer1M" `
+        "Pricing__ContentUnderstanding__prebuilt-layout__Per1000Pages=$ExtractionPricePer1000Pages" `
+        "Pricing__UsdToDkk=$UsdToDkk" `
         "ContentUnderstanding__Endpoint=$AiEndpoint" | Out-Null
 Write-Host "✓ App Service configured"
 
