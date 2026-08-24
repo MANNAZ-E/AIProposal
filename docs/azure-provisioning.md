@@ -40,7 +40,7 @@ Plan's region). Names are suggestions — adjust to Mannaz conventions.
 3. **Access control (IAM)** → **Add role assignment** →
    Role: **Storage Blob Data Contributor** → Assign to the **saga-mannaz** managed identity.
 
-## 4. Azure AI Foundry (models)
+## 4. Azure AI Foundry (models + document parsing)
 
 1. **Azure AI Foundry** → create a resource/project `saga-ai-mannaz` in **West Europe**.
    *Check GPT 5.4 availability in West Europe first — if unavailable, use the nearest EU
@@ -57,12 +57,22 @@ Plan's region). Names are suggestions — adjust to Mannaz conventions.
    Foundry project and note its connection — wiring the app to it is a follow-up task; without
    it the client profile generates from the uploaded material only.
 
-## 5. Document Intelligence
+## 5. Content Understanding (document parsing)
 
-1. **Azure AI services → Document Intelligence** → Create: `saga-docintel-mannaz`, West Europe, S0.
-2. **Access control (IAM)** → Role: **Cognitive Services User** → assign to the **saga-mannaz**
-   managed identity.
-3. Note the endpoint. Leave `DocumentIntelligence:Key` empty to use the managed identity.
+Runs on the **same Foundry resource** as step 4 — there is no separate resource to create, and
+the `prebuilt-layout` analyzer the app uses needs **no model deployment** (it is content
+extraction only; the gpt-4.1/embedding deployments in Microsoft's docs are for the RAG analyzers).
+
+1. **Access control (IAM)** on `saga-ai-mannaz` → Role: **Cognitive Services User** → assign to
+   the **saga-mannaz** managed identity. The *OpenAI User* role from step 4 does not cover
+   Content Understanding; this second assignment is required.
+2. Check that West Europe is still on the
+   [supported region list](https://learn.microsoft.com/azure/ai-services/content-understanding/language-region-support).
+3. `ContentUnderstanding:Endpoint` is the resource endpoint from step 4 — the account-level
+   `https://saga-ai-mannaz.cognitiveservices.azure.com/` (or its `services.ai.azure.com` alias),
+   **not** a `/api/projects/<project>` URL. There is no key setting: the app always uses Entra ID.
+4. Uploaded material is sent with `processingLocation=geography`, so it is processed inside the
+   resource's geography rather than the service's "global" default.
 
 ## 6. Entra ID app registration (sign-in)
 
@@ -94,9 +104,10 @@ App Service → **Environment variables / App settings** (colon `:` becomes doub
 | `AzureOpenAI__StrongPrice__OutputPer1M` | current €/1M output tokens |
 | `AzureOpenAI__LightPrice__InputPer1M` | current €/1M input tokens (mini) |
 | `AzureOpenAI__LightPrice__OutputPer1M` | current €/1M output tokens (mini) |
-| `DocumentIntelligence__Endpoint` | endpoint from step 5 |
+| `ContentUnderstanding__Endpoint` | Foundry endpoint from step 4 (same value as `AzureOpenAI__Endpoint`) |
 
-Leave `AzureOpenAI__Key` and `DocumentIntelligence__Key` **unset** — empty key = managed identity.
+Leave `AzureOpenAI__Key` **unset** — empty key = managed identity. Content Understanding has no
+key setting at all.
 
 ## 8. Deploy and smoke test
 
@@ -105,7 +116,7 @@ Leave `AzureOpenAI__Key` and `DocumentIntelligence__Key` **unset** — empty key
    first deployment either run `dotnet ef database update` against Azure SQL from a dev
    machine signed in as the Entra admin, or temporarily set `ASPNETCORE_ENVIRONMENT=Development`.
 2. Browse the site → Entra sign-in should challenge → sign in with a Mannaz account.
-3. Create a test proposal → upload a PDF (Document Intelligence path) → generate the chain
+3. Create a test proposal → upload a PDF (Content Understanding path) → generate the chain
    (real GPT 5.4) → chat → review → export both formats and open them in Office.
 4. Share the proposal with sda@mannaz.com and verify role behavior.
 5. Check the Admin page: usage rows with non-zero tokens, and set the Mannaz voice.

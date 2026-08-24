@@ -84,9 +84,9 @@ builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
     {
         new PlainTextExtractor(),
         // Offline stand-in accepts the same file types, so uploads work without Azure.
-        string.IsNullOrEmpty(config["DocumentIntelligence:Endpoint"])
+        string.IsNullOrEmpty(config["ContentUnderstanding:Endpoint"])
             ? new FakeDocumentExtractor()
-            : new DocumentIntelligenceExtractor(config),
+            : new ContentUnderstandingExtractor(config),
     };
     return new CompositeTextExtractor(extractors);
 });

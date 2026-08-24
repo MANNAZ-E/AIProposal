@@ -20,9 +20,11 @@ dotnet run --launch-profile http --no-build   # after an initial `dotnet build`
   in `appsettings.Development.json`.
 - Dev auth auto-signs in as `elv@mannaz.com` (`Auth:DevAutoSignIn: true` in
   `appsettings.Development.json`) — no real Entra ID login needed locally.
-- Azure OpenAI / Document Intelligence endpoints are blank in dev, so the app falls
+- Azure OpenAI / Content Understanding endpoints are blank in dev, so the app falls
   back to `FakeAiService` / `FakeDocumentExtractor` automatically — no Azure needed
-  to run and click through the app locally.
+  to run and click through the app locally. Set `ContentUnderstanding:Endpoint` to a
+  Foundry resource endpoint (and `az login`) to parse uploads for real via the
+  `prebuilt-layout` analyzer.
 - `dotnet run` does not open a browser by itself in this environment; navigate to
   `http://localhost:5033` manually (or `Start-Process http://localhost:5033` in
   PowerShell) once the log shows `Now listening on: http://localhost:5033`.

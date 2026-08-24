@@ -3,13 +3,13 @@ using Saga.Core.Abstractions;
 namespace Saga.Infrastructure.Extraction;
 
 /// <summary>
-/// Stand-in used when DocumentIntelligence:Endpoint is not configured, so every file type
-/// Azure Document Intelligence handles can still be uploaded offline (and in dev). Produces
+/// Stand-in used when ContentUnderstanding:Endpoint is not configured, so every file type
+/// Azure Content Understanding handles can still be uploaded offline (and in dev). Produces
 /// clearly-labelled placeholder text instead of a real extraction.
 /// </summary>
 public class FakeDocumentExtractor : IDocumentTextExtractor
 {
-    public IReadOnlySet<string> SupportedExtensions => DocumentIntelligenceExtractor.Extensions;
+    public IReadOnlySet<string> SupportedExtensions => ContentUnderstandingExtractor.Extensions;
 
     public async Task<ExtractionResult> ExtractAsync(Stream content, string fileName, CancellationToken ct = default)
     {
@@ -21,7 +21,7 @@ public class FakeDocumentExtractor : IDocumentTextExtractor
             size += read;
 
         var text = $"""
-            *(Placeholder text from the offline stand-in extractor — configure DocumentIntelligence:Endpoint
+            *(Placeholder text from the offline stand-in extractor — configure ContentUnderstanding:Endpoint
             to extract the real content of "{Path.GetFileName(fileName)}" ({size:N0} bytes).)*
 
             ## Background and purpose

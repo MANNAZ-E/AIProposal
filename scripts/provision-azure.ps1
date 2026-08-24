@@ -22,7 +22,7 @@
 #      app's managed identity (T-SQL via sqlcmd + your Entra token).
 #   5. Storage account + "Storage Blob Data Contributor" for the app identity.
 #   6. Azure AI Foundry (Azure OpenAI) + the two model deployments + role.
-#   7. Document Intelligence + role.
+#   7. Content Understanding role on the Foundry resource (document parsing).
 #   8. Entra app registration: redirect URIs, ID tokens, client secret.
 #   9. App Service configuration (connection string + app settings).
 #  10. (Commented out) code deployment.
@@ -67,8 +67,7 @@ $WebAppName      = "saga-mannaz"             # becomes https://saga-mannaz.azure
 $SqlServerName   = "saga-sql-mannaz"         # must be globally unique on database.windows.net
 $SqlDbName       = "Saga"
 $StorageAccount  = "sagamannazstorage"       # 3-24 chars, lowercase+digits, globally unique
-$AiAccountName   = "saga-ai-mannaz"          # Azure OpenAI / Foundry resource
-$DocIntelName    = "saga-docintel-mannaz"    # Document Intelligence resource
+$AiAccountName   = "saga-ai-mannaz"          # Foundry resource: models + Content Understanding
 
 # --- SQL Entra admin: who can administer the SQL server -----------------------
 # Defaults to YOU (the signed-in az user). The server is created Entra-only —
@@ -251,25 +250,21 @@ Write-Host "✓ AI Foundry $AiAccountName ($AiEndpoint) with $StrongDeployment +
 # profile then generates from uploaded material only.
 
 # =============================================================================
-# 7. DOCUMENT INTELLIGENCE + ROLE
+# 7. CONTENT UNDERSTANDING (DOCUMENT PARSING) — ROLE ONLY
 # =============================================================================
-# Extracts text/tables/page numbers from uploaded PDFs and scans.
-az cognitiveservices account create `
-    --name $DocIntelName `
-    --resource-group $ResourceGroup `
-    --location $Location `
-    --kind FormRecognizer `
-    --sku S0 `
-    --custom-domain $DocIntelName | Out-Null
-
+# Content Understanding runs on the SAME Foundry resource created above, so there
+# is no separate account to create. The app calls the prebuilt-layout analyzer to
+# turn uploaded PDFs, Office files and scans into Markdown with page spans.
+# Layout is content extraction only — it needs NO model deployment.
+#
+# The OpenAI role above does not cover it; Content Understanding needs the
+# broader "Cognitive Services User" role on the same account:
 az role assignment create `
     --assignee-object-id $PrincipalId `
     --assignee-principal-type ServicePrincipal `
     --role "Cognitive Services User" `
-    --scope $(az cognitiveservices account show -n $DocIntelName -g $ResourceGroup --query id -o tsv) | Out-Null
-
-$DocIntelEndpoint = az cognitiveservices account show -n $DocIntelName -g $ResourceGroup --query properties.endpoint -o tsv
-Write-Host "✓ Document Intelligence $DocIntelName ($DocIntelEndpoint)"
+    --scope $(az cognitiveservices account show -n $AiAccountName -g $ResourceGroup --query id -o tsv) | Out-Null
+Write-Host "✓ Content Understanding role on $AiAccountName (analyzer: prebuilt-layout)"
 
 # =============================================================================
 # 8. ENTRA APP REGISTRATION — redirect URIs, ID tokens, client secret
@@ -309,9 +304,9 @@ az webapp config connection-string set `
     --connection-string-type SQLAzure `
     --settings Saga="Server=tcp:$SqlServerName.database.windows.net,1433;Database=$SqlDbName;Authentication=Active Directory Managed Identity;Encrypt=True;" | Out-Null
 
-# App settings ("__" is the ':' hierarchy separator). AzureOpenAI__Key and
-# DocumentIntelligence__Key are intentionally NOT set: an empty key makes the
-# app authenticate with its managed identity instead.
+# App settings ("__" is the ':' hierarchy separator). AzureOpenAI__Key is
+# intentionally NOT set: an empty key makes the app authenticate with its managed
+# identity instead. Content Understanding is managed-identity only.
 az webapp config appsettings set `
     --name $WebAppName --resource-group $ResourceGroup `
     --settings `
@@ -330,7 +325,7 @@ az webapp config appsettings set `
         "AzureOpenAI__StrongPrice__OutputPer1M=$StrongPriceOutPer1M" `
         "AzureOpenAI__LightPrice__InputPer1M=$LightPriceInPer1M" `
         "AzureOpenAI__LightPrice__OutputPer1M=$LightPriceOutPer1M" `
-        "DocumentIntelligence__Endpoint=$DocIntelEndpoint" | Out-Null
+        "ContentUnderstanding__Endpoint=$AiEndpoint" | Out-Null
 Write-Host "✓ App Service configured"
 
 # =============================================================================
@@ -358,5 +353,4 @@ Write-Host "  Site:        https://$WebAppName.azurewebsites.net"
 Write-Host "  SQL:         $SqlServerName.database.windows.net / $SqlDbName (Entra-only)"
 Write-Host "  Storage:     https://$StorageAccount.blob.core.windows.net (container 'uploads')"
 Write-Host "  AI:          $AiEndpoint ($StrongDeployment, $LightDeployment)"
-Write-Host "  Doc Intel:   $DocIntelEndpoint"
 Write-Host "  Sign-in:     app $AppClientId in tenant $TenantId (new secret set on the web app)"
