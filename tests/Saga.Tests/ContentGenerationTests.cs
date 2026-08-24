@@ -25,6 +25,7 @@ public class ContentGenerationTests(LocalDbFixture db) : IClassFixture<LocalDbFi
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
                 Kind = DocumentKind.Upload,
                 Name = "tender.pdf",
                 ExtractedText = "Client material.",

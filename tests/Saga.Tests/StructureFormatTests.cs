@@ -25,6 +25,7 @@ public class StructureFormatTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         {
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
+            DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
             Kind = DocumentKind.Upload,
             Name = "tender.pdf",
             ExtractedText = "The client requests a leadership development program.",

@@ -5,8 +5,9 @@ namespace Saga.Core.Pipeline;
 
 /// <summary>
 /// Assembles the material the AI is allowed to see (spec §18). Used identically by chat and
-/// generation. Source priority: client documents > user notes > proposal artifacts, and the
-/// client profile must never override the client's own documents.
+/// generation. Source priority: uploaded documents > user notes > proposal artifacts, and the
+/// client profile must never override the client's own documents. Within the documents, the
+/// proposal's document types rank against each other in their own order.
 /// </summary>
 public static class WorkingContextBuilder
 {
@@ -23,23 +24,28 @@ public static class WorkingContextBuilder
     {
         var sb = new StringBuilder();
 
-        sb.AppendLine("<client_documents>");
-        sb.AppendLine("These are the client's own documents. They are the highest-priority source and always take precedence over notes, research and generated artifacts.");
+        sb.AppendLine("<source_documents>");
+        sb.AppendLine("Documents uploaded to this proposal, filed by category. The categories below are in priority order: where two documents conflict, the one from the earlier category wins. Uploaded documents are the highest-priority source and always take precedence over notes, research and generated artifacts.");
         if (useCondensedDocuments)
             sb.AppendLine("Note: the documents below are AI-condensed versions of larger originals.");
-        foreach (var doc in documents.Where(d => d.Kind == DocumentKind.Upload))
+        foreach (var category in Categorise(documents.Where(d => d.Kind == DocumentKind.Upload)))
         {
-            sb.AppendLine($"<document name=\"{doc.Name}\">");
-            sb.AppendLine(useCondensedDocuments ? doc.CondensedText ?? doc.ExtractedText : doc.ExtractedText);
-            sb.AppendLine("</document>");
+            sb.AppendLine($"<category name=\"{category.Key}\">");
+            foreach (var doc in category)
+            {
+                sb.AppendLine($"<document name=\"{doc.Name}\">");
+                sb.AppendLine(useCondensedDocuments ? doc.CondensedText ?? doc.ExtractedText : doc.ExtractedText);
+                sb.AppendLine("</document>");
+            }
+            sb.AppendLine("</category>");
         }
-        sb.AppendLine("</client_documents>");
+        sb.AppendLine("</source_documents>");
 
         sb.AppendLine("<user_notes>");
-        sb.AppendLine("Notes written by the Mannaz consultant. Second-priority source.");
+        sb.AppendLine("Notes written by the Mannaz consultant, each filed under the same categories as the documents above. Second-priority source.");
         foreach (var note in documents.Where(d => d.Kind == DocumentKind.Note))
         {
-            sb.AppendLine($"<note title=\"{note.Name}\">");
+            sb.AppendLine($"<note title=\"{note.Name}\" category=\"{CategoryName(note)}\">");
             sb.AppendLine(note.ExtractedText);
             sb.AppendLine("</note>");
         }
@@ -69,6 +75,22 @@ public static class WorkingContextBuilder
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Groups material by its document type, in the type's own order — which is the priority
+    /// order the prompt above tells the model to resolve conflicts by.
+    /// </summary>
+    private static IEnumerable<IGrouping<string, Document>> Categorise(IEnumerable<Document> documents)
+        => documents
+            .GroupBy(CategoryName)
+            .OrderBy(g => g.Min(d => d.DocumentType?.SortOrder ?? int.MaxValue))
+            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The type is always set in the app; the fallback only covers documents built without the
+    /// navigation loaded (unit tests), so the material still reaches the model.
+    /// </summary>
+    private static string CategoryName(Document document) => document.DocumentType?.Name ?? "Material";
 
     /// <summary>Which context each artifact type is generated from.</summary>
     public static WorkingContextKind ContextFor(ArtifactType type) => type switch

@@ -80,7 +80,9 @@ public class WorkingContextService(
     private async Task<(List<Document>, List<Artifact>)> LoadRawAsync(Guid proposalId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var documents = await db.Documents.Where(d => d.ProposalId == proposalId)
+        // The document type is part of the prompt: WorkingContextBuilder groups material by it.
+        var documents = await db.Documents.Include(d => d.DocumentType)
+            .Where(d => d.ProposalId == proposalId)
             .OrderBy(d => d.CreatedAt).ToListAsync(ct);
         var artifacts = await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
         return (documents, artifacts);

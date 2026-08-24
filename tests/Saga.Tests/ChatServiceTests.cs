@@ -41,6 +41,7 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         {
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
+            DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
             Kind = DocumentKind.Upload,
             Name = "tender.pdf",
             ExtractedText = "TENDER-TEXT: the deadline is 15 August.",

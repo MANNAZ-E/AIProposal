@@ -34,6 +34,7 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
                 Kind = DocumentKind.Upload,
                 Name = "tender.pdf",
                 ExtractedText = material,

@@ -23,10 +23,11 @@ public class PipelineTests
     [Fact]
     public void Source_material_context_contains_documents_and_notes_but_no_artifacts()
     {
+        var client = new DocumentType { Name = "Client documents", SortOrder = 0 };
         var documents = new List<Document>
         {
-            new() { Name = "tender.pdf", Kind = DocumentKind.Upload, ExtractedText = "TENDER-TEXT" },
-            new() { Name = "kickoff", Kind = DocumentKind.Note, ExtractedText = "NOTE-TEXT" },
+            new() { Name = "tender.pdf", Kind = DocumentKind.Upload, ExtractedText = "TENDER-TEXT", DocumentType = client },
+            new() { Name = "kickoff", Kind = DocumentKind.Note, ExtractedText = "NOTE-TEXT", DocumentType = client },
         };
         var artifacts = new List<Artifact>
         {
@@ -40,6 +41,29 @@ public class PipelineTests
         Assert.DoesNotContain("SUMMARY-TEXT", context);
         // Client documents come before notes: priority order is visible in the prompt.
         Assert.True(context.IndexOf("TENDER-TEXT") < context.IndexOf("NOTE-TEXT"));
+    }
+
+    [Fact]
+    public void Documents_are_grouped_by_type_in_the_types_own_priority_order()
+    {
+        var client = new DocumentType { Name = "Client documents", SortOrder = 0 };
+        var mannaz = new DocumentType { Name = "Mannaz documents", SortOrder = 1 };
+        var documents = new List<Document>
+        {
+            // Deliberately added lowest-priority first: the type's order decides, not insertion.
+            new() { Name = "offering.pdf", Kind = DocumentKind.Upload, ExtractedText = "MANNAZ-TEXT", DocumentType = mannaz },
+            new() { Name = "tender.pdf", Kind = DocumentKind.Upload, ExtractedText = "CLIENT-TEXT", DocumentType = client },
+            new() { Name = "kickoff", Kind = DocumentKind.Note, ExtractedText = "NOTE-TEXT", DocumentType = mannaz },
+        };
+
+        var context = WorkingContextBuilder.Build(WorkingContextKind.SourceMaterial, documents, []);
+
+        Assert.Contains("<category name=\"Client documents\">", context);
+        Assert.Contains("<category name=\"Mannaz documents\">", context);
+        Assert.True(context.IndexOf("CLIENT-TEXT") < context.IndexOf("MANNAZ-TEXT"));
+        // A note keeps its category as an attribute but stays in the lower-priority notes block.
+        Assert.Contains("category=\"Mannaz documents\"", context);
+        Assert.True(context.IndexOf("MANNAZ-TEXT") < context.IndexOf("NOTE-TEXT"));
     }
 
     [Fact]

@@ -16,16 +16,122 @@ public class DocumentService(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
         return await db.Documents
+            .Include(d => d.DocumentType)
             .Where(d => d.ProposalId == proposalId)
             .OrderBy(d => d.CreatedAt)
             .ToListAsync(ct);
     }
 
-    public async Task<Document> UploadAsync(Guid proposalId, Guid userId, string fileName, Stream content,
+    public async Task<List<DocumentType>> GetTypesAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        return await LoadTypesAsync(db, proposalId, ct);
+    }
+
+    public async Task<DocumentType> AddTypeAsync(Guid proposalId, Guid userId, string name,
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Editor, ct);
+
+        name = name.Trim();
+        if (name.Length == 0)
+            throw new InvalidOperationException("A document type needs a name.");
+
+        var existing = await LoadTypesAsync(db, proposalId, ct);
+        if (existing.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"This proposal already has a '{name}' type.");
+
+        // New types append, so they rank below the ones already there - the order is the
+        // priority the AI is told to resolve conflicts by.
+        var type = new DocumentType
+        {
+            Id = Guid.NewGuid(),
+            ProposalId = proposalId,
+            Name = name,
+            SortOrder = existing.Count == 0 ? 0 : existing.Max(t => t.SortOrder) + 1,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        db.DocumentTypes.Add(type);
+        await db.SaveChangesAsync(ct);
+        return type;
+    }
+
+    /// <summary>
+    /// Removes an empty type. A type holding material cannot be removed - the documents would
+    /// have nowhere to live - and neither can the last one, since every document needs a type.
+    /// </summary>
+    public async Task RemoveTypeAsync(Guid typeId, Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var type = await db.DocumentTypes.FirstAsync(t => t.Id == typeId, ct);
+        await ProposalService.EnsureRoleAsync(db, type.ProposalId, userId, ProposalRole.Editor, ct);
+
+        if (await db.Documents.AnyAsync(d => d.DocumentTypeId == typeId, ct))
+            throw new InvalidOperationException(
+                $"'{type.Name}' still holds material. Move or delete it first.");
+        if (!await db.DocumentTypes.AnyAsync(t => t.ProposalId == type.ProposalId && t.Id != typeId, ct))
+            throw new InvalidOperationException("A proposal needs at least one document type.");
+
+        db.DocumentTypes.Remove(type);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Re-files a document under a different type of the same proposal.</summary>
+    public async Task SetDocumentTypeAsync(Guid documentId, Guid userId, Guid documentTypeId,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var document = await db.Documents.FirstAsync(d => d.Id == documentId, ct);
+        await ProposalService.EnsureRoleAsync(db, document.ProposalId, userId, ProposalRole.Editor, ct);
+        if (document.DocumentTypeId == documentTypeId) return;
+
+        if (!await db.DocumentTypes.AnyAsync(t => t.Id == documentTypeId && t.ProposalId == document.ProposalId, ct))
+            throw new InvalidOperationException("That document type belongs to another proposal.");
+
+        var now = DateTimeOffset.UtcNow;
+        document.DocumentTypeId = documentTypeId;
+        // The category is part of what the AI is shown, so re-filing counts as a material change.
+        document.UpdatedAt = now;
+        await MarkMaterialChangedAsync(db, document.ProposalId, now, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static Task<List<DocumentType>> LoadTypesAsync(SagaDbContext db, Guid proposalId, CancellationToken ct)
+        => db.DocumentTypes.Where(t => t.ProposalId == proposalId)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .ToListAsync(ct);
+
+    /// <summary>
+    /// New material files under the type the caller picked, falling back to the proposal's first
+    /// type - what the upload form pre-selects - so material is never left uncategorised.
+    /// </summary>
+    private static async Task<Guid> ResolveTypeAsync(SagaDbContext db, Guid proposalId, Guid? documentTypeId,
+        CancellationToken ct)
+    {
+        if (documentTypeId is { } id)
+        {
+            if (!await db.DocumentTypes.AnyAsync(t => t.Id == id && t.ProposalId == proposalId, ct))
+                throw new InvalidOperationException("That document type belongs to another proposal.");
+            return id;
+        }
+
+        var types = await LoadTypesAsync(db, proposalId, ct);
+        if (types.Count > 0) return types[0].Id;
+
+        // Proposals left with an empty list still have to be able to take material.
+        var defaults = DocumentType.CreateDefaults(proposalId, DateTimeOffset.UtcNow);
+        db.DocumentTypes.AddRange(defaults);
+        return defaults[0].Id;
+    }
+
+    public async Task<Document> UploadAsync(Guid proposalId, Guid userId, string fileName, Stream content,
+        Guid? documentTypeId = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Editor, ct);
+        var typeId = await ResolveTypeAsync(db, proposalId, documentTypeId, ct);
 
         // Buffer once: the original goes to storage, the same bytes go to extraction.
         using var buffer = new MemoryStream();
@@ -57,6 +163,7 @@ public class DocumentService(
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
             Kind = DocumentKind.Upload,
+            DocumentTypeId = typeId,
             Name = Path.GetFileName(fileName),
             OriginalFilePath = storagePath,
             ExtractedText = extractedText,
@@ -135,10 +242,11 @@ public class DocumentService(
         };
 
     public async Task<Document> AddNoteAsync(Guid proposalId, Guid userId, string title, string text,
-        CancellationToken ct = default)
+        Guid? documentTypeId = null, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Editor, ct);
+        var typeId = await ResolveTypeAsync(db, proposalId, documentTypeId, ct);
 
         var now = DateTimeOffset.UtcNow;
         var note = new Document
@@ -146,6 +254,7 @@ public class DocumentService(
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
             Kind = DocumentKind.Note,
+            DocumentTypeId = typeId,
             Name = string.IsNullOrWhiteSpace(title) ? "Note" : title.Trim(),
             ExtractedText = text,
             CreatedAt = now,

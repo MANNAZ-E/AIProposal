@@ -56,6 +56,9 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
             UpdatedAt = now,
         };
         db.Proposals.Add(proposal);
+        // Every proposal starts with the standard material categories; the team edits the list
+        // from the Materials tab.
+        db.DocumentTypes.AddRange(DocumentType.CreateDefaults(proposal.Id, now));
         db.ProposalMembers.Add(new ProposalMember
         {
             Id = Guid.NewGuid(),
