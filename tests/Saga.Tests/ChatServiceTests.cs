@@ -36,12 +36,13 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var elv = (await _users.FindByEmailAsync("elv@mannaz.com"))!.Id;
         var sda = (await _users.FindByEmailAsync("sda@mannaz.com"))!.Id;
         var proposalId = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
+        var documentType = await TestServices.DefaultDocumentTypeAsync(db, proposalId);
         await using var setup = db.CreateDbContext();
         setup.Documents.Add(new Document
         {
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
-            DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
+            DocumentTypeId = documentType,
             Kind = DocumentKind.Upload,
             Name = "tender.pdf",
             ExtractedText = "TENDER-TEXT: the deadline is 15 August.",
@@ -52,6 +53,7 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         {
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
+            DocumentTypeId = documentType,
             Kind = DocumentKind.Upload,
             Name = "appendix.pdf",
             ExtractedText = "APPENDIX-TEXT: an annex nobody needs.",
