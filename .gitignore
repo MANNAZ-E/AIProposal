@@ -487,3 +487,5 @@ $RECYCLE.BIN/
 
 # Worktrees
 .claude/worktrees/
+# Local sample documents
+/test/

@@ -20,6 +20,7 @@ public enum AiOperation
     ExtractRequirements = 5,
     CondenseDocument = 6,
     ExtractDocument = 7,
+    DescribeFigure = 8,
 }
 
 /// <summary>

@@ -129,7 +129,14 @@ public class UsageTrackingAiService(
         var sb = new StringBuilder();
         sb.Append("[system]\n").Append(request.SystemPrompt);
         foreach (var message in request.Messages)
+        {
             sb.Append("\n\n[").Append(message.Role).Append("]\n").Append(message.Content);
+            // Images are noted, never inlined: a base64 screenshot would bloat every usage row
+            // for no forensic gain, and the original file is already in blob storage.
+            foreach (var image in message.Images ?? [])
+                sb.Append("\n[image: ").Append(image.MediaType).Append(", ")
+                  .Append(image.Data.Length.ToString("N0")).Append(" bytes]");
+        }
         return sb.ToString();
     }
 

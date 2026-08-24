@@ -74,3 +74,39 @@ reconstructed later.
 - Visible per proposal on the workspace **Usage** tab (`UsageSection.razor`) and across all
   proposals on `/admin`. Dev prices for `fake-model` are set in `appsettings.Development.json`
   so local numbers are non-zero.
+
+## Document extraction
+
+Uploads go through `CompositeTextExtractor`: local text files to `PlainTextExtractor` (free,
+unmetered), everything else to Content Understanding behind the usage decorator.
+
+- **Office files are not OCR'd by the analyzer.** `prebuilt-layout` reads a PDF or an image upload
+  visually, but takes the native digital-extraction path for `.docx`/`.pptx`/`.xlsx` and never looks
+  inside embedded bitmaps — it leaves an empty `![](figures/1.1)` where each one stood. A tender
+  exported from a procurement portal is often nothing but such screenshots, so its questions used to
+  vanish entirely. Switching analyzer does not help; figure handling is PDF/image-only everywhere.
+- `EmbeddedImageTextExtractor` fixes that by handing each embedded image back to the *same* analyzer
+  as an image, where OCR does run, and splicing the result over its placeholder. It is registered
+  **outside** `UsageTrackingTextExtractor` on purpose: every per-image call is then metered as its
+  own row sharing the document's `OperationId`, rather than disappearing into the document's row.
+  It is skipped under `Ai:UseFakeExtractor` — the stand-in answers figures with the same placeholder
+  prose as documents.
+- Reading order is what makes this work: image *n* must be the *n*-th one a reader sees, or the text
+  lands on the wrong figure. `OfficeImageReader` therefore walks the relationship references inside
+  the content (`SldIdLst` order for slides, not `SlideParts`) instead of enumerating `ImageParts`,
+  which comes back in arbitrary package order. If the placeholder and image counts still disagree,
+  the recovered text is appended with a warning rather than placed — a requirement attributed to the
+  wrong page is worse than one that lost its position.
+- A figure whose OCR comes back with almost no text is a chart, diagram or photo rather than a
+  screenshot, and gets one vision call instead (`FigurePrompts`, Light tier, `AiOperation.DescribeFigure`),
+  marked `*Figure description:*` so a later model does not read it as the client's own wording. That
+  is the only place `AiMessage.Images` is used; everything else is text-only.
+- The splice shifts the page map with it (`FigureSplicer`), because `DocumentChunker` reads only what
+  the spans cover and requirement sources are labelled from them — text outside every span would be
+  dropped from the pipeline silently. Note that Content Understanding reports **no page spans at all
+  for Office files** (measured: the SKA docx comes back with 0 spans and `pageCount` 0, so its own
+  analysis is also billed as free), so for Word the shift is a no-op and requirement sources fall
+  back to "part 1". It is PDFs that carry a real page map.
+- Tuning knobs live in the `Extraction` config section (`EmbeddedImageOptions`): `MinBytes` skips
+  icons and logo chips, `MaxImages` caps paid calls per document, `MinTextChars` is the
+  OCR-or-describe threshold. Identical images are read once however often they repeat.

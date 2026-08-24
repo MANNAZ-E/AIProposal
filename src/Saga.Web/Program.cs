@@ -90,18 +90,30 @@ builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     // Offline stand-in accepts the same file types, so uploads work without Azure.
-    IDocumentTextExtractor billed = StandInSelection.UseFakeExtractor(config)
+    var useFake = StandInSelection.UseFakeExtractor(config);
+    IDocumentTextExtractor billed = useFake
         ? new FakeDocumentExtractor()
         : new ContentUnderstandingExtractor(config);
+
+    IDocumentTextExtractor document = new UsageTrackingTextExtractor(billed,
+        ContentUnderstandingExtractor.AnalyzerId,
+        sp.GetRequiredService<IDbContextFactory<SagaDbContext>>(),
+        sp.GetRequiredService<PricingService>(),
+        sp.GetService<ILogger<UsageTrackingTextExtractor>>());
+
+    // Outside the meter, so each image it reads back is billed as its own row. Pointless against
+    // the stand-in, which answers every file — figures included — with the same placeholder prose.
+    if (!useFake)
+        document = new EmbeddedImageTextExtractor(document,
+            sp.GetRequiredService<IAiService>(),
+            config.GetSection("Extraction").Get<EmbeddedImageOptions>(),
+            sp.GetService<ILogger<EmbeddedImageTextExtractor>>());
 
     var extractors = new List<IDocumentTextExtractor>
     {
         // PlainTextExtractor reads local files and costs nothing, so it stays unmetered.
         new PlainTextExtractor(),
-        new UsageTrackingTextExtractor(billed, ContentUnderstandingExtractor.AnalyzerId,
-            sp.GetRequiredService<IDbContextFactory<SagaDbContext>>(),
-            sp.GetRequiredService<PricingService>(),
-            sp.GetService<ILogger<UsageTrackingTextExtractor>>()),
+        document,
     };
     return new CompositeTextExtractor(extractors);
 });

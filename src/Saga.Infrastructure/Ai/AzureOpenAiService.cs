@@ -40,9 +40,23 @@ public class AzureOpenAiService : IAiService
         var messages = new List<OpenAI.Chat.ChatMessage> { new SystemChatMessage(request.SystemPrompt) };
         foreach (var message in request.Messages)
         {
-            messages.Add(message.Role == "assistant"
-                ? new AssistantChatMessage(message.Content)
-                : new UserChatMessage(message.Content));
+            if (message.Role == "assistant")
+            {
+                messages.Add(new AssistantChatMessage(message.Content));
+            }
+            else if (message.Images is { Count: > 0 } images)
+            {
+                // Text first, then the images: the same system prompt to material to instruction
+                // shape as everywhere else, so the wording ahead of the bytes stays cacheable.
+                var parts = new List<ChatMessageContentPart> { ChatMessageContentPart.CreateTextPart(message.Content) };
+                parts.AddRange(images.Select(i =>
+                    ChatMessageContentPart.CreateImagePart(BinaryData.FromBytes(i.Data), i.MediaType)));
+                messages.Add(new UserChatMessage(parts));
+            }
+            else
+            {
+                messages.Add(new UserChatMessage(message.Content));
+            }
         }
 
         // Left at defaults deliberately: GPT-5.x reasoning deployments reject temperature, and the

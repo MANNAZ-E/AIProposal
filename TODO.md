@@ -1,5 +1,8 @@
 # Saga — remaining work
 
+NOTE: THIS IS AN OUTDATED TODO FILE - AI, please ignore
+
+
 Status 2026-07-03: all 10 plan milestones are built and committed (M1–M10).
 All 60 unit tests pass; every milestone was verified end-to-end in the running app
 against LocalDB and the offline stand-in AI (no Azure endpoints configured locally).

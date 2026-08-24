@@ -1,4 +1,4 @@
-namespace Saga.Core.Abstractions;
+﻿namespace Saga.Core.Abstractions;
 
 /// <summary>
 /// Which model deployment to use: Strong (analysis, generation, chat, review) or Light
@@ -12,9 +12,21 @@ public enum AiModelTier
     Light = 1,
 }
 
-public record AiMessage(string Role, string Content)
+/// <summary>
+/// An image sent alongside a message, for the vision-capable deployments. Only ever attached to a
+/// user message; providers reject images on an assistant turn.
+/// </summary>
+/// <param name="MediaType">IANA type, e.g. "image/png" — the provider needs it to decode the bytes.</param>
+public record AiImage(ReadOnlyMemory<byte> Data, string MediaType);
+
+/// <param name="Images">
+/// Attached images, appended after <paramref name="Content"/> as extra content parts. Null for the
+/// text-only calls, which is nearly all of them.
+/// </param>
+public record AiMessage(string Role, string Content, IReadOnlyList<AiImage>? Images = null)
 {
     public static AiMessage User(string content) => new("user", content);
+    public static AiMessage User(string content, IReadOnlyList<AiImage> images) => new("user", content, images);
     public static AiMessage Assistant(string content) => new("assistant", content);
 }
 
