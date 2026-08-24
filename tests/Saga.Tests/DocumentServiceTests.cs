@@ -129,6 +129,113 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
     }
 
     [Fact]
+    public async Task New_proposals_start_with_the_default_document_types()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+
+        var types = await service.GetTypesAsync(proposalId, elv);
+
+        Assert.Equal(["Client documents", "Mannaz documents"], types.Select(t => t.Name));
+    }
+
+    [Fact]
+    public async Task Uploads_and_notes_are_filed_under_the_chosen_type()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+        var types = await service.GetTypesAsync(proposalId, elv);
+        var mannaz = types[1];
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
+        var upload = await service.UploadAsync(proposalId, elv, "offering.pdf", stream, mannaz.Id);
+        var note = await service.AddNoteAsync(proposalId, elv, "Kickoff", "text", mannaz.Id);
+
+        Assert.Equal(mannaz.Id, upload.DocumentTypeId);
+        Assert.Equal(mannaz.Id, note.DocumentTypeId);
+    }
+
+    [Fact]
+    public async Task Material_added_without_a_type_falls_back_to_the_first_one()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+        var first = (await service.GetTypesAsync(proposalId, elv))[0];
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
+        var upload = await service.UploadAsync(proposalId, elv, "tender.pdf", stream);
+
+        Assert.Equal(first.Id, upload.DocumentTypeId);
+        Assert.Equal("Client documents", first.Name);
+    }
+
+    [Fact]
+    public async Task Added_types_append_below_the_existing_ones_and_names_stay_unique()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+
+        var added = await service.AddTypeAsync(proposalId, elv, "  Tender annexes  ");
+
+        Assert.Equal("Tender annexes", added.Name);
+        var types = await service.GetTypesAsync(proposalId, elv);
+        Assert.Equal(["Client documents", "Mannaz documents", "Tender annexes"], types.Select(t => t.Name));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AddTypeAsync(proposalId, elv, "tender annexes"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.AddTypeAsync(proposalId, elv, "   "));
+    }
+
+    [Fact]
+    public async Task A_type_can_only_be_removed_once_it_holds_no_material()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+        var types = await service.GetTypesAsync(proposalId, elv);
+        var client = types[0];
+        var mannaz = types[1];
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
+        var upload = await service.UploadAsync(proposalId, elv, "tender.pdf", stream, client.Id);
+
+        var blocked = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RemoveTypeAsync(client.Id, elv));
+        Assert.Contains("still holds material", blocked.Message);
+
+        // The empty one goes; the last remaining type stays, since every document needs one.
+        await service.RemoveTypeAsync(mannaz.Id, elv);
+        Assert.Equal(["Client documents"], (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
+
+        await service.DeleteAsync(upload.Id, elv);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RemoveTypeAsync(client.Id, elv));
+    }
+
+    [Fact]
+    public async Task A_document_can_be_refiled_under_another_type_of_the_same_proposal()
+    {
+        var (elv, sda, proposalId) = await SetupAsync();
+        await _proposals.ShareAsync(proposalId, elv, "sda@mannaz.com", ProposalRole.Reader);
+        var service = CreateService();
+        var types = await service.GetTypesAsync(proposalId, elv);
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
+        var upload = await service.UploadAsync(proposalId, elv, "offering.pdf", stream, types[0].Id);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.SetDocumentTypeAsync(upload.Id, sda, types[1].Id));
+
+        await service.SetDocumentTypeAsync(upload.Id, elv, types[1].Id);
+        var reloaded = Assert.Single(await service.GetForProposalAsync(proposalId, elv));
+        Assert.Equal("Mannaz documents", reloaded.DocumentType!.Name);
+
+        var otherProposal = await _proposals.CreateAsync(elv, "Other", "C", null, OutputFormat.PowerPoint);
+        var foreignType = (await service.GetTypesAsync(otherProposal, elv))[0];
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.SetDocumentTypeAsync(upload.Id, elv, foreignType.Id));
+    }
+
+    [Fact]
     public async Task Reader_cannot_upload_or_add_notes()
     {
         var (elv, sda, proposalId) = await SetupAsync();

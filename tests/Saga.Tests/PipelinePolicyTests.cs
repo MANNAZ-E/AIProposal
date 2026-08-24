@@ -66,6 +66,7 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
                 Kind = DocumentKind.Upload,
                 Name = "huge.pdf",
                 ExtractedText = string.Join(" ", Enumerable.Repeat("The client requires many things.", 200)),
@@ -76,6 +77,7 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
                 Kind = DocumentKind.Note,
                 Name = "note",
                 ExtractedText = "A note.",
@@ -129,6 +131,7 @@ public class PipelinePolicyTests(LocalDbFixture db) : IClassFixture<LocalDbFixtu
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
                 Kind = DocumentKind.Upload,
                 Name = "small.pdf",
                 ExtractedText = "Short client material.",

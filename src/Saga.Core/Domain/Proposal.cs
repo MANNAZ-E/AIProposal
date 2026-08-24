@@ -39,6 +39,7 @@ public class Proposal
     public DateTimeOffset UpdatedAt { get; set; }
 
     public ICollection<ProposalMember> Members { get; set; } = [];
+    public ICollection<DocumentType> DocumentTypes { get; set; } = [];
     public ICollection<Document> Documents { get; set; } = [];
     public ICollection<Artifact> Artifacts { get; set; } = [];
     public ICollection<ChatSession> ChatSessions { get; set; } = [];

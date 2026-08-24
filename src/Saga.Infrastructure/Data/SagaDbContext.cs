@@ -8,6 +8,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<User> Users => Set<User>();
     public DbSet<Proposal> Proposals => Set<Proposal>();
     public DbSet<ProposalMember> ProposalMembers => Set<ProposalMember>();
+    public DbSet<DocumentType> DocumentTypes => Set<DocumentType>();
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentVersion> DocumentVersions => Set<DocumentVersion>();
     public DbSet<Artifact> Artifacts => Set<Artifact>();
@@ -47,11 +48,22 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.HasOne(m => m.User).WithMany(u => u.Memberships).HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<DocumentType>(b =>
+        {
+            b.Property(t => t.Name).HasMaxLength(200);
+            // Names are the user's handle on a category, so they have to stay distinct per proposal.
+            b.HasIndex(t => new { t.ProposalId, t.Name }).IsUnique();
+            b.HasOne(t => t.Proposal).WithMany(p => p.DocumentTypes).HasForeignKey(t => t.ProposalId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Document>(b =>
         {
             b.Property(d => d.Name).HasMaxLength(500);
             b.Property(d => d.OriginalFilePath).HasMaxLength(1024);
             b.HasOne(d => d.Proposal).WithMany(p => p.Documents).HasForeignKey(d => d.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            // Restrict, not Cascade: deleting a proposal already cascades from Proposal, and a
+            // type may only be removed once it holds no documents.
+            b.HasOne(d => d.DocumentType).WithMany(t => t.Documents).HasForeignKey(d => d.DocumentTypeId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<DocumentVersion>(b =>

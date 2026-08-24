@@ -13,6 +13,15 @@
 @if (CanEdit)
 {
     <h3 class="material-heading">Upload files</h3>
+    <div class="type-picker">
+        <label for="upload-type">Document type</label>
+        <select id="upload-type" @bind="_uploadTypeId" disabled="@_uploading">
+            @foreach (var type in _types)
+            {
+                <option value="@type.Id">@type.Name</option>
+            }
+        </select>
+    </div>
     <label class="upload-area">
         <InputFile OnChange="UploadAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
@@ -26,6 +35,15 @@
     </label>
 
     <h3 class="material-heading">Add note</h3>
+    <div class="type-picker">
+        <label for="note-type">Document type</label>
+        <select id="note-type" @bind="_noteTypeId">
+            @foreach (var type in _types)
+            {
+                <option value="@type.Id">@type.Name</option>
+            }
+        </select>
+    </div>
     <button type="button" class="upload-area" @onclick="NewNote">
         <span><strong>Add note</strong></span>
     </button>
@@ -34,7 +52,37 @@
 @{
     RenderFragment<Document> documentRow = doc =>
         @<tr>
-            <td><button type="button" class="link-button" @onclick="() => _previewDocument = doc">@doc.Name</button></td>
+            <td>
+                <button type="button" class="link-button" @onclick="() => _previewDocument = doc">@doc.Name</button>
+                @if (doc.Kind == DocumentKind.Note)
+                {
+                    <span class="badge badge-role">Note</span>
+                }
+            </td>
+            <td>
+                @if (!CanEdit)
+                {
+                    <span class="text-muted">@TypeName(doc)</span>
+                }
+                else if (_typeEditDocument?.Id == doc.Id)
+                {
+                    <select @ref="_typeSelect" class="type-select"
+                            @bind:get="doc.DocumentTypeId"
+                            @bind:set="value => ChangeTypeAsync(doc, value)"
+                            @onblur="() => _typeEditDocument = null">
+                        @foreach (var type in _types)
+                        {
+                            <option value="@type.Id">@type.Name</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    <button type="button" class="link-button type-cell" @onclick="() => BeginTypeEdit(doc)">
+                        @TypeName(doc)<span class="type-caret">▾</span>
+                    </button>
+                }
+            </td>
             <td class="text-muted">@FormatLength(doc.ExtractedText)</td>
             <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
             <td class="text-muted">@(doc.UpdatedAt > doc.CreatedAt ? doc.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm") : "—")</td>
@@ -63,6 +111,7 @@ else
         <thead>
             <tr>
                 <th>Name</th>
+                <th>Type</th>
                 <th>Length</th>
                 <th>Added</th>
                 <th>Last edited</th>
@@ -70,33 +119,54 @@ else
             </tr>
         </thead>
         <tbody>
-            <tr class="table-group"><td colspan="5">Files</td></tr>
-            @if (_uploads.Count == 0)
+            @foreach (var type in _types)
             {
-                <tr><td colspan="5" class="text-muted">Upload files above</td></tr>
-            }
-            else
-            {
-                foreach (var doc in _uploads)
+                var inType = DocumentsIn(type.Id);
+                <tr class="table-group"><td colspan="6">@type.Name</td></tr>
+                @if (inType.Count == 0)
                 {
-                    @documentRow(doc)
+                    <tr><td colspan="6" class="text-muted">Nothing filed here yet</td></tr>
                 }
-            }
-
-            <tr class="table-group"><td colspan="5">Notes</td></tr>
-            @if (_notes.Count == 0)
-            {
-                <tr><td colspan="5" class="text-muted">Add notes above</td></tr>
-            }
-            else
-            {
-                foreach (var note in _notes)
+                else
                 {
-                    @documentRow(note)
+                    foreach (var doc in inType)
+                    {
+                        @documentRow(doc)
+                    }
                 }
             }
         </tbody>
     </table>
+
+    <h3 class="material-heading">Document types</h3>
+    <p class="text-muted">
+        Material is filed under these categories. The order is also their priority when the AI
+        resolves a conflict between two documents, so the first type outranks the ones below it.
+    </p>
+    <ul class="type-list">
+        @foreach (var type in _types)
+        {
+            var count = DocumentsIn(type.Id).Count;
+            <li>
+                <span class="type-list-name">@type.Name</span>
+                <span class="text-muted">@(count == 1 ? "1 item" : $"{count} items")</span>
+                @if (CanEdit)
+                {
+                    <button class="btn btn-outline btn-sm" disabled="@(_busy || !CanRemove(type))"
+                            title="@RemoveHint(type)" @onclick="() => RemoveTypeAsync(type)">Remove</button>
+                }
+            </li>
+        }
+    </ul>
+    @if (CanEdit)
+    {
+        <div class="type-add">
+            <input type="text" placeholder="New document type" maxlength="200"
+                   @bind="_newTypeName" @bind:event="oninput" @onkeydown="NewTypeKeyDownAsync" />
+            <button class="btn btn-outline btn-sm" @onclick="AddTypeAsync"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_newTypeName))">Add type</button>
+        </div>
+    }
 }
 
 @if (_previewDocument is not null)
@@ -240,13 +310,21 @@ else
 
     private string _acceptTypes = "";
     private List<Document>? _documents;
-    private List<Document> _uploads = [];
-    private List<Document> _notes = [];
+    private List<DocumentType> _types = [];
     private Document? _previewDocument;
     private Document? _deleteDocument;
     private bool _uploading;
     private bool _busy;
     private string? _error;
+
+    /// <summary>Type new material is filed under; sticky, so a run of uploads stays in one category.</summary>
+    private Guid _uploadTypeId;
+    private Guid _noteTypeId;
+    private string _newTypeName = "";
+
+    private Document? _typeEditDocument;
+    private ElementReference _typeSelect;
+    private bool _focusTypeSelect;
 
     private bool _noteEditorOpen;
     private Guid? _editingNoteId;
@@ -264,12 +342,118 @@ else
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The row's type cell turns into a select on click, so move focus onto it.
+        if (_focusTypeSelect && _typeEditDocument is not null)
+        {
+            _focusTypeSelect = false;
+            await _typeSelect.FocusAsync();
+        }
+    }
+
     private async Task LoadAsync()
     {
         var user = await CurrentUser.GetAsync();
+        _types = await Documents.GetTypesAsync(ProposalId, user.Id);
         _documents = await Documents.GetForProposalAsync(ProposalId, user.Id);
-        _uploads = _documents.Where(d => d.Kind != DocumentKind.Note).ToList();
-        _notes = _documents.Where(d => d.Kind == DocumentKind.Note).ToList();
+        _uploadTypeId = KeepOrDefault(_uploadTypeId);
+        _noteTypeId = KeepOrDefault(_noteTypeId);
+    }
+
+    /// <summary>Holds a picked type across reloads, falling back to the first (highest-priority) one.</summary>
+    private Guid KeepOrDefault(Guid selected)
+        => _types.Any(t => t.Id == selected) ? selected : _types.FirstOrDefault()?.Id ?? Guid.Empty;
+
+    private List<Document> DocumentsIn(Guid typeId)
+        => _documents?.Where(d => d.DocumentTypeId == typeId).ToList() ?? [];
+
+    private string TypeName(Document document)
+        => _types.FirstOrDefault(t => t.Id == document.DocumentTypeId)?.Name ?? "—";
+
+    private bool CanRemove(DocumentType type)
+        => _types.Count > 1 && DocumentsIn(type.Id).Count == 0;
+
+    private string? RemoveHint(DocumentType type)
+    {
+        if (DocumentsIn(type.Id).Count > 0)
+            return "Move or delete this type's material first.";
+        return _types.Count > 1 ? null : "A proposal needs at least one document type.";
+    }
+
+    private void BeginTypeEdit(Document document)
+    {
+        _typeEditDocument = document;
+        _focusTypeSelect = true;
+    }
+
+    private async Task ChangeTypeAsync(Document document, Guid typeId)
+    {
+        _typeEditDocument = null;
+        if (document.DocumentTypeId == typeId) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.SetDocumentTypeAsync(document.Id, user.Id, typeId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddTypeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTypeName)) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.AddTypeAsync(ProposalId, user.Id, _newTypeName);
+            _newTypeName = "";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task NewTypeKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddTypeAsync();
+    }
+
+    private async Task RemoveTypeAsync(DocumentType type)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.RemoveTypeAsync(type.Id, user.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task UploadAsync(InputFileChangeEventArgs e)
@@ -282,7 +466,7 @@ else
             foreach (var file in e.GetMultipleFiles())
             {
                 await using var stream = file.OpenReadStream(MaxFileSize);
-                await Documents.UploadAsync(ProposalId, user.Id, file.Name, stream);
+                await Documents.UploadAsync(ProposalId, user.Id, file.Name, stream, _uploadTypeId);
             }
             await LoadAsync();
         }
@@ -403,7 +587,7 @@ else
         {
             var user = await CurrentUser.GetAsync();
             if (_editingNoteId is null)
-                await Documents.AddNoteAsync(ProposalId, user.Id, _noteTitle, _noteText);
+                await Documents.AddNoteAsync(ProposalId, user.Id, _noteTitle, _noteText, _noteTypeId);
             else
                 await Documents.UpdateNoteAsync(_editingNoteId.Value, user.Id, _noteTitle, _noteText);
             _noteEditorOpen = false;

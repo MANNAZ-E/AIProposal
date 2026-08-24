@@ -53,6 +53,17 @@ public static class TestServices
         return new(db, ai, WorkingContext(db, ai));
     }
 
+    /// <summary>
+    /// The proposal's first document type — the one the upload form pre-selects. Tests that add
+    /// material straight to the database need it, since every document is filed under a type.
+    /// </summary>
+    public static async Task<Guid> DefaultDocumentTypeAsync(LocalDbFixture db, Guid proposalId)
+    {
+        await using var check = db.CreateDbContext();
+        return (await check.DocumentTypes.Where(t => t.ProposalId == proposalId)
+            .OrderBy(t => t.SortOrder).FirstAsync()).Id;
+    }
+
     public static AiUsageService Usage(LocalDbFixture db, IConfiguration? config = null)
         => new(db, new PricingService(config ?? Pricing()));
 }

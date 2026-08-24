@@ -9,6 +9,10 @@ public class Document
     public DocumentKind Kind { get; set; }
     public required string Name { get; set; }
 
+    /// <summary>The proposal-local category this material is filed under. Always set.</summary>
+    public Guid DocumentTypeId { get; set; }
+    public DocumentType? DocumentType { get; set; }
+
     /// <summary>Storage path of the original uploaded file. Null for notes.</summary>
     public string? OriginalFilePath { get; set; }
 

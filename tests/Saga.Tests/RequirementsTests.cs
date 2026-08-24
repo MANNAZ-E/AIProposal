@@ -92,6 +92,7 @@ public class RequirementsTests(LocalDbFixture db) : IClassFixture<LocalDbFixture
             {
                 Id = Guid.NewGuid(),
                 ProposalId = proposalId,
+                DocumentTypeId = await TestServices.DefaultDocumentTypeAsync(db, proposalId),
                 Kind = DocumentKind.Upload,
                 Name = "tender.pdf",
                 ExtractedText = "The offer must be submitted on time. Suppliers must document experience.",
