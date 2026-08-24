@@ -55,10 +55,15 @@ reconstructed later.
 - Both model tiers (`AiModelTier.Strong` / `.Light`) currently resolve to the same deployment,
   `gpt-5.6-luna`; `gpt-5.6-terra` stays deployed and priced, so moving the Strong tier back is
   the `AzureOpenAI:StrongDeployment` setting alone — no call site passes a model name.
-- Rates live in the `Pricing` config section, keyed by deployment name, **in USD** (what Azure
-  publishes); `Pricing:UsdToDkk` converts for display only. Cost is frozen on the row at write
-  time. `PricingService` returns 0 for an unpriced model rather than throwing — metering must
-  never break a generation.
+- Rates live in the `Pricing` config section, **in USD** (what Azure publishes); `Pricing:UsdToDkk`
+  converts for display only. Cost is frozen on the row at write time. `PricingService` returns 0 for
+  an unpriced model rather than throwing — metering must never break a generation, which is also why
+  `PricingConfigurationTests` guards the shipped rate keys: an unpriced meter is silent by design.
+- LLM rates are keyed by **deployment name**. Content Understanding rates are keyed by **meter** —
+  `DocumentPagesMinimalPer1000` / `Basic` / `Standard` — never by analyzer, because the service
+  charges for the work it actually performed: `prebuilt-layout` bills **Minimal** ($0.01/1000) on a
+  digital Office file and **Standard** ($5.00/1000) on a PDF, an image, or a screenshot lifted out of
+  a .docx. One upload routinely hits both. West Europe list prices, from the Azure retail price feed.
 - **Every prompt is assembled system prompt → material → instruction**, and new call sites must keep
   that order. The system prompt holds only what is stable for the proposal (persona, voice, language,
   source rules); the client material comes next; the task, the output contract and any steering the
@@ -104,9 +109,15 @@ unmetered), everything else to Content Understanding behind the usage decorator.
 - The splice shifts the page map with it (`FigureSplicer`), because `DocumentChunker` reads only what
   the spans cover and requirement sources are labelled from them — text outside every span would be
   dropped from the pipeline silently. Note that Content Understanding reports **no page spans at all
-  for Office files** (measured: the SKA docx comes back with 0 spans and `pageCount` 0, so its own
-  analysis is also billed as free), so for Word the shift is a no-op and requirement sources fall
-  back to "part 1". It is PDFs that carry a real page map.
+  for Office files** (measured: the SKA docx comes back with 0 spans), so for Word the shift is a
+  no-op and requirement sources fall back to "part 1". It is PDFs that carry a real page map.
+- **Page geometry is not the billing unit** — reading it as one is what metered every Office upload
+  as free. `ContentUnderstandingExtractor` takes the quantities from `operation.GetUsage()`, the
+  `usage` object Azure returns beside its result, and `document.Pages` is now used only to build the
+  page map. Nothing on our side may derive a page count: Word bills by its own native pagination
+  (PPTX per slide, XLSX per sheet including hidden ones, TXT/HTML per 3,000 characters), none of
+  which is reproducible from OpenXML. A call that reports no usage records **null**, not zero, and
+  logs a warning — "we were not told" is a different fact from "nothing was charged".
 - Tuning knobs live in the `Extraction` config section (`EmbeddedImageOptions`): `MinBytes` skips
   icons and logo chips, `MaxImages` caps paid calls per document, `MinTextChars` is the
   OCR-or-describe threshold. Identical images are read once however often they repeat.

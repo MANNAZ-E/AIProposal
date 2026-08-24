@@ -100,9 +100,15 @@ $StrongPriceOutPer1M      = "26.40"
 $LightPriceInPer1M        = "1.10"
 $LightPriceCachedInPer1M  = "0.11"
 $LightPriceOutPer1M       = "6.60"
-# Content Understanding, USD per 1000 pages analysed, and the DKK display rate
-# ("0" leaves the usage pages in USD).
-$ExtractionPricePer1000Pages = "0"
+# Content Understanding, USD per 1000 units, from Microsoft's retail price feed for West Europe
+# (checked 2026-08-24). Keyed by METER, not by analyzer: the service charges for the work it
+# performed, so prebuilt-layout bills Minimal on a digital Office file and Standard on a PDF, an
+# image, or a screenshot lifted out of a .docx. Re-check the rates for your region before running.
+$ExtractionPriceMinimalPer1000  = "0.01"
+$ExtractionPriceBasicPer1000    = "1.00"
+$ExtractionPriceStandardPer1000 = "5.00"
+$ContextualizationPer1000Tokens = "0.001"
+# DKK display rate ("0" leaves the usage pages in USD).
 $UsdToDkk                    = "0"
 
 Write-Host "Subscription: $(az account show --query name -o tsv)"
@@ -345,7 +351,10 @@ az webapp config appsettings set `
         "Pricing__Models__${LightDeployment}__InputPer1M=$LightPriceInPer1M" `
         "Pricing__Models__${LightDeployment}__CachedInputPer1M=$LightPriceCachedInPer1M" `
         "Pricing__Models__${LightDeployment}__OutputPer1M=$LightPriceOutPer1M" `
-        "Pricing__ContentUnderstanding__prebuilt-layout__Per1000Pages=$ExtractionPricePer1000Pages" `
+        "Pricing__ContentUnderstanding__DocumentPagesMinimalPer1000=$ExtractionPriceMinimalPer1000" `
+        "Pricing__ContentUnderstanding__DocumentPagesBasicPer1000=$ExtractionPriceBasicPer1000" `
+        "Pricing__ContentUnderstanding__DocumentPagesStandardPer1000=$ExtractionPriceStandardPer1000" `
+        "Pricing__ContentUnderstanding__ContextualizationTokensPer1000=$ContextualizationPer1000Tokens" `
         "Pricing__UsdToDkk=$UsdToDkk" `
         "ContentUnderstanding__Endpoint=$AiEndpoint" | Out-Null
 Write-Host "✓ App Service configured"

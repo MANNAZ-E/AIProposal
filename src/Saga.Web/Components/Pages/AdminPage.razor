@@ -98,7 +98,7 @@ else
                     <td style="text-align: right;">@groupTotal.Calls.ToString("N0")</td>
                     <td style="text-align: right;">@groupTotal.InputTokens.ToString("N0")</td>
                     <td style="text-align: right;">@groupTotal.OutputTokens.ToString("N0")</td>
-                    <td style="text-align: right;">@(groupTotal.PageCount > 0 ? groupTotal.PageCount.ToString("N0") : "—")</td>
+                    <td style="text-align: right;">@(groupTotal.Pages > 0 ? groupTotal.Pages.ToString("N0") : "—")</td>
                     <td style="text-align: right;"><strong>@Cost(groupTotal.CostUsd)</strong></td>
                 </tr>
                 @foreach (var row in group)
@@ -109,7 +109,7 @@ else
                         <td style="text-align: right;">@row.Totals.Calls.ToString("N0")</td>
                         <td style="text-align: right;">@row.Totals.InputTokens.ToString("N0")</td>
                         <td style="text-align: right;">@row.Totals.OutputTokens.ToString("N0")</td>
-                        <td style="text-align: right;">@(row.Totals.PageCount > 0 ? row.Totals.PageCount.ToString("N0") : "—")</td>
+                        <td style="text-align: right;">@(row.Totals.Pages > 0 ? row.Totals.Pages.ToString("N0") : "—")</td>
                         <td style="text-align: right;">@Cost(row.Totals.CostUsd)</td>
                     </tr>
                 }
@@ -147,7 +147,7 @@ else
                     <td style="text-align: right;">@row.Calls.ToString("N0")</td>
                     <td style="text-align: right;">@row.InputTokens.ToString("N0")</td>
                     <td style="text-align: right;">@row.OutputTokens.ToString("N0")</td>
-                    <td style="text-align: right;">@(row.PageCount > 0 ? row.PageCount.ToString("N0") : "—")</td>
+                    <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "—")</td>
                     <td style="text-align: right;">@Cost(row.CostUsd)</td>
                     <td>@row.LastCallAt?.ToLocalTime().ToString("dd MMM HH:mm")</td>
                 </tr>
@@ -160,7 +160,7 @@ else
                 <th style="text-align: right;">@_usage.Sum(u => u.Calls).ToString("N0")</th>
                 <th style="text-align: right;">@_usage.Sum(u => u.InputTokens).ToString("N0")</th>
                 <th style="text-align: right;">@_usage.Sum(u => u.OutputTokens).ToString("N0")</th>
-                <th style="text-align: right;">@_usage.Sum(u => u.PageCount).ToString("N0")</th>
+                <th style="text-align: right;">@_usage.Sum(u => u.Pages).ToString("N0")</th>
                 <th style="text-align: right;">@Cost(_usage.Sum(u => u.CostUsd))</th>
                 <th></th>
             </tr>

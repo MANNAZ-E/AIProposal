@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     --saga-primary: #5A616D;
     --saga-primary-dark: #464c56;
     --saga-primary-light: #eceef1;
@@ -689,6 +689,16 @@ tr:hover .rename-button,
 .type-list-name {
     flex: 1;
     font-weight: 600;
+}
+
+/* A custom type's name is its own rename handle: reads as text until clicked. */
+button.type-list-name {
+    color: var(--saga-text);
+}
+
+.type-rename-input {
+    flex: 1;
+    min-width: 0;
 }
 
 .type-add {

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Saga.Core.Abstractions;
 using Saga.Infrastructure.Ai;
 
 namespace Saga.Tests;
@@ -76,6 +77,34 @@ public class PricingConfigurationTests
             Assert.True(cached < uncached,
                 $"{fileName}: '{deployment}' prices cached input at the full rate "
                 + $"({cached} vs {uncached}). Set Pricing:Models:{deployment}:CachedInputPer1M.");
+        }
+    }
+
+    /// <summary>
+    /// The check that was missing. Extraction rates shipped as 0 in appsettings.json, so every
+    /// upload in production would have recorded free — silently, because an unpriced meter costs
+    /// zero by design rather than throwing. A rate key renamed or never filled in fails here now.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ConfigFiles))]
+    public void Every_extraction_meter_has_a_usable_rate(string fileName)
+    {
+        var pricing = new PricingService(Load(fileName));
+
+        var meters = new (string Name, ExtractionUsage Usage)[]
+        {
+            ("DocumentPagesMinimalPer1000", new ExtractionUsage(1_000, 0, 0)),
+            ("DocumentPagesBasicPer1000", new ExtractionUsage(0, 1_000, 0)),
+            ("DocumentPagesStandardPer1000", new ExtractionUsage(0, 0, 1_000)),
+            ("ContextualizationTokensPer1000", new ExtractionUsage(0, 0, 0, 1_000)),
+        };
+
+        foreach (var (name, usage) in meters)
+        {
+            Assert.True(pricing.EstimateExtractionUsd(usage) > 0m,
+                $"{fileName}: no usable rate for the {name} meter. Add "
+                + $"Pricing:ContentUnderstanding:{name} — otherwise every call billed on that meter "
+                + "records at zero cost.");
         }
     }
 

@@ -55,7 +55,7 @@ public enum WorkingContextKind
     /// <summary>A chat whose material was picked by hand instead of from one of the presets.</summary>
     Custom = 3,
 
-    /// <summary>Only what the client sent — the material filed under the fixed "Client material" type.</summary>
+    /// <summary>Only what the client sent — the material filed under the fixed "Client materials" type.</summary>
     ClientMaterial = 4,
 }
 

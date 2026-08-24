@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Saga.Core.Abstractions;
 using Saga.Infrastructure.Ai;
 
 namespace Saga.Tests;
@@ -77,14 +78,56 @@ public class PricingTests
         Assert.Equal(0m, pricing.EstimateLlmUsd("", 200_000, 40_000));
     }
 
-    [Fact]
-    public void Extraction_is_priced_per_thousand_pages()
-    {
-        var pricing = Service(("Pricing:ContentUnderstanding:prebuilt-layout:Per1000Pages", "10"));
+    private static PricingService Extraction() => Service(
+        ("Pricing:ContentUnderstanding:DocumentPagesMinimalPer1000", "0.01"),
+        ("Pricing:ContentUnderstanding:DocumentPagesBasicPer1000", "1.00"),
+        ("Pricing:ContentUnderstanding:DocumentPagesStandardPer1000", "5.00"),
+        ("Pricing:ContentUnderstanding:ContextualizationTokensPer1000", "0.001"));
 
-        Assert.Equal(0.12m, pricing.EstimateExtractionUsd("prebuilt-layout", 12));
-        Assert.Equal(0m, pricing.EstimateExtractionUsd("prebuilt-layout", 0));
-        Assert.Equal(0m, pricing.EstimateExtractionUsd("unknown-analyzer", 12));
+    /// <summary>
+    /// The whole point of the meter split: the same analyzer charges 500× more for a page of a
+    /// scanned PDF than for a page of a .docx, so one blended rate could only ever be wrong for one
+    /// of them. A tender and the screenshots inside it hit both meters on the same upload.
+    /// </summary>
+    [Fact]
+    public void Each_extraction_meter_is_priced_at_its_own_rate()
+    {
+        var pricing = Extraction();
+
+        // 1000 minimal pages at 0.01/1000.
+        Assert.Equal(0.01m, pricing.EstimateExtractionUsd(new ExtractionUsage(1000, 0, 0)));
+        // 20 basic pages at 1.00/1000.
+        Assert.Equal(0.02m, pricing.EstimateExtractionUsd(new ExtractionUsage(0, 20, 0)));
+        // A single standard page — one screenshot lifted out of a .docx — at 5.00/1000.
+        Assert.Equal(0.005m, pricing.EstimateExtractionUsd(new ExtractionUsage(0, 0, 1)));
+    }
+
+    [Fact]
+    public void A_call_spanning_several_meters_sums_them()
+    {
+        // 10 minimal (0.0001) + 4 basic (0.004) + 2 standard (0.01) + 3000 tokens (0.003).
+        Assert.Equal(0.0171m, Extraction().EstimateExtractionUsd(new ExtractionUsage(10, 4, 2, 3000)));
+    }
+
+    /// <summary>
+    /// Unknown is not free. The service reporting nothing means we cannot say what it cost, and the
+    /// caller warns about it — but pricing still may not throw in the middle of an upload.
+    /// </summary>
+    [Fact]
+    public void Unreported_usage_costs_zero_rather_than_throwing()
+    {
+        Assert.Equal(0m, Extraction().EstimateExtractionUsd(null));
+        Assert.Equal(0m, Extraction().EstimateExtractionUsd(ExtractionUsage.Free));
+    }
+
+    [Fact]
+    public void An_unpriced_meter_costs_zero_without_dragging_down_the_priced_ones()
+    {
+        // Only Standard is configured; Minimal pages are unpriced and must not throw.
+        var pricing = Service(("Pricing:ContentUnderstanding:DocumentPagesStandardPer1000", "5.00"));
+
+        Assert.Equal(0m, pricing.EstimateExtractionUsd(new ExtractionUsage(1000, 0, 0)));
+        Assert.Equal(0.01m, pricing.EstimateExtractionUsd(new ExtractionUsage(1000, 0, 2)));
     }
 
     [Fact]

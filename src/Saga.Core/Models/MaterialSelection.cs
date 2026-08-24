@@ -26,7 +26,7 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
     /// <summary>
     /// The presets a chat can be started from, narrowest first — which is also the order
     /// <see cref="PresetOrCustom"/> resolves ties in, so a proposal holding nothing but client
-    /// material reads as "Client material" rather than as the wider preset selecting the same rows.
+    /// material reads as "Client materials" rather than as the wider preset selecting the same rows.
     /// </summary>
     public static readonly WorkingContextKind[] ChatPresets =
         [WorkingContextKind.ClientMaterial, WorkingContextKind.SourceMaterial, WorkingContextKind.FullProject];
@@ -64,7 +64,7 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
     }
 
     /// <summary>
-    /// Material filed under the fixed "Client material" category. Matched by the type's name
+    /// Material filed under the fixed "Client materials" category. Matched by the type's name
     /// rather than an id, since the category is per-proposal but its name is not.
     /// </summary>
     private static bool IsClientMaterial(Document document)

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Infrastructure.Data;
@@ -56,6 +56,38 @@ public class DocumentService(
         db.DocumentTypes.Add(type);
         await db.SaveChangesAsync(ct);
         return type;
+    }
+
+    /// <summary>
+    /// Renames a type added to this proposal. The two seeded categories keep their names - they
+    /// are recognised by name, so renaming one would strand the material filed under it - and a
+    /// custom type cannot take one of those names either. The name is what the AI sees the
+    /// category called, so a rename counts as a material change.
+    /// </summary>
+    public async Task RenameTypeAsync(Guid typeId, Guid userId, string name, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var type = await db.DocumentTypes.FirstAsync(t => t.Id == typeId, ct);
+        await ProposalService.EnsureRoleAsync(db, type.ProposalId, userId, ProposalRole.Editor, ct);
+
+        if (type.IsFixed)
+            throw new InvalidOperationException(
+                $"'{type.Name}' is one of the standard categories and keeps its name.");
+
+        name = name.Trim();
+        if (name.Length == 0)
+            throw new InvalidOperationException("A document type needs a name.");
+        if (type.Name == name) return;
+        if (DocumentType.IsFixedName(name))
+            throw new InvalidOperationException($"'{name}' is reserved for a standard category.");
+
+        var existing = await LoadTypesAsync(db, type.ProposalId, ct);
+        if (existing.Any(t => t.Id != typeId && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"This proposal already has a '{name}' type.");
+
+        type.Name = name;
+        await MarkMaterialChangedAsync(db, type.ProposalId, DateTimeOffset.UtcNow, ct);
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>

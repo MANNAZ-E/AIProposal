@@ -111,13 +111,20 @@ App Service → **Environment variables / App settings** (colon `:` becomes doub
 | `Pricing__Models__gpt-5.6-luna__InputPer1M` | current USD/1M input tokens (Luna) |
 | `Pricing__Models__gpt-5.6-luna__CachedInputPer1M` | current USD/1M cached input tokens (Luna) |
 | `Pricing__Models__gpt-5.6-luna__OutputPer1M` | current USD/1M output tokens (Luna) |
-| `Pricing__ContentUnderstanding__prebuilt-layout__Per1000Pages` | current USD per 1000 pages analysed |
+| `Pricing__ContentUnderstanding__DocumentPagesMinimalPer1000` | USD/1000 pages, digital files (docx, pptx, xlsx) |
+| `Pricing__ContentUnderstanding__DocumentPagesBasicPer1000` | USD/1000 pages, OCR without layout |
+| `Pricing__ContentUnderstanding__DocumentPagesStandardPer1000` | USD/1000 pages, layout on PDFs and images |
+| `Pricing__ContentUnderstanding__ContextualizationTokensPer1000` | USD/1000 tokens; 0 usage under prebuilt-layout |
 | `Pricing__UsdToDkk` | DKK per USD, for display only (leave unset to show USD) |
 
 Prices are entered in **USD** because that is what Microsoft publishes, so they can be copied
 from the Azure pricing pages without conversion; the app converts to DKK when rendering. Rates are
 keyed by **deployment name** — adding a third model means adding a `Pricing__Models__<name>__*`
-pair, not changing code. A model with no configured rate is still logged, at zero cost, with a
+pair, not changing code. Content Understanding rates are keyed by **meter** instead, because the
+service charges for the work it performed rather than the analyzer asked for: the same
+`prebuilt-layout` call bills Minimal on a .docx and Standard on a PDF or an embedded screenshot.
+West Europe list prices at the time of writing were 0.01 / 1.00 / 5.00 USD per 1000 pages; check
+`prices.azure.com` for your region (filter `contains(meterName,'Doc Content Extraction')`). A model with no configured rate is still logged, at zero cost, with a
 warning in the app log. Enter the **short-context** rates: the working context is capped at
 `AzureOpenAI__ContextTokenBudget`, so calls stay below the long-context threshold. Cached input is
 priced separately at `CachedInputPer1M` and only the uncached remainder at `InputPer1M`; omit the

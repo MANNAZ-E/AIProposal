@@ -23,7 +23,7 @@ public class PipelineTests
     [Fact]
     public void Source_material_context_contains_documents_and_notes_but_no_artifacts()
     {
-        var client = new DocumentType { Name = "Client material", SortOrder = 0 };
+        var client = new DocumentType { Name = "Client materials", SortOrder = 0 };
         var documents = new List<Document>
         {
             new() { Name = "tender.pdf", Kind = DocumentKind.Upload, ExtractedText = "TENDER-TEXT", DocumentType = client },
@@ -46,8 +46,8 @@ public class PipelineTests
     [Fact]
     public void Documents_are_grouped_by_type_in_the_types_own_priority_order()
     {
-        var client = new DocumentType { Name = "Client material", SortOrder = 0 };
-        var mannaz = new DocumentType { Name = "Mannaz material", SortOrder = 1 };
+        var client = new DocumentType { Name = "Client materials", SortOrder = 0 };
+        var mannaz = new DocumentType { Name = "Mannaz materials", SortOrder = 1 };
         var documents = new List<Document>
         {
             // Deliberately added lowest-priority first: the type's order decides, not insertion.
@@ -58,11 +58,11 @@ public class PipelineTests
 
         var context = WorkingContextBuilder.Build(WorkingContextKind.SourceMaterial, documents, []);
 
-        Assert.Contains("<category name=\"Client material\">", context);
-        Assert.Contains("<category name=\"Mannaz material\">", context);
+        Assert.Contains("<category name=\"Client materials\">", context);
+        Assert.Contains("<category name=\"Mannaz materials\">", context);
         Assert.True(context.IndexOf("CLIENT-TEXT") < context.IndexOf("MANNAZ-TEXT"));
         // A note keeps its category as an attribute but stays in the lower-priority notes block.
-        Assert.Contains("category=\"Mannaz material\"", context);
+        Assert.Contains("category=\"Mannaz materials\"", context);
         Assert.True(context.IndexOf("MANNAZ-TEXT") < context.IndexOf("NOTE-TEXT"));
     }
 

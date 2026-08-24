@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Saga.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Saga.Infrastructure.Data;
 namespace Saga.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(SagaDbContext))]
-    partial class SagaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260824181725_DocumentTypeNamesPlural")]
+    partial class DocumentTypeNamesPlural
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -31,13 +34,7 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.Property<int?>("ArtifactType")
                         .HasColumnType("int");
 
-                    b.Property<int?>("BasicPages")
-                        .HasColumnType("int");
-
                     b.Property<int>("CachedInputTokens")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ContextualizationTokens")
                         .HasColumnType("int");
 
                     b.Property<TimeSpan>("Duration")
@@ -61,9 +58,6 @@ namespace Saga.Infrastructure.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<int?>("MinimalPages")
-                        .HasColumnType("int");
-
                     b.Property<string>("Model")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -81,6 +75,9 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.Property<int>("OutputTokens")
                         .HasColumnType("int");
 
+                    b.Property<int>("PageCount")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("ProposalId")
                         .HasColumnType("uniqueidentifier");
 
@@ -91,9 +88,6 @@ namespace Saga.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Service")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("StandardPages")
                         .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("StartedAt")
@@ -110,7 +104,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProposalId", "StartedAt");
 
-                    b.ToTable("AiUsage", (string)null);
+                    b.ToTable("AiUsage");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.Artifact", b =>
@@ -154,7 +148,7 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.HasIndex("ProposalId", "Type")
                         .IsUnique();
 
-                    b.ToTable("Artifacts", (string)null);
+                    b.ToTable("Artifacts");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.ArtifactVersion", b =>
@@ -187,7 +181,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("ArtifactId", "CreatedAt");
 
-                    b.ToTable("ArtifactVersions", (string)null);
+                    b.ToTable("ArtifactVersions");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.ChatMessage", b =>
@@ -221,7 +215,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("ChatSessionId", "CreatedAt");
 
-                    b.ToTable("ChatMessages", (string)null);
+                    b.ToTable("ChatMessages");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.ChatSeen", b =>
@@ -246,7 +240,7 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.HasIndex("ChatSessionId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("ChatSeen", (string)null);
+                    b.ToTable("ChatSeen");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.ChatSession", b =>
@@ -292,7 +286,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProposalId", "LastMessageAt");
 
-                    b.ToTable("ChatSessions", (string)null);
+                    b.ToTable("ChatSessions");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.Document", b =>
@@ -345,7 +339,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("ProposalId");
 
-                    b.ToTable("Documents", (string)null);
+                    b.ToTable("Documents");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.DocumentType", b =>
@@ -373,7 +367,7 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.HasIndex("ProposalId", "Name")
                         .IsUnique();
 
-                    b.ToTable("DocumentTypes", (string)null);
+                    b.ToTable("DocumentTypes");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.DocumentVersion", b =>
@@ -404,7 +398,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("DocumentId", "CreatedAt");
 
-                    b.ToTable("DocumentVersions", (string)null);
+                    b.ToTable("DocumentVersions");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.FinalProposalFile", b =>
@@ -436,7 +430,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("VersionId");
 
-                    b.ToTable("FinalProposalFiles", (string)null);
+                    b.ToTable("FinalProposalFiles");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.FinalProposalVersion", b =>
@@ -474,7 +468,7 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.HasIndex("ProposalId", "Number")
                         .IsUnique();
 
-                    b.ToTable("FinalProposalVersions", (string)null);
+                    b.ToTable("FinalProposalVersions");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.MannazVoiceSettings", b =>
@@ -500,7 +494,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("MannazVoiceSettings", (string)null);
+                    b.ToTable("MannazVoiceSettings");
 
                     b.HasData(
                         new
@@ -569,7 +563,7 @@ namespace Saga.Infrastructure.Data.Migrations
 
                     b.HasIndex("OwnerId");
 
-                    b.ToTable("Proposals", (string)null);
+                    b.ToTable("Proposals");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.ProposalMember", b =>
@@ -597,7 +591,7 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.HasIndex("ProposalId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("ProposalMembers", (string)null);
+                    b.ToTable("ProposalMembers");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.User", b =>
@@ -632,7 +626,7 @@ namespace Saga.Infrastructure.Data.Migrations
                         .IsUnique()
                         .HasFilter("[EntraObjectId] IS NOT NULL");
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
 
                     b.HasData(
                         new

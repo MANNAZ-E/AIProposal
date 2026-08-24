@@ -42,8 +42,11 @@ against LocalDB and the offline stand-in AI (no Azure endpoints configured local
 7. **Token prices — verify against a real call.** The GPT-5.6 rates are now entered
    (`Pricing:Models:gpt-5.6-terra` / `gpt-5.6-luna`, input + cached input + output, USD per
    1M, short-context tier, checked 2026-08-24). Still open:
-   - `Pricing:ContentUnderstanding:prebuilt-layout:Per1000Pages` is still `0` in
-     `appsettings.json`, so extraction records at zero cost in production.
+   - Extraction rates are now entered per meter (`Pricing:ContentUnderstanding:DocumentPages
+     Minimal/Basic/StandardPer1000`, West Europe list prices from the Azure retail price feed) and
+     `PricingConfigurationTests` fails if any of them is left at 0. Still worth confirming against a
+     real upload that a .docx records **Minimal** pages and each figure **Standard** — a row with no
+     pages at all means the service reported no usage and the app logs a warning for it.
    - `Pricing:UsdToDkk` is `0` in production (usage pages show USD). Dev uses 6.9. Note that
      Azure bills DKK at a monthly fixed FX rate, so a hand-set constant is an approximation.
    - On the first real generation, check the Usage tab shows non-zero input/output tokens **and**

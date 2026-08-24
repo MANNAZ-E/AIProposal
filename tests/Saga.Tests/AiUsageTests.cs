@@ -66,7 +66,9 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
         Assert.Equal("keep it short", record.InstructionText);
         Assert.True(record.InputTokens > 0);
         Assert.True(record.OutputTokens > 0);
-        Assert.Equal(0, record.PageCount);
+        // An LLM call has no billed pages — null, not zero, so it can never be mistaken for a
+        // Content Understanding call that came back without its quantities.
+        Assert.Null(record.Pages);
 
         // Priced from the fake-model rates in TestServices.Pricing.
         Assert.True(record.EstimatedCostUsd > 0m);
@@ -181,11 +183,40 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
         Assert.Equal(AiOperation.ExtractDocument, record.Operation);
         Assert.Equal("prebuilt-layout", record.Model);
         Assert.Equal("tender.pdf", record.Label);
-        Assert.Equal(4, record.PageCount);
+        // The stub reports what a scanned PDF bills: 4 pages on the Standard meter.
+        Assert.Equal(4, record.StandardPages);
+        Assert.Equal(0, record.MinimalPages);
+        Assert.Equal(4, record.Pages);
         Assert.Equal(0, record.InputTokens);
-        // 4 pages at 10 USD / 1000 pages.
-        Assert.Equal(0.04m, record.EstimatedCostUsd);
+        // 4 standard pages at 5.00 USD / 1000 pages.
+        Assert.Equal(0.02m, record.EstimatedCostUsd);
         Assert.Contains("tender.pdf", record.RequestText);
+    }
+
+    /// <summary>
+    /// The bug this whole split exists for: page <em>geometry</em> was used as the billing unit, and
+    /// Office files come back with none, so every Office upload recorded a plausible-looking 0.00
+    /// while Azure charged for it. An unreported quantity must now read as unknown — null, not zero —
+    /// so it can never again be mistaken for a free call.
+    /// </summary>
+    [Fact]
+    public async Task An_extraction_that_reports_no_quantities_is_recorded_as_unknown_not_free()
+    {
+        var (elv, proposalId) = await SetupAsync(material: null);
+        var extractor = TestServices.Extractor(db, new SilentExtractorStub());
+        var documents = new DocumentService(db, new TempDirStorage(_storageDir), extractor);
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("tender content"));
+        await documents.UploadAsync(proposalId, elv, "tender.docx", stream);
+
+        await using var check = db.CreateDbContext();
+        var record = check.AiUsage.Single(r => r.ProposalId == proposalId);
+
+        Assert.Equal(GenerationOutcome.Succeeded, record.Outcome);
+        Assert.Null(record.MinimalPages);
+        Assert.Null(record.StandardPages);
+        Assert.Null(record.Pages);
+        Assert.Equal(0m, record.EstimatedCostUsd);
     }
 
     [Fact]
@@ -222,7 +253,7 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
         var usage = await TestServices.Usage(db).GetProposalUsageAsync(proposalId, elv);
 
         Assert.Equal(2, usage.Totals.Calls);
-        Assert.Equal(4, usage.Totals.PageCount);
+        Assert.Equal(4, usage.Totals.Pages);
         Assert.Equal(2, usage.Breakdown.Count);
         Assert.Contains(usage.Breakdown, b => b.Service == AiServiceKind.AzureOpenAI && b.Model == "fake-model");
         Assert.Contains(usage.Breakdown, b => b.Service == AiServiceKind.ContentUnderstanding
@@ -243,14 +274,25 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
             () => TestServices.Usage(db).GetProposalUsageAsync(proposalId, sda));
     }
 
-    /// <summary>Reports a page count, like the real Content Understanding extractor does.</summary>
+    /// <summary>Reports billed quantities the way the real extractor reads them off Azure.</summary>
     private sealed class FakeDocumentExtractorStub : IDocumentTextExtractor
     {
         public IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string> { ".pdf" };
 
         public Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
             AiCallContext? context = null, CancellationToken ct = default)
-            => Task.FromResult(new ExtractionResult("extracted markdown", [new PageSpan(1, 0, 10)], PageCount: 4));
+            => Task.FromResult(new ExtractionResult("extracted markdown", [new PageSpan(1, 0, 10)],
+                new ExtractionUsage(MinimalPages: 0, BasicPages: 0, StandardPages: 4)));
+    }
+
+    /// <summary>Succeeds but reports no usage — what an Office upload looked like before the fix.</summary>
+    private sealed class SilentExtractorStub : IDocumentTextExtractor
+    {
+        public IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string> { ".docx" };
+
+        public Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
+            AiCallContext? context = null, CancellationToken ct = default)
+            => Task.FromResult(new ExtractionResult("extracted markdown", [new PageSpan(1, 0, 10)]));
     }
 
     private sealed class ThrowingExtractorStub : IDocumentTextExtractor

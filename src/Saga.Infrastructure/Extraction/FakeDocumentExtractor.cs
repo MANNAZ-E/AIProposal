@@ -38,7 +38,15 @@ public class FakeDocumentExtractor : IDocumentTextExtractor
             Questions can be submitted in writing. The placeholder ends here — edit this text via
             "Edit text" if you want to work with real content before Azure is wired up.
             """;
-        // Reports one page so the usage decorator has a plausible billing unit to record.
-        return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)], PageCount: 1);
+        return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)], Billed(fileName));
     }
+
+    /// <summary>
+    /// Mirrors which meter the real service would charge, so an offline run shows the same shape of
+    /// number as a real one: a digital Office file is Minimal, anything image-based is Standard.
+    /// </summary>
+    private static ExtractionUsage Billed(string fileName)
+        => OfficeImageReader.Extensions.Contains(Path.GetExtension(fileName).ToLowerInvariant())
+            ? new ExtractionUsage(MinimalPages: 1, BasicPages: 0, StandardPages: 0)
+            : new ExtractionUsage(MinimalPages: 0, BasicPages: 0, StandardPages: 1);
 }
