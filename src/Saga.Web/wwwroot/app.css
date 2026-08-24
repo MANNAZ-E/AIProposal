@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --saga-primary: #5A616D;
     --saga-primary-dark: #464c56;
     --saga-primary-light: #eceef1;
@@ -572,12 +572,28 @@ button.upload-area {
     margin: 2rem 0 0.75rem;
 }
 
-/* Type picker above the upload/note drop areas. */
+/* Text boxes and selects on this page: the settings form's look, one size down. */
+.material-input {
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--saga-border);
+    border-radius: 6px;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.material-input:focus {
+    outline: 2px solid var(--saga-primary);
+    outline-offset: -1px;
+}
+
+/* Type picker under the upload/note drop areas. */
 .type-picker {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    margin-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
 }
 
 .type-picker label {
@@ -589,6 +605,48 @@ button.upload-area {
 .type-picker select {
     width: auto;
     min-width: 14rem;
+}
+
+/* The row's name cell: the title, its rename handle, and the file it came from. */
+.name-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.rename-button {
+    border: none;
+    background: none;
+    padding: 0 0.15rem;
+    font-size: 0.85rem;
+    line-height: 1;
+    color: var(--saga-muted);
+    cursor: pointer;
+    opacity: 0;
+}
+
+tr:hover .rename-button,
+.rename-button:focus {
+    opacity: 1;
+}
+
+.rename-button:hover {
+    color: var(--saga-text);
+}
+
+.rename-input {
+    width: 100%;
+    max-width: 22rem;
+}
+
+.name-original {
+    font-size: 0.78rem;
+    color: var(--saga-muted);
+    margin-top: 0.15rem;
+}
+
+.modal-source {
+    margin: -0.6rem 0 0.9rem;
 }
 
 /* The row's type cell: reads as text until clicked, then becomes the select. */
@@ -607,8 +665,6 @@ button.upload-area {
 .type-select {
     width: auto;
     min-width: 11rem;
-    padding: 0.2rem 0.4rem;
-    font-size: 0.85rem;
 }
 
 .type-list {
@@ -780,6 +836,15 @@ button.upload-area {
 }
 
 /* ---------- Generate section ---------- */
+
+/* Bulk check/uncheck, sitting above the option list and separated from it by the
+   same divider the option rows use. */
+.gen-bulk {
+    display: flex;
+    gap: 0.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--saga-border);
+}
 
 /* One row per artifact: the checkbox line plus any settings that belong to it.
    The divider sits on the group so sub-options stay on the same side of the line

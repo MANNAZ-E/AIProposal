@@ -136,7 +136,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         var types = await service.GetTypesAsync(proposalId, elv);
 
-        Assert.Equal(["Client documents", "Mannaz documents"], types.Select(t => t.Name));
+        Assert.Equal(["Client material", "Mannaz material"], types.Select(t => t.Name));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         var upload = await service.UploadAsync(proposalId, elv, "tender.pdf", stream);
 
         Assert.Equal(first.Id, upload.DocumentTypeId);
-        Assert.Equal("Client documents", first.Name);
+        Assert.Equal("Client material", first.Name);
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         Assert.Equal("Tender annexes", added.Name);
         var types = await service.GetTypesAsync(proposalId, elv);
-        Assert.Equal(["Client documents", "Mannaz documents", "Tender annexes"], types.Select(t => t.Name));
+        Assert.Equal(["Client material", "Mannaz material", "Tender annexes"], types.Select(t => t.Name));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.AddTypeAsync(proposalId, elv, "tender annexes"));
@@ -205,10 +205,33 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         // The empty one goes; the last remaining type stays, since every document needs one.
         await service.RemoveTypeAsync(mannaz.Id, elv);
-        Assert.Equal(["Client documents"], (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
+        Assert.Equal(["Client material"], (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
 
         await service.DeleteAsync(upload.Id, elv);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.RemoveTypeAsync(client.Id, elv));
+    }
+
+    [Fact]
+    public async Task An_upload_can_be_renamed_and_keeps_the_file_it_came_from()
+    {
+        var (elv, sda, proposalId) = await SetupAsync();
+        await _proposals.ShareAsync(proposalId, elv, "sda@mannaz.com", ProposalRole.Reader);
+        var service = CreateService();
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
+        var upload = await service.UploadAsync(proposalId, elv, "RFP_final_v3 (2).pdf", stream);
+        Assert.Equal("RFP_final_v3 (2).pdf", upload.Name);
+        Assert.Equal("RFP_final_v3 (2).pdf", upload.OriginalFileName);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => service.RenameAsync(upload.Id, sda, "Tender"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameAsync(upload.Id, elv, "   "));
+
+        await service.RenameAsync(upload.Id, elv, "  Tender brief  ");
+        var reloaded = Assert.Single(await service.GetForProposalAsync(proposalId, elv));
+        Assert.Equal("Tender brief", reloaded.Name);
+        Assert.Equal("RFP_final_v3 (2).pdf", reloaded.OriginalFileName);
     }
 
     [Fact]
@@ -227,7 +250,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         await service.SetDocumentTypeAsync(upload.Id, elv, types[1].Id);
         var reloaded = Assert.Single(await service.GetForProposalAsync(proposalId, elv));
-        Assert.Equal("Mannaz documents", reloaded.DocumentType!.Name);
+        Assert.Equal("Mannaz material", reloaded.DocumentType!.Name);
 
         var otherProposal = await _proposals.CreateAsync(elv, "Other", "C", null, OutputFormat.PowerPoint);
         var foreignType = (await service.GetTypesAsync(otherProposal, elv))[0];

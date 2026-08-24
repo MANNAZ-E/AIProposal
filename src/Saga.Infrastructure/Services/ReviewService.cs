@@ -46,13 +46,21 @@ public class ReviewService(
         if (ContentPayload.FromJson(contentArtifact?.ContentJson).Units.Count == 0)
             throw new InvalidOperationException("There is no proposal content to review yet. Generate content first.");
 
-        var systemPrompt = ReviewPrompts.BuildSystemPrompt(proposal, requirements);
+        // System prompt, then material, then the instruction: the review is re-run as the draft
+        // changes, so the requirements list and working context sit in front of the task and stay
+        // cacheable between runs.
+        var systemPrompt = ReviewPrompts.BuildSystemPrompt(proposal);
         var context = WorkingContextBuilder.Build(WorkingContextKind.FullProject,
             loaded.Documents, loaded.Artifacts,
             excludeArtifact: ArtifactType.Review, useCondensedDocuments: loaded.UseCondensed);
 
         var operationId = Guid.NewGuid();
-        var request = new AiRequest(systemPrompt, [AiMessage.User(context)],
+        var request = new AiRequest(systemPrompt,
+            [
+                AiMessage.User(ReviewPrompts.BuildRequirementsMessage(requirements)),
+                AiMessage.User(context),
+                AiMessage.User(ReviewPrompts.Instruction),
+            ],
             Context: new AiCallContext(operationId, AiOperation.ReviewDraft, proposalId, userId,
                 ArtifactType: ArtifactType.Review));
 

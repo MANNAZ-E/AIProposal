@@ -23,6 +23,13 @@
 }
 
 <div class="card">
+    <div class="gen-bulk">
+        <button class="btn btn-outline btn-sm" @onclick="CheckAll"
+                disabled="@(_running || _selected.Count == Selectable.Count())">Check all</button>
+        <button class="btn btn-outline btn-sm" @onclick="UncheckAll"
+                disabled="@(_running || _selected.Count == 0)">Uncheck all</button>
+    </div>
+
     <div class="gen-options">
     @foreach (var option in Options)
     {
@@ -165,12 +172,25 @@
     {
         if (_defaultsApplied) return;
         _defaultsApplied = true;
-        foreach (var option in Options)
-        {
-            var artifact = _artifacts.FirstOrDefault(a => a.Type == option.Type);
-            if (artifact?.IsLocked != true)
-                _selected.Add(option.Type);
-        }
+        CheckAll();
+    }
+
+    /// <summary>Everything the user is allowed to tick — locked artifacts are skipped anyway.</summary>
+    private IEnumerable<ArtifactType> Selectable => Options
+        .Select(o => o.Type)
+        .Where(t => _artifacts.FirstOrDefault(a => a.Type == t)?.IsLocked != true);
+
+    private void CheckAll()
+    {
+        foreach (var type in Selectable)
+            _selected.Add(type);
+        UpdateRecommendations();
+    }
+
+    private void UncheckAll()
+    {
+        _selected.Clear();
+        UpdateRecommendations();
     }
 
     private void Toggle(ArtifactType type, bool selected)

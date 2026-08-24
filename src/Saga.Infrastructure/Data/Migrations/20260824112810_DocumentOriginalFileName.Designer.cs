@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Saga.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using Saga.Infrastructure.Data;
 namespace Saga.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(SagaDbContext))]
-    partial class SagaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260824112810_DocumentOriginalFileName")]
+    partial class DocumentOriginalFileName
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -215,73 +218,21 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.ToTable("ChatMessages");
                 });
 
-            modelBuilder.Entity("Saga.Core.Domain.ChatSeen", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ChatSessionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTimeOffset>("LastSeenAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("ChatSessionId", "UserId")
-                        .IsUnique();
-
-                    b.ToTable("ChatSeen");
-                });
-
             modelBuilder.Entity("Saga.Core.Domain.ChatSession", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("ContextSnapshot")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
-
-                    b.Property<DateTimeOffset>("LastMessageAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("MaterialSelectionJson")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<Guid>("OwnerId")
-                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("ProposalId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("Visibility")
-                        .HasColumnType("int");
-
-                    b.Property<int>("WorkingContext")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("OwnerId");
-
-                    b.HasIndex("ProposalId", "LastMessageAt");
+                    b.HasIndex("ProposalId");
 
                     b.ToTable("ChatSessions");
                 });
@@ -706,40 +657,13 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.Navigation("ChatSession");
                 });
 
-            modelBuilder.Entity("Saga.Core.Domain.ChatSeen", b =>
-                {
-                    b.HasOne("Saga.Core.Domain.ChatSession", "ChatSession")
-                        .WithMany("Seen")
-                        .HasForeignKey("ChatSessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Saga.Core.Domain.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ChatSession");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("Saga.Core.Domain.ChatSession", b =>
                 {
-                    b.HasOne("Saga.Core.Domain.User", "Owner")
-                        .WithMany()
-                        .HasForeignKey("OwnerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("Saga.Core.Domain.Proposal", "Proposal")
                         .WithMany("ChatSessions")
                         .HasForeignKey("ProposalId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Owner");
 
                     b.Navigation("Proposal");
                 });
@@ -859,8 +783,6 @@ namespace Saga.Infrastructure.Data.Migrations
             modelBuilder.Entity("Saga.Core.Domain.ChatSession", b =>
                 {
                     b.Navigation("Messages");
-
-                    b.Navigation("Seen");
                 });
 
             modelBuilder.Entity("Saga.Core.Domain.Document", b =>

@@ -59,6 +59,13 @@ reconstructed later.
   publishes); `Pricing:UsdToDkk` converts for display only. Cost is frozen on the row at write
   time. `PricingService` returns 0 for an unpriced model rather than throwing — metering must
   never break a generation.
+- **Every prompt is assembled system prompt → material → instruction**, and new call sites must keep
+  that order. The system prompt holds only what is stable for the proposal (persona, voice, language,
+  source rules); the client material comes next; the task, the output contract and any steering the
+  consultant typed go in a trailing user message. Anything variable placed ahead of the material
+  shifts every byte of the tender and re-charges it at full input price — which is why a per-unit task
+  in the system prompt cost the whole working context once per slide. `PromptOrderTests` pins this
+  down; the order is invisible in the output, so nothing else would catch a regression.
 - Input tokens the provider served from its cache are billed at `CachedInputPer1M`, a fraction of
   the input rate, and only the uncached remainder at `InputPer1M` — it matters because the system
   prompt and working context repeat across every call of a run. Omitting the key falls back to the

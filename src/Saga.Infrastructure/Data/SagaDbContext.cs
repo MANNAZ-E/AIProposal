@@ -61,6 +61,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
         {
             b.Property(d => d.Name).HasMaxLength(500);
             b.Property(d => d.OriginalFilePath).HasMaxLength(1024);
+            b.Property(d => d.OriginalFileName).HasMaxLength(500);
             b.HasOne(d => d.Proposal).WithMany(p => p.Documents).HasForeignKey(d => d.ProposalId).OnDelete(DeleteBehavior.Cascade);
             // Restrict, not Cascade: deleting a proposal already cascades from Proposal, and a
             // type may only be removed once it holds no documents.

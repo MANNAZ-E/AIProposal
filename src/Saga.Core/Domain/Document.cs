@@ -16,6 +16,12 @@ public class Document
     /// <summary>Storage path of the original uploaded file. Null for notes.</summary>
     public string? OriginalFilePath { get; set; }
 
+    /// <summary>
+    /// The file's name as uploaded. <see cref="Name"/> starts as a copy of it and can be renamed,
+    /// so this stays as the record of where the material came from. Null for notes.
+    /// </summary>
+    public string? OriginalFileName { get; set; }
+
     /// <summary>Extracted plain text (uploads) or the note text itself.</summary>
     public string ExtractedText { get; set; } = "";
 

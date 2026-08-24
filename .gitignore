@@ -483,3 +483,7 @@ $RECYCLE.BIN/
 
 # Local scratch script archive
 /elv/Archive/
+
+
+# Worktrees
+.claude/worktrees/

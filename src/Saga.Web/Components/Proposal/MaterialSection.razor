@@ -1,4 +1,4 @@
-﻿@using Saga.Core.Abstractions
+@using Saga.Core.Abstractions
 @inject DocumentService Documents
 @inject CurrentUserService CurrentUser
 @inject IDocumentTextExtractor TextExtractor
@@ -13,15 +13,6 @@
 @if (CanEdit)
 {
     <h3 class="material-heading">Upload files</h3>
-    <div class="type-picker">
-        <label for="upload-type">Document type</label>
-        <select id="upload-type" @bind="_uploadTypeId" disabled="@_uploading">
-            @foreach (var type in _types)
-            {
-                <option value="@type.Id">@type.Name</option>
-            }
-        </select>
-    </div>
     <label class="upload-area">
         <InputFile OnChange="UploadAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
@@ -33,30 +24,59 @@
             <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, Excel, images, text</span>
         }
     </label>
-
-    <h3 class="material-heading">Add note</h3>
     <div class="type-picker">
-        <label for="note-type">Document type</label>
-        <select id="note-type" @bind="_noteTypeId">
+        <label for="upload-type">Document type</label>
+        <select id="upload-type" class="material-input" @bind="_uploadTypeId" disabled="@_uploading">
             @foreach (var type in _types)
             {
                 <option value="@type.Id">@type.Name</option>
             }
         </select>
     </div>
+
+    <h3 class="material-heading">Add note</h3>
     <button type="button" class="upload-area" @onclick="NewNote">
         <span><strong>Add note</strong></span>
     </button>
+    <div class="type-picker">
+        <label for="note-type">Document type</label>
+        <select id="note-type" class="material-input" @bind="_noteTypeId">
+            @foreach (var type in _types)
+            {
+                <option value="@type.Id">@type.Name</option>
+            }
+        </select>
+    </div>
 }
 
 @{
     RenderFragment<Document> documentRow = doc =>
         @<tr>
             <td>
-                <button type="button" class="link-button" @onclick="() => _previewDocument = doc">@doc.Name</button>
-                @if (doc.Kind == DocumentKind.Note)
+                @if (_renameDocument?.Id == doc.Id)
                 {
-                    <span class="badge badge-role">Note</span>
+                    <input @ref="_renameInput" class="material-input rename-input" maxlength="500"
+                           @bind="_renameValue" @bind:event="oninput"
+                           @onkeydown="RenameKeyDownAsync" @onblur="SaveRenameAsync" />
+                }
+                else
+                {
+                    <div class="name-cell">
+                        <button type="button" class="link-button" @onclick="() => _previewDocument = doc">@doc.Name</button>
+                        @if (doc.Kind == DocumentKind.Note)
+                        {
+                            <span class="badge badge-role">Note</span>
+                        }
+                        @if (CanEdit)
+                        {
+                            <button type="button" class="rename-button" title="Rename"
+                                    @onclick="() => BeginRename(doc)">✎</button>
+                        }
+                    </div>
+                    @if (RenamedFrom(doc) is { } original)
+                    {
+                        <div class="name-original" title="Original file name">@original</div>
+                    }
                 }
             </td>
             <td>
@@ -66,7 +86,7 @@
                 }
                 else if (_typeEditDocument?.Id == doc.Id)
                 {
-                    <select @ref="_typeSelect" class="type-select"
+                    <select @ref="_typeSelect" class="material-input type-select"
                             @bind:get="doc.DocumentTypeId"
                             @bind:set="value => ChangeTypeAsync(doc, value)"
                             @onblur="() => _typeEditDocument = null">
@@ -139,10 +159,6 @@ else
     </table>
 
     <h3 class="material-heading">Document types</h3>
-    <p class="text-muted">
-        Material is filed under these categories. The order is also their priority when the AI
-        resolves a conflict between two documents, so the first type outranks the ones below it.
-    </p>
     <ul class="type-list">
         @foreach (var type in _types)
         {
@@ -161,7 +177,7 @@ else
     @if (CanEdit)
     {
         <div class="type-add">
-            <input type="text" placeholder="New document type" maxlength="200"
+            <input type="text" class="material-input" placeholder="New document type" maxlength="200"
                    @bind="_newTypeName" @bind:event="oninput" @onkeydown="NewTypeKeyDownAsync" />
             <button class="btn btn-outline btn-sm" @onclick="AddTypeAsync"
                     disabled="@(_busy || string.IsNullOrWhiteSpace(_newTypeName))">Add type</button>
@@ -174,6 +190,10 @@ else
     <div class="modal-backdrop" @onclick="() => _previewDocument = null">
         <div class="modal-panel modal-wide" @onclick:stopPropagation>
             <h2 class="modal-title">@_previewDocument.Name</h2>
+            @if (_previewDocument.OriginalFileName is { } original)
+            {
+                <p class="name-original modal-source">@original</p>
+            }
             <div class="preview-text">@_previewDocument.ExtractedText</div>
             <div class="modal-actions">
                 <button class="btn btn-outline" @onclick="() => _previewDocument = null">Close</button>
@@ -190,14 +210,24 @@ else
 {
     <div class="modal-backdrop" @onclick="CloseTextEditor">
         <div class="modal-panel modal-wide" @onclick:stopPropagation>
-            <h2 class="modal-title">Edit extracted text — @_textEditDocument.Name</h2>
+            <h2 class="modal-title">Edit document</h2>
             <div class="form-field">
-                <textarea rows="22" style="width: 100%; font-family: ui-monospace, monospace; font-size: 0.85rem;"
+                <label for="doc-title">Title</label>
+                <input id="doc-title" type="text" maxlength="500" @bind="_textEditTitle" />
+                @if (_textEditDocument.OriginalFileName is { } original)
+                {
+                    <p class="form-hint">Original file: @original</p>
+                }
+            </div>
+            <div class="form-field">
+                <label for="doc-text">Extracted text</label>
+                <textarea id="doc-text" rows="20"
+                          style="font-family: ui-monospace, monospace; font-size: 0.85rem;"
                           @bind="_textEditValue"></textarea>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-outline" @onclick="CloseTextEditor">Cancel</button>
-                <button class="btn btn-primary" @onclick="SaveTextEditAsync" disabled="@_busy">Save text</button>
+                <button class="btn btn-primary" @onclick="SaveTextEditAsync" disabled="@_busy">Save changes</button>
             </div>
         </div>
     </div>
@@ -326,12 +356,18 @@ else
     private ElementReference _typeSelect;
     private bool _focusTypeSelect;
 
+    private Document? _renameDocument;
+    private string _renameValue = "";
+    private ElementReference _renameInput;
+    private bool _focusRenameInput;
+
     private bool _noteEditorOpen;
     private Guid? _editingNoteId;
     private string _noteTitle = "";
     private string _noteText = "";
 
     private Document? _textEditDocument;
+    private string _textEditTitle = "";
     private string _textEditValue = "";
     private Document? _historyDocument;
     private List<DocumentVersion>? _historyVersions;
@@ -349,6 +385,13 @@ else
         {
             _focusTypeSelect = false;
             await _typeSelect.FocusAsync();
+        }
+
+        // Same for the name cell, which turns into a text box.
+        if (_focusRenameInput && _renameDocument is not null)
+        {
+            _focusRenameInput = false;
+            await _renameInput.FocusAsync();
         }
     }
 
@@ -379,6 +422,53 @@ else
         if (DocumentsIn(type.Id).Count > 0)
             return "Move or delete this type's material first.";
         return _types.Count > 1 ? null : "A proposal needs at least one document type.";
+    }
+
+    /// <summary>The file a renamed upload came from, or null when the name is still the file's own.</summary>
+    private static string? RenamedFrom(Document document)
+        => document.OriginalFileName is { } original && original != document.Name ? original : null;
+
+    private void BeginRename(Document document)
+    {
+        _renameDocument = document;
+        _renameValue = document.Name;
+        _focusRenameInput = true;
+    }
+
+    private async Task RenameKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SaveRenameAsync();
+        else if (e.Key == "Escape")
+            _renameDocument = null;
+    }
+
+    /// <summary>
+    /// Commits the inline rename. Also runs on blur, so it no-ops once the cell is back to
+    /// plain text - an Escape or an already-saved Enter must not save a second time.
+    /// </summary>
+    private async Task SaveRenameAsync()
+    {
+        if (_renameDocument is not { } document) return;
+        _renameDocument = null;
+        if (string.IsNullOrWhiteSpace(_renameValue) || _renameValue.Trim() == document.Name) return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.RenameAsync(document.Id, user.Id, _renameValue);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private void BeginTypeEdit(Document document)
@@ -490,6 +580,7 @@ else
             return;
         }
         _textEditDocument = document;
+        _textEditTitle = document.Name;
         _textEditValue = document.ExtractedText;
     }
 
@@ -503,6 +594,8 @@ else
         try
         {
             var user = await CurrentUser.GetAsync();
+            if (!string.IsNullOrWhiteSpace(_textEditTitle))
+                await Documents.RenameAsync(_textEditDocument.Id, user.Id, _textEditTitle);
             await Documents.UpdateExtractedTextAsync(_textEditDocument.Id, user.Id, _textEditValue);
             _textEditDocument = null;
             await LoadAsync();

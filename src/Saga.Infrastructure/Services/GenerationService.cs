@@ -39,12 +39,18 @@ public class GenerationService(
         if (!loaded.Documents.Any(d => !string.IsNullOrWhiteSpace(d.ExtractedText)))
             throw new InvalidOperationException("Upload client documents or add notes before generating.");
 
-        var systemPrompt = ArtifactPrompts.BuildSystemPrompt(type, proposal, voice, instruction);
+        // Ordered for the provider's prompt cache: stable system prompt, then the material, then
+        // the task and whatever the consultant typed for this run. Steering placed ahead of the
+        // material would shift every byte of the tender and re-charge it at full input price.
+        var systemPrompt = ArtifactPrompts.BuildSystemPrompt(proposal, voice);
         var context = WorkingContextBuilder.Build(
             WorkingContextBuilder.ContextFor(type), loaded.Documents, loaded.Artifacts,
             excludeArtifact: type, useCondensedDocuments: loaded.UseCondensed);
+        var messages = new List<AiMessage> { AiMessage.User(context) };
 
         // Client profile: add live web research (Bing grounding via Foundry) when configured.
+        // It goes in its own message after the material, since findings that differ on every run
+        // would otherwise invalidate the cached documents sitting ahead of them.
         if (type == ArtifactType.ClientProfile)
         {
             var searchName = string.IsNullOrWhiteSpace(proposal.ResearchClientName)
@@ -53,11 +59,15 @@ public class GenerationService(
             var findings = await webResearch.ResearchClientAsync(
                 searchName, proposal.ClientWebsite, proposal.Description, ct);
             if (!string.IsNullOrWhiteSpace(findings))
-                context += $"\n<web_research>\nLive web research about the client, with sources. Ground the profile in this.\n{findings}\n</web_research>\n";
+                messages.Add(AiMessage.User(
+                    $"<web_research>\nLive web research about the client, with sources. Ground the profile in this.\n{findings}\n</web_research>"));
         }
 
+        messages.Add(AiMessage.User(
+            ArtifactPrompts.BuildTaskInstruction(type, proposal.OutputFormat, instruction)));
+
         var operationId = Guid.NewGuid();
-        var request = new AiRequest(systemPrompt, [AiMessage.User(context)], TierFor(type),
+        var request = new AiRequest(systemPrompt, messages, TierFor(type),
             new AiCallContext(operationId, AiOperation.GenerateArtifact, proposalId, userId,
                 ArtifactType: type,
                 InstructionText: string.IsNullOrWhiteSpace(instruction) ? null : instruction.Trim()));

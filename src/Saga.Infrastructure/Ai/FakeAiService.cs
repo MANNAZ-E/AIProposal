@@ -13,10 +13,18 @@ public class FakeAiService : IAiService
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(AiRequest request,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
+        // Real prompts read system prompt -> material -> instruction, so what a call asks for is in
+        // the trailing message rather than the system prompt. Match on those two and never on the
+        // material, or a chat about the structure artifact would be mistaken for a structure run.
+        var directive = request.SystemPrompt + "\n"
+            + (request.Messages.Count > 0 ? request.Messages[^1].Content : "");
+        // Ids to echo back live in the material, which the review branches below need to read.
+        var whole = request.SystemPrompt + "\n" + string.Join("\n", request.Messages.Select(m => m.Content));
+
         // Structure prompts get a canned slide/section list back.
-        if (request.SystemPrompt.Contains("\"keyMessage\""))
+        if (directive.Contains("\"keyMessage\""))
         {
-            var isPowerPoint = request.SystemPrompt.Contains("\"slideCount\"");
+            var isPowerPoint = directive.Contains("\"slideCount\"");
             var length = isPowerPoint ? "\"slideCount\": 1" : "\"wordCount\": 400";
             var structureJson = $$"""
                 [
@@ -32,10 +40,10 @@ public class FakeAiService : IAiService
 
         // Proposal review prompts (checked before the draft review: both embed req ids, but only
         // this one asks for a recommendedEdit): canned three-axis JSON object with real ids.
-        if (request.SystemPrompt.Contains("recommendedEdit"))
+        if (directive.Contains("recommendedEdit"))
         {
             var reviewIds = System.Text.RegularExpressions.Regex
-                .Matches(request.SystemPrompt, @"\[req id: ([0-9a-fA-F-]{36})\]")
+                .Matches(whole, @"\[req id: ([0-9a-fA-F-]{36})\]")
                 .Select(m => m.Groups[1].Value)
                 .ToList();
             var criteriaCoverages = new[]
@@ -70,10 +78,10 @@ public class FakeAiService : IAiService
         }
 
         // Review prompts: echo the real requirement ids so the coverage report joins up offline.
-        if (request.SystemPrompt.Contains("[req id: "))
+        if (directive.Contains("\"requirementId\""))
         {
             var ids = System.Text.RegularExpressions.Regex
-                .Matches(request.SystemPrompt, @"\[req id: ([0-9a-fA-F-]{36})\]")
+                .Matches(whole, @"\[req id: ([0-9a-fA-F-]{36})\]")
                 .Select(m => m.Groups[1].Value)
                 .ToList();
             var coverages = new[]
@@ -95,7 +103,7 @@ public class FakeAiService : IAiService
         }
 
         // JSON-contract prompts (e.g. requirements extraction) get canned JSON back.
-        if (request.SystemPrompt.Contains("Return ONLY a JSON array"))
+        if (directive.Contains("Return ONLY a JSON array"))
         {
             var json = """
                 [

@@ -4,29 +4,17 @@ using Saga.Core.Domain;
 namespace Saga.Core.Prompts;
 
 /// <summary>
-/// System prompts per artifact type. Every generation prompt carries the Mannaz voice
-/// settings and the content-language rule.
+/// Prompts for artifact generation, split so every call reads system prompt → material → instruction.
+/// The system prompt carries only what is stable for the proposal (voice, language, source rules);
+/// the per-artifact task and any steering the consultant typed travel in a trailing user message
+/// <em>after</em> the client material. That keeps the material at a byte-identical offset across
+/// regenerations and across the units of one content run, so the provider serves it from its prompt
+/// cache instead of charging full input price for the whole tender every time.
 /// </summary>
 public static class ArtifactPrompts
 {
-    public static string BuildSystemPrompt(ArtifactType type, Proposal proposal, MannazVoiceSettings voice,
-        string? instruction = null)
-    {
-        var sb = new StringBuilder(BuildSystemPromptCore(proposal, voice));
-        sb.AppendLine("## Task");
-        sb.AppendLine(TaskFor(type, proposal.OutputFormat));
-
-        if (!string.IsNullOrWhiteSpace(instruction))
-        {
-            sb.AppendLine();
-            sb.AppendLine("## Additional instruction from the consultant for this generation");
-            sb.AppendLine(instruction.Trim());
-        }
-
-        return sb.ToString();
-    }
-
-    private static string BuildSystemPromptCore(Proposal proposal, MannazVoiceSettings voice)
+    /// <summary>The stable prefix: who Saga is, the proposal, the language, the voice, the source rules.</summary>
+    public static string BuildSystemPrompt(Proposal proposal, MannazVoiceSettings voice)
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are Saga, Mannaz's proposal assistant. Mannaz is a Scandinavian consultancy specialising in leadership development, project management and organisational change.");
@@ -51,6 +39,26 @@ public static class ArtifactPrompts
         sb.AppendLine("- Earlier proposal artifacts and any research-based client profile are background; they never override the client documents.");
         sb.AppendLine("- Do not invent facts about the client. If something important is unknown or ambiguous, say so explicitly.");
         sb.AppendLine();
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The trailing instruction for one artifact: what to write, plus any steering the consultant
+    /// typed for this run. Sent as the last user message, after the material.
+    /// </summary>
+    public static string BuildTaskInstruction(ArtifactType type, OutputFormat format, string? instruction = null)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("## Task");
+        sb.AppendLine(TaskFor(type, format));
+
+        if (!string.IsNullOrWhiteSpace(instruction))
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Additional instruction from the consultant for this generation");
+            sb.AppendLine(instruction.Trim());
+        }
+
         return sb.ToString();
     }
 
@@ -177,11 +185,13 @@ public static class ArtifactPrompts
         _ => throw new NotSupportedException($"No prompt defined yet for {type}."),
     };
 
-    /// <summary>System prompt for generating one content unit (a slide or section) from the structure.</summary>
-    public static string BuildContentUnitPrompt(Proposal proposal, MannazVoiceSettings voice,
-        Models.StructureItem item, int position, int total, string? instruction = null)
+    /// <summary>
+    /// The trailing instruction for one content unit (a slide or section). It follows the working
+    /// context, so every unit of a run replays the same cached prefix and only this tail differs.
+    /// </summary>
+    public static string BuildContentUnitInstruction(Proposal proposal, Models.StructureItem item,
+        int position, int total, string? instruction = null)
     {
-        var basePrompt = BuildSystemPromptCore(proposal, voice);
         var isPowerPoint = proposal.OutputFormat == OutputFormat.PowerPoint;
         var unitKind = isPowerPoint ? "slide" : "section";
         var bodyRule = isPowerPoint
@@ -206,9 +216,8 @@ public static class ArtifactPrompts
             Stay strictly on this {unitKind}'s purpose; other {unitKind}s cover the rest of the storyline.
             """;
 
-        var result = basePrompt + task;
         if (!string.IsNullOrWhiteSpace(instruction))
-            result += $"\n\n## Additional instruction from the consultant\n{instruction.Trim()}";
-        return result;
+            task += $"\n\n## Additional instruction from the consultant\n{instruction.Trim()}";
+        return task;
     }
 }

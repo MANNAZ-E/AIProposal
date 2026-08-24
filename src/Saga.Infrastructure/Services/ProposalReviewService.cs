@@ -151,10 +151,18 @@ public class ProposalReviewService(
             a => a.ProposalId == version.ProposalId && a.Type == ArtifactType.Requirements, ct);
         var requirements = RequirementsPayload.FromJson(requirementsArtifact?.ContentJson);
 
-        var systemPrompt = ProposalReviewPrompts.BuildSystemPrompt(proposal, requirements);
+        // System prompt, then material, then the instruction: re-running the review on the same
+        // version replays a byte-identical prefix, so the uploaded proposal is charged as cached
+        // input rather than in full a second time.
+        var systemPrompt = ProposalReviewPrompts.BuildSystemPrompt(proposal);
         var context = ProposalReviewPrompts.BuildFilesContext(
             version.Files.OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase));
-        var request = new AiRequest(systemPrompt, [AiMessage.User(context)],
+        var request = new AiRequest(systemPrompt,
+            [
+                AiMessage.User(ProposalReviewPrompts.BuildCriteriaMessage(requirements)),
+                AiMessage.User(context),
+                AiMessage.User(ProposalReviewPrompts.Instruction),
+            ],
             Context: new AiCallContext(Guid.NewGuid(), AiOperation.ReviewProposal, version.ProposalId,
                 userId, ArtifactType: ArtifactType.Review,
                 Label: version.Label ?? $"Version {version.Number}"));

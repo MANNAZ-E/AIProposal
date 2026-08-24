@@ -78,6 +78,29 @@ public class DocumentService(
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Renames a document. Uploads start out named after the file they came from; the original
+    /// file name is kept on the row, so a rename only changes what the material is called.
+    /// </summary>
+    public async Task RenameAsync(Guid documentId, Guid userId, string name, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var document = await db.Documents.FirstAsync(d => d.Id == documentId, ct);
+        await ProposalService.EnsureRoleAsync(db, document.ProposalId, userId, ProposalRole.Editor, ct);
+
+        name = name.Trim();
+        if (name.Length == 0)
+            throw new InvalidOperationException("A document needs a name.");
+        if (document.Name == name) return;
+
+        var now = DateTimeOffset.UtcNow;
+        document.Name = name;
+        // The name is part of what the AI is shown, so it counts as a material change.
+        document.UpdatedAt = now;
+        await MarkMaterialChangedAsync(db, document.ProposalId, now, ct);
+        await db.SaveChangesAsync(ct);
+    }
+
     /// <summary>Re-files a document under a different type of the same proposal.</summary>
     public async Task SetDocumentTypeAsync(Guid documentId, Guid userId, Guid documentTypeId,
         CancellationToken ct = default)
@@ -166,6 +189,7 @@ public class DocumentService(
             DocumentTypeId = typeId,
             Name = Path.GetFileName(fileName),
             OriginalFilePath = storagePath,
+            OriginalFileName = Path.GetFileName(fileName),
             ExtractedText = extractedText,
             PageMapJson = pageMapJson,
             CreatedAt = now,

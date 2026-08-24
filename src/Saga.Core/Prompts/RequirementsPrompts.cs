@@ -3,13 +3,16 @@ namespace Saga.Core.Prompts;
 public static class RequirementsPrompts
 {
     /// <summary>
-    /// System prompt for per-chunk requirements extraction on the light model.
-    /// The model returns a raw JSON array; source document and location are added by the caller.
+    /// System prompt for per-chunk requirements extraction on the light model. It names no
+    /// document and no location, so the whole prefix is byte-identical for every chunk of every
+    /// upload and the provider serves it from its prompt cache; which excerpt is being read
+    /// travels with the excerpt itself in <see cref="BuildChunkMessage"/>. The model returns a raw
+    /// JSON array; source document and location are added by the caller.
     /// </summary>
-    public static string BuildSystemPrompt(string documentName, string locationLabel) => $$"""
+    public const string SystemPrompt = """
         You extract requirements from tender/client material for a consultancy proposal.
 
-        You will receive an excerpt of the document "{{documentName}}" ({{locationLabel}}).
+        You will receive an excerpt of one document, headed by its name and location.
         Find every passage that expresses something the proposal must satisfy or relate to:
         - mandatory requirements ("shall", "must", "required")
         - evaluation criteria (what the client will assess offers on)
@@ -30,4 +33,8 @@ public static class RequirementsPrompts
         - Keep each requirement atomic; split compound sentences into separate items.
         - If the excerpt contains no requirements, return [].
         """;
+
+    /// <summary>The material message: one excerpt, labelled with the document it came from.</summary>
+    public static string BuildChunkMessage(string documentName, string locationLabel, string chunkText)
+        => $"Excerpt of the document \"{documentName}\" ({locationLabel}):\n\n{chunkText}";
 }

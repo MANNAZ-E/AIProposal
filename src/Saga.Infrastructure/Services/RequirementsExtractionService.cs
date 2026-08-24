@@ -56,9 +56,13 @@ public class RequirementsExtractionService(
                     await onProgress(new ExtractionProgress(document.Name, i + 1, chunks.Count));
 
                 var chunk = chunks[i];
+                // System prompt first and identical for every chunk, then the excerpt: which
+                // document this is travels with the material rather than in the prefix, so the
+                // rules above it stay cacheable across the whole extraction run.
                 var request = new AiRequest(
-                    RequirementsPrompts.BuildSystemPrompt(document.Name, chunk.LocationLabel),
-                    [AiMessage.User(chunk.Text)],
+                    RequirementsPrompts.SystemPrompt,
+                    [AiMessage.User(RequirementsPrompts.BuildChunkMessage(
+                        document.Name, chunk.LocationLabel, chunk.Text))],
                     AiModelTier.Light,
                     new AiCallContext(operationId, AiOperation.ExtractRequirements, proposalId, userId,
                         ArtifactType: ArtifactType.Requirements,

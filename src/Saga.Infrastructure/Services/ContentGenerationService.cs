@@ -119,14 +119,22 @@ public class ContentGenerationService(
         return (operationId, body);
     }
 
+    /// <summary>
+    /// One unit's call, ordered system prompt → material → instruction. Every unit of a run shares the
+    /// first two, so only the short trailing instruction differs and the provider serves the whole
+    /// working context from its prompt cache for units 2..n instead of re-charging it per unit.
+    /// </summary>
     private async Task<string> GenerateUnitBodyAsync(Proposal proposal, MannazVoiceSettings voice,
         StructureItem item, int position, int total, string context, string? instruction,
         AiCallContext callContext, Func<string, Task>? onDelta, CancellationToken ct)
     {
-        var prompt = ArtifactPrompts.BuildContentUnitPrompt(proposal, voice, item, position, total, instruction);
+        var systemPrompt = ArtifactPrompts.BuildSystemPrompt(proposal, voice);
+        var unitInstruction = ArtifactPrompts.BuildContentUnitInstruction(
+            proposal, item, position, total, instruction);
         var text = new System.Text.StringBuilder();
         await foreach (var evt in ai.StreamAsync(
-            new AiRequest(prompt, [AiMessage.User(context)], Context: callContext), ct))
+            new AiRequest(systemPrompt, [AiMessage.User(context), AiMessage.User(unitInstruction)],
+                Context: callContext), ct))
         {
             if (evt is AiStreamEvent.Delta d)
             {
