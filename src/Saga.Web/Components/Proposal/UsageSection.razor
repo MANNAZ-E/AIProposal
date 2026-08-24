@@ -39,6 +39,12 @@ else
                     @_usage.Totals.InputTokens.ToString("N0") / @_usage.Totals.OutputTokens.ToString("N0")
                 </div>
             </div>
+            <div>
+                <div class="text-muted" style="font-size: 0.82rem;">Cached input</div>
+                <div style="font-size: 1.6rem; font-weight: 600;">
+                    @Tokens.Cached(_usage.Totals.CachedInputTokens, _usage.Totals.InputTokens)
+                </div>
+            </div>
             @if (_usage.Totals.PageCount > 0)
             {
                 <div>
@@ -58,6 +64,7 @@ else
                     <th>Model</th>
                     <th style="text-align: right;">Calls</th>
                     <th style="text-align: right;">Tokens in</th>
+                    <th style="text-align: right;">Cached in</th>
                     <th style="text-align: right;">Tokens out</th>
                     <th style="text-align: right;">Pages</th>
                     <th style="text-align: right;">Est. cost (@Money.Currency(_rate))</th>
@@ -71,6 +78,7 @@ else
                         <td colspan="2"><strong>@ServiceName(group.Key)</strong></td>
                         <td style="text-align: right;">@groupTotal.Calls.ToString("N0")</td>
                         <td style="text-align: right;">@groupTotal.InputTokens.ToString("N0")</td>
+                        <td style="text-align: right;">@Tokens.Cached(groupTotal.CachedInputTokens, groupTotal.InputTokens)</td>
                         <td style="text-align: right;">@groupTotal.OutputTokens.ToString("N0")</td>
                         <td style="text-align: right;">@(groupTotal.PageCount > 0 ? groupTotal.PageCount.ToString("N0") : "—")</td>
                         <td style="text-align: right;"><strong>@Cost(groupTotal.CostUsd)</strong></td>
@@ -82,6 +90,7 @@ else
                             <td>@row.Model</td>
                             <td style="text-align: right;">@row.Totals.Calls.ToString("N0")</td>
                             <td style="text-align: right;">@row.Totals.InputTokens.ToString("N0")</td>
+                            <td style="text-align: right;">@Tokens.Cached(row.Totals.CachedInputTokens, row.Totals.InputTokens)</td>
                             <td style="text-align: right;">@row.Totals.OutputTokens.ToString("N0")</td>
                             <td style="text-align: right;">@(row.Totals.PageCount > 0 ? row.Totals.PageCount.ToString("N0") : "—")</td>
                             <td style="text-align: right;">@Cost(row.Totals.CostUsd)</td>
@@ -111,6 +120,7 @@ else
                         <th>Model</th>
                         <th>User</th>
                         <th style="text-align: right;">In / out</th>
+                        <th style="text-align: right;">Cached</th>
                         <th style="text-align: right;">Pages</th>
                         <th style="text-align: right;">Cost</th>
                         <th>Outcome</th>
@@ -130,6 +140,7 @@ else
                                     ? $"{call.InputTokens:N0} / {call.OutputTokens:N0}"
                                     : "—")
                             </td>
+                            <td style="text-align: right;">@Tokens.Cached(call.CachedInputTokens, call.InputTokens)</td>
                             <td style="text-align: right;">@(call.PageCount > 0 ? call.PageCount.ToString("N0") : "—")</td>
                             <td style="text-align: right;">@Cost(call.CostUsd)</td>
                             <td><span class="badge @OutcomeClass(call.Outcome)">@call.Outcome</span></td>
@@ -150,7 +161,8 @@ else
                 @_detail.Call.StartedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss") ·
                 @(_detail.Call.UserName ?? "System") ·
                 @_detail.Call.Duration.TotalSeconds.ToString("N1") s ·
-                @Cost(_detail.Call.CostUsd)
+                @Cost(_detail.Call.CostUsd) ·
+                @Tokens.Cached(_detail.Call.CachedInputTokens, _detail.Call.InputTokens) cached
                 @if (_detail.Call.Label is not null)
                 {
                     <text> · @_detail.Call.Label</text>

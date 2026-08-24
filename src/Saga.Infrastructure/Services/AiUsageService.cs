@@ -19,8 +19,8 @@ public record AiUsageBreakdownRow(AiServiceKind Service, string Model, AiUsageTo
 /// <summary>One call in the log. Payloads are deliberately absent — they are fetched per call.</summary>
 public record AiUsageCall(Guid Id, Guid OperationId, DateTimeOffset StartedAt, AiServiceKind Service,
     string Model, AiOperation Operation, string? Label, string? UserName, int InputTokens,
-    int OutputTokens, int PageCount, decimal CostUsd, TimeSpan Duration, GenerationOutcome Outcome,
-    string? ErrorMessage);
+    int CachedInputTokens, int OutputTokens, int PageCount, decimal CostUsd, TimeSpan Duration,
+    GenerationOutcome Outcome, string? ErrorMessage);
 
 /// <summary>A call plus the stored request and response, for backtracking what happened.</summary>
 public record AiUsageCallDetail(AiUsageCall Call, string? InstructionText, string? RequestText,
@@ -59,8 +59,9 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
             .Where(r => r.ProposalId == proposalId)
             .OrderByDescending(r => r.StartedAt)
             .Select(r => new AiUsageCall(r.Id, r.OperationId, r.StartedAt, r.Service, r.Model,
-                r.Operation, r.Label, r.StartedBy!.DisplayName, r.InputTokens, r.OutputTokens,
-                r.PageCount, r.EstimatedCostUsd, r.Duration, r.Outcome, r.ErrorMessage))
+                r.Operation, r.Label, r.StartedBy!.DisplayName, r.InputTokens,
+                r.CachedInputTokens, r.OutputTokens, r.PageCount, r.EstimatedCostUsd, r.Duration,
+                r.Outcome, r.ErrorMessage))
             .ToListAsync(ct);
     }
 
@@ -78,8 +79,8 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
 
         var call = new AiUsageCall(record.Id, record.OperationId, record.StartedAt, record.Service,
             record.Model, record.Operation, record.Label, record.StartedBy?.DisplayName,
-            record.InputTokens, record.OutputTokens, record.PageCount, record.EstimatedCostUsd,
-            record.Duration, record.Outcome, record.ErrorMessage);
+            record.InputTokens, record.CachedInputTokens, record.OutputTokens, record.PageCount,
+            record.EstimatedCostUsd, record.Duration, record.Outcome, record.ErrorMessage);
         return new AiUsageCallDetail(call, record.InstructionText, record.RequestText, record.ResponseText);
     }
 

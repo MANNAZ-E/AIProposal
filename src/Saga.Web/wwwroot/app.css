@@ -418,7 +418,7 @@ a {
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    padding-top: 10vh;
+    padding: 8vh 1rem;
     z-index: 100;
 }
 
@@ -428,6 +428,8 @@ a {
     width: min(560px, 92vw);
     padding: 1.5rem;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+    max-height: 82vh;
+    overflow-y: auto;
 }
 
 .modal-title {
@@ -708,7 +710,7 @@ tr:hover .rename-button,
 
 .preview-text {
     white-space: pre-wrap;
-    max-height: 55vh;
+    max-height: 20rem;
     overflow-y: auto;
     border: 1px solid var(--saga-border);
     border-radius: 6px;

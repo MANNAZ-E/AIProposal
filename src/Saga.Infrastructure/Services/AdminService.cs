@@ -6,7 +6,8 @@ namespace Saga.Infrastructure.Services;
 
 /// <summary>Spend for one proposal, as shown on the admin roll-up.</summary>
 public record ProposalSpend(Guid ProposalId, string Title, string ClientName, int Calls,
-    long InputTokens, long OutputTokens, long PageCount, decimal CostUsd, DateTimeOffset? LastCallAt);
+    long InputTokens, long CachedInputTokens, long OutputTokens, long PageCount, decimal CostUsd,
+    DateTimeOffset? LastCallAt);
 
 /// <summary>One row in the admin recycle bin.</summary>
 public record DeletedProposal(Guid ProposalId, string Title, string ClientName, string OwnerName,
@@ -58,6 +59,7 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
                 g.Key.ClientName,
                 Calls = g.Count(),
                 InputTokens = g.Sum(r => (long)r.InputTokens),
+                CachedInputTokens = g.Sum(r => (long)r.CachedInputTokens),
                 OutputTokens = g.Sum(r => (long)r.OutputTokens),
                 PageCount = g.Sum(r => (long)r.PageCount),
                 CostUsd = g.Sum(r => r.EstimatedCostUsd),
@@ -67,7 +69,8 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
         return rows
             .OrderByDescending(r => r.LastCallAt)
             .Select(r => new ProposalSpend(r.ProposalId!.Value, r.Title, r.ClientName, r.Calls,
-                r.InputTokens, r.OutputTokens, r.PageCount, r.CostUsd, r.LastCallAt))
+                r.InputTokens, r.CachedInputTokens, r.OutputTokens, r.PageCount, r.CostUsd,
+                r.LastCallAt))
             .ToList();
     }
 }
