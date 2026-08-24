@@ -4,6 +4,7 @@ using Azure.Core;
 using Azure.Core.Pipeline;
 using Azure.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Saga.Core.Abstractions;
 using System.Text;
 
@@ -24,9 +25,13 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
     public const string AnalyzerId = "prebuilt-layout";
 
     private readonly ContentUnderstandingClient _client;
+    private readonly ILogger<ContentUnderstandingExtractor>? logger;
 
-    public ContentUnderstandingExtractor(IConfiguration configuration)
+    public ContentUnderstandingExtractor(IConfiguration configuration,
+        ILogger<ContentUnderstandingExtractor>? logger = null)
     {
+        this.logger = logger;
+
         var endpoint = configuration["ContentUnderstanding:Endpoint"]
             ?? throw new InvalidOperationException("ContentUnderstanding:Endpoint is not configured.");
 
@@ -62,7 +67,6 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
 
         var markdown = new StringBuilder();
         var pages = new List<PageSpan>();
-        var pageCount = 0;
 
         // A single file normally yields one document content; loop anyway so nothing is dropped
         // silently, shifting each part's spans by where its Markdown lands in the combined text.
@@ -72,8 +76,8 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
                 markdown.Append("\n\n");
             var baseOffset = markdown.Length;
 
-            // Pages are what Content Understanding bills by, so the count is recorded too.
-            pageCount += document.Pages.Count;
+            // Page geometry, for the page map only. It is not the billing unit — Office files
+            // carry none at all, so counting it here is what metered them as free.
             foreach (var page in document.Pages)
                 foreach (var span in page.Spans)
                     pages.Add(new PageSpan(page.PageNumber, baseOffset + span.Offset, span.Length));
@@ -85,7 +89,40 @@ public class ContentUnderstandingExtractor : IDocumentTextExtractor
             throw new InvalidOperationException(
                 $"Content Understanding returned no document content for '{Path.GetFileName(fileName)}'.");
 
-        return new ExtractionResult(markdown.ToString(), pages, pageCount);
+        return new ExtractionResult(markdown.ToString(), pages, BilledUsage(operation, fileName));
+    }
+
+    /// <summary>
+    /// The quantities Azure says it billed, read off the <c>usage</c> field the analyze operation
+    /// returns beside its result. This is the only honest source: the meter charged follows the work
+    /// performed rather than the analyzer requested, so nothing on our side can derive it. An absent
+    /// counter inside a present <c>usage</c> genuinely means zero of that meter; an absent
+    /// <c>usage</c> means we were told nothing, and null carries that all the way to the row.
+    /// </summary>
+    private ExtractionUsage? BilledUsage(Operation<AnalysisResult> operation, string fileName)
+    {
+        var usage = operation.GetUsage();
+        if (usage is null)
+        {
+            logger?.LogWarning(
+                "Content Understanding reported no usage for '{File}'; the call is recorded without "
+                + "a billed quantity. It was still charged — the numbers are missing, not zero.",
+                Path.GetFileName(fileName));
+            return null;
+        }
+
+        var billed = new ExtractionUsage(
+            usage.DocumentPagesMinimal ?? 0,
+            usage.DocumentPagesBasic ?? 0,
+            usage.DocumentPagesStandard ?? 0,
+            usage.ContextualizationTokens ?? 0);
+
+        // The only view into which meter a given upload actually hit, which is otherwise invisible.
+        logger?.LogDebug("'{File}' billed {Minimal} minimal, {Basic} basic, {Standard} standard "
+            + "pages and {Tokens} contextualization tokens.", Path.GetFileName(fileName),
+            billed.MinimalPages, billed.BasicPages, billed.StandardPages, billed.ContextualizationTokens);
+
+        return billed;
     }
 
     /// <summary>

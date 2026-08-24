@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Saga.Core.Abstractions;
 
 namespace Saga.Infrastructure.Ai;
 
@@ -50,17 +51,43 @@ public class PricingService(IConfiguration configuration, ILogger<PricingService
         return (uncached * input + cached * cachedRate + outputTokens * output) / 1_000_000m;
     }
 
-    public decimal EstimateExtractionUsd(string analyzerId, int pageCount)
+    /// <summary>
+    /// Prices what Content Understanding reported it billed. Rates are per 1,000 units and keyed by
+    /// <b>meter</b>, not by analyzer: the service charges for the work actually performed, so one
+    /// analyzer bills Minimal on a digital Office file and Standard on a PDF or a screenshot.
+    /// A null usage — the service told us nothing — costs 0 here and is warned about at the call site.
+    /// </summary>
+    public decimal EstimateExtractionUsd(ExtractionUsage? usage)
     {
-        if (string.IsNullOrWhiteSpace(analyzerId) || pageCount <= 0) return 0m;
+        if (usage is null) return 0m;
 
-        var per1000 = configuration.GetValue<decimal>($"Pricing:ContentUnderstanding:{analyzerId}:Per1000Pages");
-        if (per1000 == 0m) WarnOnce(analyzerId);
-
-        return pageCount * per1000 / 1000m;
+        return Units(usage.MinimalPages, "DocumentPagesMinimalPer1000")
+            + Units(usage.BasicPages, "DocumentPagesBasicPer1000")
+            + Units(usage.StandardPages, "DocumentPagesStandardPer1000")
+            + Units(usage.ContextualizationTokens, "ContextualizationTokensPer1000");
     }
 
-    /// <summary>Once per model per process — an unpriced model would otherwise log on every call.</summary>
+    /// <summary>
+    /// Warns per meter rather than per analyzer — with several meters under one analyzer, a single
+    /// shared warning key would let a priced meter silence a missing one. Only a meter that actually
+    /// consumed something is worth complaining about.
+    /// </summary>
+    private decimal Units(int quantity, string key)
+    {
+        if (quantity <= 0) return 0m;
+
+        var per1000 = configuration.GetValue<decimal>($"Pricing:ContentUnderstanding:{key}");
+        if (per1000 == 0m) WarnOnce($"ContentUnderstanding:{key}");
+
+        return quantity * per1000 / 1000m;
+    }
+
+    /// <summary>
+    /// Once per key per process — an unpriced model or meter would otherwise log on every call.
+    /// The key is a deployment name for LLM rates and a meter for extraction rates, never an
+    /// analyzer: several meters share one analyzer, and a shared key would let a priced meter
+    /// silence a missing one.
+    /// </summary>
     private void WarnOnce(string key)
     {
         if (_warned.TryAdd(key, 0))

@@ -6,7 +6,7 @@ namespace Saga.Infrastructure.Services;
 
 /// <summary>Spend for one proposal, as shown on the admin roll-up.</summary>
 public record ProposalSpend(Guid ProposalId, string Title, string ClientName, int Calls,
-    long InputTokens, long CachedInputTokens, long OutputTokens, long PageCount, decimal CostUsd,
+    long InputTokens, long CachedInputTokens, long OutputTokens, long Pages, decimal CostUsd,
     DateTimeOffset? LastCallAt);
 
 /// <summary>One row in the admin recycle bin.</summary>
@@ -61,7 +61,8 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
                 InputTokens = g.Sum(r => (long)r.InputTokens),
                 CachedInputTokens = g.Sum(r => (long)r.CachedInputTokens),
                 OutputTokens = g.Sum(r => (long)r.OutputTokens),
-                PageCount = g.Sum(r => (long)r.PageCount),
+                Pages = g.Sum(r => (long)((r.MinimalPages ?? 0) + (r.BasicPages ?? 0)
+                    + (r.StandardPages ?? 0))),
                 CostUsd = g.Sum(r => r.EstimatedCostUsd),
                 LastCallAt = g.Max(r => (DateTimeOffset?)r.StartedAt),
             })
@@ -69,7 +70,7 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
         return rows
             .OrderByDescending(r => r.LastCallAt)
             .Select(r => new ProposalSpend(r.ProposalId!.Value, r.Title, r.ClientName, r.Calls,
-                r.InputTokens, r.CachedInputTokens, r.OutputTokens, r.PageCount, r.CostUsd,
+                r.InputTokens, r.CachedInputTokens, r.OutputTokens, r.Pages, r.CostUsd,
                 r.LastCallAt))
             .ToList();
     }

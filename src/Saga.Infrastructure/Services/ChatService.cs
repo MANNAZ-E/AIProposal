@@ -85,7 +85,7 @@ public class ChatService(
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
-        // The type comes along: the picker groups by it, and the "Client material" preset is
+        // The type comes along: the picker groups by it, and the "Client materials" preset is
         // defined by it.
         var documents = await db.Documents.Include(d => d.DocumentType)
             .Where(d => d.ProposalId == proposalId)

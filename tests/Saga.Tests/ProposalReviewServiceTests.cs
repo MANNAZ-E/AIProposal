@@ -156,6 +156,7 @@ public class ProposalReviewServiceTests(LocalDbFixture db) : IClassFixture<Local
 
         public Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
             AiCallContext? context = null, CancellationToken ct = default)
-            => Task.FromResult(new ExtractionResult($"extracted: {fileName}", [new PageSpan(1, 0, 10)], PageCount: 3));
+            => Task.FromResult(new ExtractionResult($"extracted: {fileName}", [new PageSpan(1, 0, 10)],
+                new ExtractionUsage(MinimalPages: 0, BasicPages: 0, StandardPages: 3)));
     }
 }

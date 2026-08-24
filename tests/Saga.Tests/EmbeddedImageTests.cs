@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
@@ -26,11 +26,15 @@ internal sealed class RecordingExtractor : IDocumentTextExtractor
         lock (Calls) Calls.Add((fileName, context));
 
         if (!fileName.StartsWith("figure ", StringComparison.Ordinal))
-            return Task.FromResult(new ExtractionResult(DocumentMarkdown, Pages, PageCount: 1));
+            // The parent .docx is a digital file: Minimal, however many Standard-billed
+                // screenshots turn up inside it.
+                return Task.FromResult(new ExtractionResult(DocumentMarkdown, Pages,
+                    new ExtractionUsage(MinimalPages: 1, BasicPages: 0, StandardPages: 0)));
 
         var ordinal = int.Parse(Path.GetFileNameWithoutExtension(fileName)["figure ".Length..]);
         return Task.FromResult(new ExtractionResult(FigureText(ordinal),
-            [new PageSpan(1, 0, FigureText(ordinal).Length)], PageCount: 1));
+            [new PageSpan(1, 0, FigureText(ordinal).Length)],
+            new ExtractionUsage(MinimalPages: 0, BasicPages: 0, StandardPages: 1)));
     }
 }
 

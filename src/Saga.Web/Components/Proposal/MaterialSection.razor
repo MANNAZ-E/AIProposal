@@ -1,4 +1,4 @@
-@using Saga.Core.Abstractions
+﻿@using Saga.Core.Abstractions
 @inject DocumentService Documents
 @inject CurrentUserService CurrentUser
 @inject IDocumentTextExtractor TextExtractor
@@ -164,7 +164,21 @@ else
         {
             var count = DocumentsIn(type.Id).Count;
             <li>
-                <span class="type-list-name">@type.Name</span>
+                @if (_renameType?.Id == type.Id)
+                {
+                    <input @ref="_renameTypeInput" class="material-input type-rename-input" maxlength="200"
+                           @bind="_renameTypeValue" @bind:event="oninput"
+                           @onkeydown="RenameTypeKeyDownAsync" @onblur="SaveTypeRenameAsync" />
+                }
+                else if (CanEdit && !type.IsFixed)
+                {
+                    <button type="button" class="link-button type-list-name" title="Rename"
+                            @onclick="() => BeginTypeRename(type)">@type.Name</button>
+                }
+                else
+                {
+                    <span class="type-list-name">@type.Name</span>
+                }
                 <span class="text-muted">@(count == 1 ? "1 item" : $"{count} items")</span>
                 @if (CanEdit && !type.IsFixed)
                 {
@@ -361,6 +375,11 @@ else
     private ElementReference _renameInput;
     private bool _focusRenameInput;
 
+    private DocumentType? _renameType;
+    private string _renameTypeValue = "";
+    private ElementReference _renameTypeInput;
+    private bool _focusRenameTypeInput;
+
     private bool _noteEditorOpen;
     private Guid? _editingNoteId;
     private string _noteTitle = "";
@@ -392,6 +411,13 @@ else
         {
             _focusRenameInput = false;
             await _renameInput.FocusAsync();
+        }
+
+        // And for a custom type's name in the list below the table.
+        if (_focusRenameTypeInput && _renameType is not null)
+        {
+            _focusRenameTypeInput = false;
+            await _renameTypeInput.FocusAsync();
         }
     }
 
@@ -489,6 +515,47 @@ else
         {
             var user = await CurrentUser.GetAsync();
             await Documents.SetDocumentTypeAsync(document.Id, user.Id, typeId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void BeginTypeRename(DocumentType type)
+    {
+        _renameType = type;
+        _renameTypeValue = type.Name;
+        _focusRenameTypeInput = true;
+    }
+
+    private async Task RenameTypeKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await SaveTypeRenameAsync();
+        else if (e.Key == "Escape")
+            _renameType = null;
+    }
+
+    /// <summary>Commits the inline type rename; like the document one it also runs on blur, so
+    /// it no-ops once the row is back to plain text.</summary>
+    private async Task SaveTypeRenameAsync()
+    {
+        if (_renameType is not { } type) return;
+        _renameType = null;
+        if (string.IsNullOrWhiteSpace(_renameTypeValue) || _renameTypeValue.Trim() == type.Name) return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var user = await CurrentUser.GetAsync();
+            await Documents.RenameTypeAsync(type.Id, user.Id, _renameTypeValue);
             await LoadAsync();
         }
         catch (Exception ex)

@@ -151,6 +151,7 @@ if errorlevel 1 (
 
 set "RUNNING=1"
 set "ADOPTED=0"
+start "" "%URL%"
 
 rem Let the final ASP.NET startup log lines print before showing controls.
 timeout /t 1 /nobreak >nul

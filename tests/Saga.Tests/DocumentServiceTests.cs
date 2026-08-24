@@ -136,7 +136,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         var types = await service.GetTypesAsync(proposalId, elv);
 
-        Assert.Equal(["Client material", "Mannaz material"], types.Select(t => t.Name));
+        Assert.Equal(["Client materials", "Mannaz materials"], types.Select(t => t.Name));
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         var upload = await service.UploadAsync(proposalId, elv, "tender.pdf", stream);
 
         Assert.Equal(first.Id, upload.DocumentTypeId);
-        Assert.Equal("Client material", first.Name);
+        Assert.Equal("Client materials", first.Name);
     }
 
     [Fact]
@@ -179,12 +179,39 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         Assert.Equal("Tender annexes", added.Name);
         var types = await service.GetTypesAsync(proposalId, elv);
-        Assert.Equal(["Client material", "Mannaz material", "Tender annexes"], types.Select(t => t.Name));
+        Assert.Equal(["Client materials", "Mannaz materials", "Tender annexes"], types.Select(t => t.Name));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.AddTypeAsync(proposalId, elv, "tender annexes"));
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.AddTypeAsync(proposalId, elv, "   "));
+    }
+
+    [Fact]
+    public async Task An_added_type_can_be_renamed_but_the_standard_ones_and_their_names_are_off_limits()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+        var client = (await service.GetTypesAsync(proposalId, elv))[0];
+        var annexes = await service.AddTypeAsync(proposalId, elv, "Tender annexes");
+        await service.AddTypeAsync(proposalId, elv, "Meeting notes");
+
+        await service.RenameTypeAsync(annexes.Id, elv, "  Tender appendices  ");
+        Assert.Equal(["Client materials", "Mannaz materials", "Tender appendices", "Meeting notes"],
+            (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
+
+        var fixedType = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameTypeAsync(client.Id, elv, "The client's stuff"));
+        Assert.Contains("keeps its name", fixedType.Message);
+
+        var reserved = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameTypeAsync(annexes.Id, elv, "client materials"));
+        Assert.Contains("reserved", reserved.Message);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameTypeAsync(annexes.Id, elv, "meeting notes"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RenameTypeAsync(annexes.Id, elv, "   "));
     }
 
     [Fact]
@@ -205,7 +232,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         // Emptied, the added type goes; the two seeded ones stay behind.
         await service.DeleteAsync(upload.Id, elv);
         await service.RemoveTypeAsync(annexes.Id, elv);
-        Assert.Equal(["Client material", "Mannaz material"],
+        Assert.Equal(["Client materials", "Mannaz materials"],
             (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
 
         var fixedType = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -224,7 +251,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         foreach (var type in types)
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.RemoveTypeAsync(type.Id, elv));
 
-        Assert.Equal(["Client material", "Mannaz material"],
+        Assert.Equal(["Client materials", "Mannaz materials"],
             (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
     }
 
@@ -267,7 +294,7 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         await service.SetDocumentTypeAsync(upload.Id, elv, types[1].Id);
         var reloaded = Assert.Single(await service.GetForProposalAsync(proposalId, elv));
-        Assert.Equal("Mannaz material", reloaded.DocumentType!.Name);
+        Assert.Equal("Mannaz materials", reloaded.DocumentType!.Name);
 
         var otherProposal = await _proposals.CreateAsync(elv, "Other", "C", null, OutputFormat.PowerPoint);
         var foreignType = (await service.GetTypesAsync(otherProposal, elv))[0];
@@ -319,7 +346,8 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
 
         public Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
             AiCallContext? context = null, CancellationToken ct = default)
-            => Task.FromResult(new ExtractionResult($"extracted: {fileName}", [new PageSpan(1, 0, 10)], PageCount: 3));
+            => Task.FromResult(new ExtractionResult($"extracted: {fileName}", [new PageSpan(1, 0, 10)],
+                new ExtractionUsage(MinimalPages: 0, BasicPages: 0, StandardPages: 3)));
     }
 
     private sealed class ThrowingExtractor : IDocumentTextExtractor

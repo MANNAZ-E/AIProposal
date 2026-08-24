@@ -12,7 +12,8 @@ public class PlainTextExtractor : IDocumentTextExtractor
     {
         using var reader = new StreamReader(content);
         var text = await reader.ReadToEndAsync(ct);
-        // PageCount stays 0: reading a local file costs nothing, so there is nothing to bill.
-        return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)]);
+        // Explicitly free rather than unknown: reading a local file costs nothing, and this
+        // extractor is registered outside the meter, so no usage row is written for it at all.
+        return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)], ExtractionUsage.Free);
     }
 }

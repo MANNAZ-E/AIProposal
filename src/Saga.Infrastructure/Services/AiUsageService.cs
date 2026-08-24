@@ -7,8 +7,12 @@ using Saga.Infrastructure.Data;
 namespace Saga.Infrastructure.Services;
 
 /// <summary>Roll-up across a set of calls. Costs are USD; the UI converts for display.</summary>
+/// <param name="Pages">
+/// Billed pages across all three Content Understanding meters. They are summed only for display —
+/// each row was priced at its own meter's rate before it was ever added up.
+/// </param>
 public record AiUsageTotals(int Calls, long InputTokens, long OutputTokens, long CachedInputTokens,
-    long PageCount, decimal CostUsd)
+    long Pages, decimal CostUsd)
 {
     public static readonly AiUsageTotals Empty = new(0, 0, 0, 0, 0, 0m);
 }
@@ -19,8 +23,30 @@ public record AiUsageBreakdownRow(AiServiceKind Service, string Model, AiUsageTo
 /// <summary>One call in the log. Payloads are deliberately absent — they are fetched per call.</summary>
 public record AiUsageCall(Guid Id, Guid OperationId, DateTimeOffset StartedAt, AiServiceKind Service,
     string Model, AiOperation Operation, string? Label, string? UserName, int InputTokens,
-    int CachedInputTokens, int OutputTokens, int PageCount, decimal CostUsd, TimeSpan Duration,
-    GenerationOutcome Outcome, string? ErrorMessage);
+    int CachedInputTokens, int OutputTokens, int? MinimalPages, int? BasicPages, int? StandardPages, decimal CostUsd,
+    TimeSpan Duration, GenerationOutcome Outcome, string? ErrorMessage)
+{
+    /// <summary>Null on an LLM call, and where the analyzer reported no quantities at all.</summary>
+    public int? Pages => MinimalPages + BasicPages + StandardPages;
+
+    /// <summary>
+    /// Which meter the call was charged on — the thing that decides the rate, and the only reason
+    /// the same analyzer can cost 500× more for one upload than another. Null when nothing was
+    /// billed or nothing was reported; "Mixed" if one call somehow spanned two meters.
+    /// </summary>
+    public string? Meter
+    {
+        get
+        {
+            if (Pages is null or 0) return null;
+            var charged = new List<string>(3);
+            if (MinimalPages > 0) charged.Add("Minimal");
+            if (BasicPages > 0) charged.Add("Basic");
+            if (StandardPages > 0) charged.Add("Standard");
+            return charged.Count == 1 ? charged[0] : "Mixed";
+        }
+    }
+}
 
 /// <summary>A call plus the stored request and response, for backtracking what happened.</summary>
 public record AiUsageCallDetail(AiUsageCall Call, string? InstructionText, string? RequestText,
@@ -60,7 +86,8 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
             .OrderByDescending(r => r.StartedAt)
             .Select(r => new AiUsageCall(r.Id, r.OperationId, r.StartedAt, r.Service, r.Model,
                 r.Operation, r.Label, r.StartedBy!.DisplayName, r.InputTokens,
-                r.CachedInputTokens, r.OutputTokens, r.PageCount, r.EstimatedCostUsd, r.Duration,
+                r.CachedInputTokens, r.OutputTokens, r.MinimalPages, r.BasicPages, r.StandardPages,
+                r.EstimatedCostUsd, r.Duration,
                 r.Outcome, r.ErrorMessage))
             .ToListAsync(ct);
     }
@@ -79,8 +106,9 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
 
         var call = new AiUsageCall(record.Id, record.OperationId, record.StartedAt, record.Service,
             record.Model, record.Operation, record.Label, record.StartedBy?.DisplayName,
-            record.InputTokens, record.CachedInputTokens, record.OutputTokens, record.PageCount,
-            record.EstimatedCostUsd, record.Duration, record.Outcome, record.ErrorMessage);
+            record.InputTokens, record.CachedInputTokens, record.OutputTokens, record.MinimalPages,
+            record.BasicPages, record.StandardPages, record.EstimatedCostUsd, record.Duration,
+            record.Outcome, record.ErrorMessage);
         return new AiUsageCallDetail(call, record.InstructionText, record.RequestText, record.ResponseText);
     }
 
@@ -117,7 +145,10 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
                 InputTokens = g.Sum(r => (long)r.InputTokens),
                 OutputTokens = g.Sum(r => (long)r.OutputTokens),
                 CachedInputTokens = g.Sum(r => (long)r.CachedInputTokens),
-                PageCount = g.Sum(r => (long)r.PageCount),
+                // Nulls collapse to 0 for the roll-up; the per-call log is where "not reported"
+                // stays visible as a dash.
+                Pages = g.Sum(r => (long)((r.MinimalPages ?? 0) + (r.BasicPages ?? 0)
+                    + (r.StandardPages ?? 0))),
                 CostUsd = g.Sum(r => r.EstimatedCostUsd),
             })
             .ToListAsync(ct);
@@ -128,7 +159,7 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
             .ThenBy(r => r.Model)
             .Select(r => new AiUsageBreakdownRow(r.Service, r.Model,
                 new AiUsageTotals(r.Calls, r.InputTokens, r.OutputTokens, r.CachedInputTokens,
-                    r.PageCount, r.CostUsd)))
+                    r.Pages, r.CostUsd)))
             .ToList();
     }
 
@@ -142,7 +173,7 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
                 list.Sum(t => t.InputTokens),
                 list.Sum(t => t.OutputTokens),
                 list.Sum(t => t.CachedInputTokens),
-                list.Sum(t => t.PageCount),
+                list.Sum(t => t.Pages),
                 list.Sum(t => t.CostUsd));
     }
 }

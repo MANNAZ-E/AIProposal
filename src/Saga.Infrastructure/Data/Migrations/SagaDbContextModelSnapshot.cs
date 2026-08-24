@@ -31,7 +31,13 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.Property<int?>("ArtifactType")
                         .HasColumnType("int");
 
+                    b.Property<int?>("BasicPages")
+                        .HasColumnType("int");
+
                     b.Property<int>("CachedInputTokens")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ContextualizationTokens")
                         .HasColumnType("int");
 
                     b.Property<TimeSpan>("Duration")
@@ -55,6 +61,9 @@ namespace Saga.Infrastructure.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<int?>("MinimalPages")
+                        .HasColumnType("int");
+
                     b.Property<string>("Model")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -72,9 +81,6 @@ namespace Saga.Infrastructure.Data.Migrations
                     b.Property<int>("OutputTokens")
                         .HasColumnType("int");
 
-                    b.Property<int>("PageCount")
-                        .HasColumnType("int");
-
                     b.Property<Guid?>("ProposalId")
                         .HasColumnType("uniqueidentifier");
 
@@ -85,6 +91,9 @@ namespace Saga.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("Service")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("StandardPages")
                         .HasColumnType("int");
 
                     b.Property<DateTimeOffset>("StartedAt")

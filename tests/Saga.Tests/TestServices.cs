@@ -17,7 +17,12 @@ public static class TestServices
             ["Pricing:UsdToDkk"] = "7",
             ["Pricing:Models:fake-model:InputPer1M"] = "1.25",
             ["Pricing:Models:fake-model:OutputPer1M"] = "10",
-            ["Pricing:ContentUnderstanding:prebuilt-layout:Per1000Pages"] = "10",
+            // Keyed by meter, not analyzer — the real West Europe rates, so a test cost is the
+            // cost the app would actually book.
+            ["Pricing:ContentUnderstanding:DocumentPagesMinimalPer1000"] = "0.01",
+            ["Pricing:ContentUnderstanding:DocumentPagesBasicPer1000"] = "1.00",
+            ["Pricing:ContentUnderstanding:DocumentPagesStandardPer1000"] = "5.00",
+            ["Pricing:ContentUnderstanding:ContextualizationTokensPer1000"] = "0.001",
         }.Concat(extra.Select(e => new KeyValuePair<string, string?>(e.Key, e.Value)))
          .ToDictionary(e => e.Key, e => e.Value)).Build();
 

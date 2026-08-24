@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using Saga.Core.Abstractions;
 
 namespace Saga.Core.Domain;
@@ -42,8 +43,22 @@ public class AiUsageRecord
     public int OutputTokens { get; set; }
     public int CachedInputTokens { get; set; }
 
-    /// <summary>Pages analysed; the unit Content Understanding bills by. 0 for LLM calls.</summary>
-    public int PageCount { get; set; }
+    /// <summary>
+    /// What Content Understanding reported it billed, per meter — the meter follows the work it
+    /// performed, so a digital Office file lands on Minimal and a PDF or screenshot on Standard.
+    /// Null on LLM rows, and on an extraction where the service reported no usage at all: that is
+    /// "we were not told", which is a different thing from "nothing was charged".
+    /// </summary>
+    public int? MinimalPages { get; set; }
+    public int? BasicPages { get; set; }
+    public int? StandardPages { get; set; }
+
+    /// <summary>Only a generative analyzer produces any; pure content extraction reports 0.</summary>
+    public int? ContextualizationTokens { get; set; }
+
+    /// <summary>Pages across all three meters, for display. Null when nothing was reported.</summary>
+    [NotMapped]
+    public int? Pages => MinimalPages + BasicPages + StandardPages;
 
     /// <summary>
     /// Frozen at write time from the rates then in force, in USD because that is the currency

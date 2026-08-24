@@ -1,7 +1,7 @@
 namespace Saga.Core.Domain;
 
 /// <summary>
-/// A per-proposal category for source material ("Client material", "Mannaz material", …).
+/// A per-proposal category for source material ("Client materials", "Mannaz materials", …).
 /// <see cref="SortOrder"/> is also the priority order the AI is told to resolve conflicts by,
 /// so the seeded defaults come first and types added later rank below them.
 /// </summary>
@@ -21,9 +21,9 @@ public class DocumentType
     public ICollection<Document> Documents { get; set; } = [];
 
     /// <summary>The client's own material — the narrowest thing a chat can be pointed at.</summary>
-    public const string ClientMaterialName = "Client material";
+    public const string ClientMaterialName = "Client materials";
 
-    public const string MannazMaterialName = "Mannaz material";
+    public const string MannazMaterialName = "Mannaz materials";
 
     /// <summary>The categories every new proposal starts with, in priority order.</summary>
     public static readonly string[] DefaultNames = [ClientMaterialName, MannazMaterialName];
