@@ -2,6 +2,7 @@
 @implements IDisposable
 @inject ProposalService Proposals
 @inject ArtifactService Artifacts
+@inject ChatService Chat
 @inject CurrentUserService CurrentUser
 @inject AppHeaderState Header
 @inject NavigationManager Nav
@@ -49,7 +50,7 @@ else
                     @onclick="() => SelectSectionAsync(Section.Export)">Export</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Chat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Chat)">Chat</button>
+                    @onclick="() => SelectSectionAsync(Section.Chat)">Chat @ChatBadge()</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Review ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Review)">Review</button>
@@ -114,7 +115,9 @@ else
                 }
                 else if (_section == Section.Chat)
                 {
-                    <ChatSection ProposalId="ProposalId" MyRole="_myRole" />
+                    <ChatSection ProposalId="ProposalId" MyRole="_myRole"
+                                 TeammateCount="_proposal.Members.Count - 1"
+                                 OnUnreadChanged="RefreshUnreadAsync" />
                 }
                 else if (_section == Section.Export)
                 {
@@ -280,6 +283,7 @@ else
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
+    private int _unreadChats;
     private ProposalRole _myRole;
     private Section _section = Section.Material;
     private bool _notFound;
@@ -313,6 +317,7 @@ else
         }
         (_proposal, _myRole) = result.Value;
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
+        _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
         Header.Set(_proposal.Title, _proposal.ClientName, _proposal.IsArchived ? "Archived" : null);
     }
 
@@ -328,6 +333,21 @@ else
         }
         // Refresh nav badges: edits inside the previous section may have changed the artifacts.
         await LoadAsync();
+    }
+
+    /// <summary>
+    /// Chats with messages this user has not seen. Refreshed on load and on every section switch,
+    /// the same staleness the artifact flags already have â€” no timer, no polling.
+    /// </summary>
+    private RenderFragment? ChatBadge()
+        => _unreadChats == 0
+            ? null
+            : @<span class="nav-flag nav-flag-count" title="Chats with new messages">@_unreadChats</span>;
+
+    private async Task RefreshUnreadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
     }
 
     private RenderFragment? ArtifactBadge(ArtifactType type)

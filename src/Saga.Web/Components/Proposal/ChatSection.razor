@@ -5,7 +5,8 @@
 
 <div class="chat-layout">
     <ChatList Chats="_chats" SelectedId="_activeChatId" IsDraftActive="_isDraft"
-              Streaming="_streamingIds" OnSelect="SelectAsync" OnNew="NewChat" />
+              IsProposalOwner="MyRole == ProposalRole.Owner" Streaming="_streamingIds"
+              OnSelect="SelectAsync" OnNew="NewChat" OnRename="RenameAsync" OnDelete="DeleteAsync" />
 
     <div class="chat-pane">
         @if (!_isDraft && _activeChatId is null)
@@ -37,6 +38,31 @@
                     }
                     else
                     {
+                        <span class="chat-visibility">
+                            @if (ActiveChat?.IsMine == true)
+                            {
+                                <button class="link-button" @onclick="() => _showVisibility = !_showVisibility">
+                                    @VisibilityLabel(ActiveChat.Visibility) ▾
+                                </button>
+                                @if (_showVisibility)
+                                {
+                                    <div class="menu-backdrop" @onclick="() => _showVisibility = false"></div>
+                                    <div class="menu-panel">
+                                        <button @onclick="() => SetVisibilityAsync(ChatVisibility.Private)">
+                                            🔒 Only me
+                                        </button>
+                                        <button @onclick="() => SetVisibilityAsync(ChatVisibility.Shared)">
+                                            👥 Everyone on this proposal
+                                        </button>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <text>👥 Shared by @ActiveChat?.OwnerName</text>
+                            }
+                        </span>
+                        <text> · </text>
                         <button class="link-button" @onclick="() => _showMaterial = !_showMaterial">
                             @ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)
                             · @SelectedDocumentCount of @_documents.Count files @(_showMaterial ? "▴" : "▾")
@@ -108,23 +134,64 @@
             </div>
 
             <div class="chat-composer">
-                <div class="chat-input">
-                    <textarea rows="2" placeholder="Ask about the material, the requirements, the proposal…"
-                              @bind="_question" @bind:event="oninput" disabled="@ActiveIsBusy"
-                              @onkeydown="OnKeyDown"></textarea>
-                    <button class="btn btn-primary" @onclick="AskAsync"
-                            disabled="@(ActiveIsBusy || string.IsNullOrWhiteSpace(_question))">
-                        @(ActiveIsBusy ? "Answering…" : "Ask")
-                    </button>
-                </div>
+                @if (CanPost)
+                {
+                    <div class="chat-input">
+                        <textarea rows="2" placeholder="Ask about the material, the requirements, the proposal…"
+                                  @bind="_question" @bind:event="oninput" disabled="@ActiveIsBusy"
+                                  @onkeydown="OnKeyDown"></textarea>
+                        <button class="btn btn-primary" @onclick="AskAsync"
+                                disabled="@(ActiveIsBusy || string.IsNullOrWhiteSpace(_question))">
+                            @(ActiveIsBusy ? "Answering…" : "Ask")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted" style="margin: 0.35rem 0;">
+                        You have read-only access to this proposal, so you can read this chat but not
+                        add to it. Start your own chat to ask a question.
+                    </p>
+                }
             </div>
         }
     </div>
 </div>
 
+@if (_confirmUnshare)
+{
+    @* The one modal in the feature: unsharing takes something away from people, including
+       messages they wrote themselves. Sharing does not, so it needs no confirmation. *@
+    <div class="modal-backdrop" @onclick="() => _confirmUnshare = false">
+        <div class="modal-panel" @onclick:stopPropagation>
+            <h2 class="modal-title">Make this chat private?</h2>
+            <p>
+                @if (TeammateCount == 1)
+                {
+                    <text>1 teammate will lose access to this chat, including anything they wrote in it.</text>
+                }
+                else
+                {
+                    <text>@TeammateCount teammates will lose access to this chat, including anything they wrote in it.</text>
+                }
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-outline" @onclick="() => _confirmUnshare = false">Cancel</button>
+                <button class="btn btn-danger" @onclick="UnshareAsync">Make private</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter, EditorRequired] public Guid ProposalId { get; set; }
     [Parameter] public ProposalRole MyRole { get; set; }
+
+    /// <summary>Everyone on the proposal except me — what an unshare would take the chat from.</summary>
+    [Parameter] public int TeammateCount { get; set; }
+
+    /// <summary>Lets the page refresh the unread badge on the Chat nav item.</summary>
+    [Parameter] public EventCallback OnUnreadChanged { get; set; }
 
     private List<ChatListItem> _chats = [];
     private List<ChatMessage> _messages = [];
@@ -147,6 +214,8 @@
     private HashSet<Guid> _selectedDocuments = [];
     private HashSet<ArtifactType> _selectedArtifacts = [];
     private bool _showMaterial;
+    private bool _showVisibility;
+    private bool _confirmUnshare;
     private ChatSession? _activeSession;
 
     /// <summary>Answers still streaming, keyed by chat id (the draft uses Guid.Empty), so
@@ -161,6 +230,12 @@
 
     private ChatListItem? ActiveChat => _chats.FirstOrDefault(c => c.Id == _activeChatId);
     private int SelectedDocumentCount => _selectedDocuments.Count;
+
+    /// <summary>
+    /// A Reader keeps their own chats — asking never modifies the proposal — but cannot add to a
+    /// chat someone else shared. Disabling the composer says so before the service has to.
+    /// </summary>
+    private bool CanPost => _isDraft || ActiveChat?.IsMine == true || MyRole >= ProposalRole.Editor;
 
     /// <summary>
     /// A chat answers from what it froze, so material edited since then is invisible to it. Say so
@@ -206,6 +281,11 @@
             _messages = await Chat.GetMessagesAsync(chatId, user.Id);
             _activeSession = await Chat.GetChatAsync(chatId, user.Id);
             ShowFrozenSelection(_activeSession);
+            // Opening a chat is the only place a read mark moves from the UI; the service skips
+            // the write when it is already caught up, so this costs nothing on a re-render.
+            await Chat.MarkSeenAsync(chatId, user.Id);
+            await LoadChatsAsync();
+            await OnUnreadChanged.InvokeAsync();
         }
         catch (Exception ex)
         {
@@ -243,6 +323,79 @@
         var everything = MaterialSelection.Everything(_documents, _artifacts);
         _selectedDocuments = everything.DocumentIds.ToHashSet();
         _selectedArtifacts = everything.ArtifactTypes.ToHashSet();
+    }
+
+    private async Task SetVisibilityAsync(ChatVisibility visibility)
+    {
+        _showVisibility = false;
+        if (ActiveChat is null || ActiveChat.Visibility == visibility) return;
+        if (visibility == ChatVisibility.Private)
+        {
+            _confirmUnshare = true;
+            return;
+        }
+        await ApplyVisibilityAsync(ChatVisibility.Shared);
+    }
+
+    private async Task UnshareAsync()
+    {
+        _confirmUnshare = false;
+        await ApplyVisibilityAsync(ChatVisibility.Private);
+    }
+
+    private async Task ApplyVisibilityAsync(ChatVisibility visibility)
+    {
+        if (_activeChatId is null) return;
+        _error = null;
+        var user = await CurrentUser.GetAsync();
+        try
+        {
+            await Chat.SetVisibilityAsync(_activeChatId.Value, user.Id, visibility);
+            await LoadChatsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task RenameAsync((Guid Id, string Title) rename)
+    {
+        _error = null;
+        var user = await CurrentUser.GetAsync();
+        try
+        {
+            await Chat.RenameAsync(rename.Id, user.Id, rename.Title);
+            await LoadChatsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(Guid chatId)
+    {
+        _error = null;
+        var user = await CurrentUser.GetAsync();
+        try
+        {
+            await Chat.DeleteAsync(chatId, user.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+
+        await LoadChatsAsync();
+        if (_activeChatId == chatId)
+        {
+            // Land on the neighbour rather than on nothing.
+            _activeChatId = null;
+            _activeSession = null;
+            _messages = [];
+            if (_chats.Count > 0) await SelectAsync(_chats[0].Id);
+        }
     }
 
     /// <summary>The escape hatch from the lock: same material, fresh chat.</summary>
@@ -335,6 +488,9 @@
             _streamingIds = _streaming.Keys.ToHashSet();
         }
     }
+
+    private static string VisibilityLabel(ChatVisibility visibility)
+        => visibility == ChatVisibility.Shared ? "👥 Shared with team" : "🔒 Private";
 
     private static string ContextLabel(WorkingContextKind kind) => kind switch
     {

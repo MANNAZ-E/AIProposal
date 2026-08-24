@@ -9,15 +9,17 @@
 
     @if (IsDraftActive)
     {
-        <button class="chat-row active" type="button">
-            <span class="chat-row-line">
-                <span class="chat-row-title">New chat</span>
-                @if (Streaming.Contains(Guid.Empty))
-                {
-                    <span class="chat-row-time">⟳</span>
-                }
-            </span>
-        </button>
+        <div class="chat-row-wrap">
+            <button class="chat-row active" type="button">
+                <span class="chat-row-line">
+                    <span class="chat-row-title">New chat</span>
+                    @if (Streaming.Contains(Guid.Empty))
+                    {
+                        <span class="chat-row-time">⟳</span>
+                    }
+                </span>
+            </button>
+        </div>
     }
 
     @if (Mine.Count > 0)
@@ -43,31 +45,141 @@
     [Parameter, EditorRequired] public List<ChatListItem> Chats { get; set; } = [];
     [Parameter] public Guid? SelectedId { get; set; }
     [Parameter] public bool IsDraftActive { get; set; }
+    [Parameter] public bool IsProposalOwner { get; set; }
     [Parameter] public HashSet<Guid> Streaming { get; set; } = [];
     [Parameter] public EventCallback<Guid> OnSelect { get; set; }
     [Parameter] public EventCallback OnNew { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Title)> OnRename { get; set; }
+    [Parameter] public EventCallback<Guid> OnDelete { get; set; }
+
+    private Guid? _menuFor;
+    private Guid? _renameFor;
+    private Guid? _deleteFor;
+    private string _renameText = "";
 
     private List<ChatListItem> Mine => Chats.Where(c => c.IsMine).ToList();
     private List<ChatListItem> SharedWithMe => Chats.Where(c => !c.IsMine).ToList();
 
+    /// <summary>
+    /// Someone else's shared chat is theirs: no rename, no delete. The exception is the proposal
+    /// owner, who can delete it — otherwise a chat belonging to someone since removed from the
+    /// proposal could never be cleaned up.
+    /// </summary>
+    private bool CanRename(ChatListItem chat) => chat.IsMine;
+    private bool CanDelete(ChatListItem chat) => chat.IsMine || IsProposalOwner;
+
     private RenderFragment Row(ChatListItem chat) =>
-        @<button class="chat-row @(SelectedId == chat.Id ? "active" : null)" type="button"
-                 @onclick="() => OnSelect.InvokeAsync(chat.Id)">
-            <span class="chat-row-line">
-                <span class="chat-row-title">
-                    @chat.Title
-                    @if (chat.IsMine && chat.Visibility == ChatVisibility.Shared)
-                    {
-                        <span class="text-muted" title="Shared with the team">👥</span>
-                    }
-                </span>
-                <span class="chat-row-time">
-                    @(Streaming.Contains(chat.Id) ? "⟳" : RelativeTime.Display(chat.LastMessageAt, DateTimeOffset.UtcNow))
-                </span>
-            </span>
-            @if (!chat.IsMine)
+        @<div class="chat-row-wrap">
+            @if (_renameFor == chat.Id)
             {
-                <span class="chat-row-meta">@chat.OwnerName</span>
+                <div class="chat-row chat-row-editing">
+                    <input class="chat-rename-input" value="@_renameText" @oninput="OnRenameInput"
+                           @onkeydown="e => OnRenameKey(e, chat)" />
+                    <div class="chat-row-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="() => CommitRenameAsync(chat)">Save</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => _renameFor = null">Cancel</button>
+                    </div>
+                </div>
             }
-        </button>;
+            else if (_deleteFor == chat.Id)
+            {
+                @* Confirming in the row itself: chats are cheap, and a modal for each one would
+                   be heavier than the thing it is protecting. *@
+                <div class="chat-row chat-row-editing">
+                    <div class="chat-row-meta">
+                        @(chat.Visibility == ChatVisibility.Shared
+                            ? "Delete this chat? The team loses it too."
+                            : "Delete this chat?")
+                    </div>
+                    <div class="chat-row-actions">
+                        <button class="btn btn-danger btn-sm" @onclick="() => ConfirmDeleteAsync(chat)">Delete</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => _deleteFor = null">Cancel</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <button class="chat-row @(SelectedId == chat.Id ? "active" : null)" type="button"
+                        @onclick="() => OnSelect.InvokeAsync(chat.Id)">
+                    <span class="chat-row-line">
+                        <span class="chat-row-title @(chat.HasUnread ? "chat-unread" : null)">
+                            @if (chat.HasUnread)
+                            {
+                                <span class="chat-unread-dot" title="New messages">●</span>
+                            }
+                            @chat.Title
+                            @if (chat.IsMine && chat.Visibility == ChatVisibility.Shared)
+                            {
+                                <span class="text-muted" title="Shared with the team">👥</span>
+                            }
+                        </span>
+                        <span class="chat-row-time">
+                            @(Streaming.Contains(chat.Id) ? "⟳" : RelativeTime.Display(chat.LastMessageAt, DateTimeOffset.UtcNow))
+                        </span>
+                    </span>
+                    @if (!chat.IsMine)
+                    {
+                        <span class="chat-row-meta">@chat.OwnerName</span>
+                    }
+                </button>
+
+                @if (CanRename(chat) || CanDelete(chat))
+                {
+                    <button class="chat-row-menu" title="More" @onclick="() => _menuFor = chat.Id">⋯</button>
+                }
+
+                @if (_menuFor == chat.Id)
+                {
+                    @* No JS interop in this app, so dismissing on an outside click is a
+                       transparent full-viewport catcher, the way the modals already work. *@
+                    <div class="menu-backdrop" @onclick="() => _menuFor = null"></div>
+                    <div class="menu-panel">
+                        @if (CanRename(chat))
+                        {
+                            <button @onclick="() => StartRename(chat)">Rename</button>
+                        }
+                        @if (CanDelete(chat))
+                        {
+                            <button @onclick="() => StartDelete(chat)">Delete</button>
+                        }
+                    </div>
+                }
+            }
+        </div>;
+
+    private void StartRename(ChatListItem chat)
+    {
+        _menuFor = null;
+        _deleteFor = null;
+        _renameText = chat.Title;
+        _renameFor = chat.Id;
+    }
+
+    private void StartDelete(ChatListItem chat)
+    {
+        _menuFor = null;
+        _renameFor = null;
+        _deleteFor = chat.Id;
+    }
+
+    private void OnRenameInput(ChangeEventArgs e) => _renameText = (string?)e.Value ?? "";
+
+    private async Task OnRenameKey(KeyboardEventArgs e, ChatListItem chat)
+    {
+        if (e.Key == "Enter") await CommitRenameAsync(chat);
+        else if (e.Key == "Escape") _renameFor = null;
+    }
+
+    private async Task CommitRenameAsync(ChatListItem chat)
+    {
+        _renameFor = null;
+        if (!string.IsNullOrWhiteSpace(_renameText) && _renameText != chat.Title)
+            await OnRename.InvokeAsync((chat.Id, _renameText.Trim()));
+    }
+
+    private async Task ConfirmDeleteAsync(ChatListItem chat)
+    {
+        _deleteFor = null;
+        await OnDelete.InvokeAsync(chat.Id);
+    }
 }

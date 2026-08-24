@@ -1047,6 +1047,125 @@ button.upload-area {
     margin: 0;
 }
 
+/* ---------- Chat row menu ---------- */
+
+.chat-row-wrap {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+}
+
+.chat-row-wrap .chat-row {
+    flex: 1;
+    min-width: 0;
+}
+
+.chat-row-editing {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    cursor: default;
+}
+
+.chat-row-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.chat-rename-input {
+    width: 100%;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--saga-border);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+/* Kept in the DOM so keyboard users can reach it; revealed on hover or focus. */
+.chat-row-menu {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    border: none;
+    background: transparent;
+    color: var(--saga-muted);
+    font: inherit;
+    line-height: 1;
+    padding: 0.15rem 0.3rem;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.chat-row-wrap:hover .chat-row-menu,
+.chat-row-menu:focus {
+    opacity: 1;
+}
+
+.chat-row-menu:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* There is no JS interop in this app, so "click outside to dismiss" is a transparent
+   full-viewport catcher sitting under the panel â€” the same idea as .modal-backdrop. */
+.menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+}
+
+.menu-panel {
+    position: absolute;
+    top: 1.6rem;
+    right: 0.35rem;
+    z-index: 21;
+    min-width: 9rem;
+    background: #fff;
+    border: 1px solid var(--saga-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    padding: 0.25rem;
+}
+
+.menu-panel button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 0.88rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.menu-panel button:hover {
+    background: var(--saga-primary-light);
+}
+
+.chat-unread {
+    font-weight: 600;
+}
+
+.chat-unread-dot {
+    color: var(--saga-primary);
+    font-size: 0.6rem;
+    vertical-align: middle;
+    margin-right: 0.15rem;
+}
+
+.chat-visibility {
+    position: relative;
+}
+
+.nav-flag-count {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    padding: 0 0.4rem;
+    font-weight: 600;
+}
+
 /* ---------- Chat material picker ---------- */
 
 .chat-material-presets {
