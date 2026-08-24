@@ -13,7 +13,7 @@
                 <label class="chat-preset">
                     <input type="radio" name="chat-preset" checked="@(Preset == preset)"
                            @onchange="() => ApplyPreset(preset)" />
-                    <span>@PresetLabel(preset)</span>
+                    <span>@ContextLabel(preset)</span>
                 </label>
             }
             @if (Preset == WorkingContextKind.Custom)
@@ -23,8 +23,10 @@
         </div>
     }
 
-    @Group("Client documents", Uploads)
-    @Group("Notes", Notes)
+    @foreach (var category in Categories)
+    {
+        @Group(category.Key, category.ToList())
+    }
 
     @if (Artifacts.Count > 0)
     {
@@ -51,9 +53,10 @@
 
     @if (ReadOnly)
     {
-        <p class="form-hint" style="margin-top: 0.6rem;">
-            Locked for this chat — start a new chat to change it.
-        </p>
+        <div class="chat-material-locked">
+            <div class="chat-material-locked-head">New chat to change materials</div>
+            <p class="form-hint">Materials are locked when a chat is started - start a new chat to change</p>
+        </div>
     }
     else
     {
@@ -77,11 +80,17 @@
     [Parameter] public WorkingContextKind Preset { get; set; }
     [Parameter] public EventCallback<WorkingContextKind> PresetChanged { get; set; }
 
-    private static readonly WorkingContextKind[] Presets =
-        [WorkingContextKind.SourceMaterial, WorkingContextKind.Analysis, WorkingContextKind.FullProject];
+    private static readonly WorkingContextKind[] Presets = MaterialSelection.ChatPresets;
 
-    private List<Document> Uploads => Documents.Where(d => d.Kind == DocumentKind.Upload).ToList();
-    private List<Document> Notes => Documents.Where(d => d.Kind == DocumentKind.Note).ToList();
+    /// <summary>
+    /// The proposal's own document types, in their priority order — the same grouping the
+    /// Materials tab shows and the same one the model is handed the material under.
+    /// </summary>
+    private IEnumerable<IGrouping<string, Document>> Categories
+        => Documents
+            .GroupBy(d => d.DocumentType?.Name ?? "Material")
+            .OrderBy(g => g.Min(d => d.DocumentType?.SortOrder ?? int.MaxValue))
+            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
     private int EstimatedTokens
         => Documents.Where(d => SelectedDocuments.Contains(d.Id))
@@ -160,17 +169,27 @@
                         <input type="checkbox" disabled="@ReadOnly" checked="@IsDocumentChecked(document)"
                                @onchange="() => ToggleDocument(document)" />
                         <span>@document.Name</span>
+                        @if (document.Kind == DocumentKind.Note)
+                        {
+                            <span class="badge badge-role">Note</span>
+                        }
                     </label>
                 }
             </div>
         </div>;
     }
 
-    private static string PresetLabel(WorkingContextKind kind) => kind switch
+    /// <summary>
+    /// What a chat's material selection is called — on the preset radios here and on the header
+    /// of a chat that already froze one, so both name the same thing.
+    /// </summary>
+    public static string ContextLabel(WorkingContextKind kind) => kind switch
     {
-        WorkingContextKind.SourceMaterial => "Source material",
+        WorkingContextKind.ClientMaterial => "Client material",
+        WorkingContextKind.SourceMaterial => "Materials",
         WorkingContextKind.Analysis => "Analysis",
-        _ => "Full project",
+        WorkingContextKind.Custom => "Selected material",
+        _ => "Materials & artefacts",
     };
 
     public static string ArtifactLabel(ArtifactType type) => type switch

@@ -49,10 +49,10 @@
                                     <div class="menu-backdrop" @onclick="() => _showVisibility = false"></div>
                                     <div class="menu-panel">
                                         <button @onclick="() => SetVisibilityAsync(ChatVisibility.Private)">
-                                            🔒 Only me
+                                            🔒 Private
                                         </button>
                                         <button @onclick="() => SetVisibilityAsync(ChatVisibility.Shared)">
-                                            👥 Everyone on this proposal
+                                            👥 Shared with bid team
                                         </button>
                                     </div>
                                 }
@@ -64,7 +64,7 @@
                         </span>
                         <text> · </text>
                         <button class="link-button" @onclick="() => _showMaterial = !_showMaterial">
-                            @ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)
+                            @ChatMaterial.ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)
                             · @SelectedDocumentCount of @_documents.Count files @(_showMaterial ? "▴" : "▾")
                         </button>
                         @if (MaterialHasChanged)
@@ -92,7 +92,7 @@
                                       SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
                                       ReadOnly="true" Preset="ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject" />
                         <button class="btn btn-outline btn-sm" @onclick="NewChatWithSameMaterial">
-                            New chat with this material
+                            New chat
                         </button>
                     </div>
                 }
@@ -329,12 +329,14 @@
     {
         _showVisibility = false;
         if (ActiveChat is null || ActiveChat.Visibility == visibility) return;
-        if (visibility == ChatVisibility.Private)
+        // Unsharing only takes something away when there is somebody on the proposal to take it
+        // from; on a one-person proposal the confirmation would be asking about nobody.
+        if (visibility == ChatVisibility.Private && TeammateCount > 0)
         {
             _confirmUnshare = true;
             return;
         }
-        await ApplyVisibilityAsync(ChatVisibility.Shared);
+        await ApplyVisibilityAsync(visibility);
     }
 
     private async Task UnshareAsync()
@@ -490,13 +492,6 @@
     }
 
     private static string VisibilityLabel(ChatVisibility visibility)
-        => visibility == ChatVisibility.Shared ? "👥 Shared with team" : "🔒 Private";
+        => visibility == ChatVisibility.Shared ? "👥 Shared with bid team" : "🔒 Private";
 
-    private static string ContextLabel(WorkingContextKind kind) => kind switch
-    {
-        WorkingContextKind.SourceMaterial => "Source material",
-        WorkingContextKind.Analysis => "Analysis",
-        WorkingContextKind.Custom => "Selected material",
-        _ => "Full project",
-    };
 }

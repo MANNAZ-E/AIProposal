@@ -59,8 +59,9 @@ public class DocumentService(
     }
 
     /// <summary>
-    /// Removes an empty type. A type holding material cannot be removed - the documents would
-    /// have nowhere to live - and neither can the last one, since every document needs a type.
+    /// Removes an empty type added to this proposal. The two seeded categories stay whatever
+    /// happens; a type holding material cannot be removed either - the documents would have
+    /// nowhere to live - and neither can the last one, since every document needs a type.
     /// </summary>
     public async Task RemoveTypeAsync(Guid typeId, Guid userId, CancellationToken ct = default)
     {
@@ -68,6 +69,9 @@ public class DocumentService(
         var type = await db.DocumentTypes.FirstAsync(t => t.Id == typeId, ct);
         await ProposalService.EnsureRoleAsync(db, type.ProposalId, userId, ProposalRole.Editor, ct);
 
+        if (type.IsFixed)
+            throw new InvalidOperationException(
+                $"'{type.Name}' is one of the standard categories and is always available.");
         if (await db.Documents.AnyAsync(d => d.DocumentTypeId == typeId, ct))
             throw new InvalidOperationException(
                 $"'{type.Name}' still holds material. Move or delete it first.");

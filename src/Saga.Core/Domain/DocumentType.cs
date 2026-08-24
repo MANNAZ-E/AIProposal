@@ -20,8 +20,22 @@ public class DocumentType
 
     public ICollection<Document> Documents { get; set; } = [];
 
+    /// <summary>The client's own material — the narrowest thing a chat can be pointed at.</summary>
+    public const string ClientMaterialName = "Client material";
+
+    public const string MannazMaterialName = "Mannaz material";
+
     /// <summary>The categories every new proposal starts with, in priority order.</summary>
-    public static readonly string[] DefaultNames = ["Client material", "Mannaz material"];
+    public static readonly string[] DefaultNames = [ClientMaterialName, MannazMaterialName];
+
+    /// <summary>
+    /// The two seeded categories are part of every proposal's shape — what the client sent and
+    /// what Mannaz brought — so they cannot be removed. Only types added later can.
+    /// </summary>
+    public bool IsFixed => IsFixedName(Name);
+
+    public static bool IsFixedName(string name)
+        => DefaultNames.Contains(name, StringComparer.OrdinalIgnoreCase);
 
     public static List<DocumentType> CreateDefaults(Guid proposalId, DateTimeOffset now)
         => [.. DefaultNames.Select((name, index) => new DocumentType

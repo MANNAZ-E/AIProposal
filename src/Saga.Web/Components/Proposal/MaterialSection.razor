@@ -166,7 +166,7 @@ else
             <li>
                 <span class="type-list-name">@type.Name</span>
                 <span class="text-muted">@(count == 1 ? "1 item" : $"{count} items")</span>
-                @if (CanEdit)
+                @if (CanEdit && !type.IsFixed)
                 {
                     <button class="btn btn-outline btn-sm" disabled="@(_busy || !CanRemove(type))"
                             title="@RemoveHint(type)" @onclick="() => RemoveTypeAsync(type)">Remove</button>
@@ -414,6 +414,8 @@ else
     private string TypeName(Document document)
         => _types.FirstOrDefault(t => t.Id == document.DocumentTypeId)?.Name ?? "—";
 
+    /// <summary>The two standard categories have no Remove button at all, so this only covers
+    /// types added to this proposal.</summary>
     private bool CanRemove(DocumentType type)
         => _types.Count > 1 && DocumentsIn(type.Id).Count == 0;
 

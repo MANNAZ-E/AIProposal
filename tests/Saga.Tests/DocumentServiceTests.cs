@@ -192,23 +192,40 @@ public class DocumentServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
     {
         var (elv, _, proposalId) = await SetupAsync();
         var service = CreateService();
-        var types = await service.GetTypesAsync(proposalId, elv);
-        var client = types[0];
-        var mannaz = types[1];
+        var client = (await service.GetTypesAsync(proposalId, elv))[0];
+        var annexes = await service.AddTypeAsync(proposalId, elv, "Tender annexes");
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("x"));
-        var upload = await service.UploadAsync(proposalId, elv, "tender.pdf", stream, client.Id);
+        var upload = await service.UploadAsync(proposalId, elv, "tender.pdf", stream, annexes.Id);
 
         var blocked = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => service.RemoveTypeAsync(client.Id, elv));
+            () => service.RemoveTypeAsync(annexes.Id, elv));
         Assert.Contains("still holds material", blocked.Message);
 
-        // The empty one goes; the last remaining type stays, since every document needs one.
-        await service.RemoveTypeAsync(mannaz.Id, elv);
-        Assert.Equal(["Client material"], (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
-
+        // Emptied, the added type goes; the two seeded ones stay behind.
         await service.DeleteAsync(upload.Id, elv);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.RemoveTypeAsync(client.Id, elv));
+        await service.RemoveTypeAsync(annexes.Id, elv);
+        Assert.Equal(["Client material", "Mannaz material"],
+            (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
+
+        var fixedType = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RemoveTypeAsync(client.Id, elv));
+        Assert.Contains("always available", fixedType.Message);
+    }
+
+    [Fact]
+    public async Task The_two_standard_categories_cannot_be_removed()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var service = CreateService();
+        var types = await service.GetTypesAsync(proposalId, elv);
+
+        // Neither one, even though both are empty and removing one would leave the other.
+        foreach (var type in types)
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.RemoveTypeAsync(type.Id, elv));
+
+        Assert.Equal(["Client material", "Mannaz material"],
+            (await service.GetTypesAsync(proposalId, elv)).Select(t => t.Name));
     }
 
     [Fact]

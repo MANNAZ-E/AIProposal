@@ -1340,16 +1340,31 @@ tr:hover .rename-button,
     font-weight: 600;
 }
 
+/* One file per line: a wrapped grid made it guesswork which category a name belonged to. */
 .chat-material-items {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 1.2rem;
+    flex-direction: column;
+    gap: 0.2rem;
     padding: 0.25rem 0 0 1.4rem;
 }
 
 .chat-material-item {
     font-size: 0.85rem;
-    min-width: 12rem;
+}
+
+.chat-material-locked {
+    margin-top: 0.7rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--saga-border);
+}
+
+.chat-material-locked-head {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.chat-material-locked .form-hint {
+    margin: 0.15rem 0 0;
 }
 
 .chat-token-meter {

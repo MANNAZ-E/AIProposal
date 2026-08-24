@@ -30,6 +30,11 @@ else
             <button class="nav-item @(_section == Section.Generate ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
             <div class="nav-divider"></div>
+            <button class="nav-item @(_section == Section.Chat ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Chat)">AI Chat @ChatBadge()</button>
+            <button class="nav-item @(_section == Section.BidTeamChat ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Bid Team Chat</button>
+            <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.ClientProfile ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</button>
             <button class="nav-item @(_section == Section.Summary ? "active" : null)"
@@ -49,16 +54,13 @@ else
             <button class="nav-item @(_section == Section.Export ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Export)">Export</button>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Chat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Chat)">Chat @ChatBadge()</button>
-            <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Review ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Review)">Review</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Usage ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Usage)">Usage</button>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.People)">Team</button>
+                    @onclick="() => SelectSectionAsync(Section.People)">Bid Team</button>
             <button class="nav-item @(_section == Section.Settings ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Settings)">Settings</button>
         </nav>
@@ -119,6 +121,13 @@ else
                                  TeammateCount="_proposal.Members.Count - 1"
                                  OnUnreadChanged="RefreshUnreadAsync" />
                 }
+                else if (_section == Section.BidTeamChat)
+                {
+                    <h2>Bid Team Chat</h2>
+                    <div class="empty-state">
+                        <p class="text-muted">Group chat with the bid team is not built yet.</p>
+                    </div>
+                }
                 else if (_section == Section.Export)
                 {
                     <ExportSection ProposalId="ProposalId" />
@@ -129,7 +138,7 @@ else
                 }
                 else if (_section == Section.People)
                 {
-                    <h2>Team</h2>
+                    <h2>Bid Team</h2>
                     @if (_myRole == ProposalRole.Owner)
                     {
                         <div class="card">
@@ -279,7 +288,7 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, Export, Usage, People, Settings }
+    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, BidTeamChat, Export, Usage, People, Settings }
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];

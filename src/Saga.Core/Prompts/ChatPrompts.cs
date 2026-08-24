@@ -28,6 +28,7 @@ public static class ChatPrompts
 
     private static string Describe(WorkingContextKind kind) => kind switch
     {
+        WorkingContextKind.ClientMaterial => "the material the client supplied",
         WorkingContextKind.SourceMaterial => "the client's documents and the consultant's notes",
         WorkingContextKind.Analysis => "the source material plus the client profile, summary and requirements",
         // A hand-picked selection: the context block below is the authoritative list, so the

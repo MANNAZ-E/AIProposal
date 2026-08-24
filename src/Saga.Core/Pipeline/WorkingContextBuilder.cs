@@ -51,7 +51,9 @@ public static class WorkingContextBuilder
         }
         sb.AppendLine("</user_notes>");
 
-        if (kind == WorkingContextKind.SourceMaterial)
+        // Chat narrows by its own selection before it gets here, so the client-material kind only
+        // reaches this far as a label - but it is a documents-only context either way.
+        if (kind is WorkingContextKind.SourceMaterial or WorkingContextKind.ClientMaterial)
             return sb.ToString();
 
         var visibleTypes = kind == WorkingContextKind.Analysis

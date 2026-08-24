@@ -23,6 +23,14 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
             documents.Select(d => d.Id).ToList(),
             artifacts.Where(a => a.Status != ArtifactStatus.Empty).Select(a => a.Type).ToList());
 
+    /// <summary>
+    /// The presets a chat can be started from, narrowest first — which is also the order
+    /// <see cref="PresetOrCustom"/> resolves ties in, so a proposal holding nothing but client
+    /// material reads as "Client material" rather than as the wider preset selecting the same rows.
+    /// </summary>
+    public static readonly WorkingContextKind[] ChatPresets =
+        [WorkingContextKind.ClientMaterial, WorkingContextKind.SourceMaterial, WorkingContextKind.FullProject];
+
     /// <summary>What a preset picks, so the presets stay a shortcut into the same selection.</summary>
     public static MaterialSelection ForPreset(
         WorkingContextKind kind, IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
@@ -30,6 +38,8 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
         var everything = Everything(documents, artifacts);
         return kind switch
         {
+            WorkingContextKind.ClientMaterial => new MaterialSelection(
+                documents.Where(IsClientMaterial).Select(d => d.Id).ToList(), []),
             WorkingContextKind.SourceMaterial => everything with { ArtifactTypes = [] },
             WorkingContextKind.Analysis => everything with
             {
@@ -43,8 +53,7 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
     public WorkingContextKind PresetOrCustom(
         IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
     {
-        foreach (var preset in (WorkingContextKind[])
-                 [WorkingContextKind.SourceMaterial, WorkingContextKind.Analysis, WorkingContextKind.FullProject])
+        foreach (var preset in ChatPresets)
         {
             var candidate = ForPreset(preset, documents, artifacts);
             if (candidate.DocumentIds.ToHashSet().SetEquals(DocumentIds)
@@ -53,6 +62,14 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
         }
         return WorkingContextKind.Custom;
     }
+
+    /// <summary>
+    /// Material filed under the fixed "Client material" category. Matched by the type's name
+    /// rather than an id, since the category is per-proposal but its name is not.
+    /// </summary>
+    private static bool IsClientMaterial(Document document)
+        => string.Equals(document.DocumentType?.Name, DocumentType.ClientMaterialName,
+            StringComparison.OrdinalIgnoreCase);
 
     private static bool IsAnalysisType(ArtifactType type)
         => type is ArtifactType.ClientProfile or ArtifactType.Summary or ArtifactType.Requirements;

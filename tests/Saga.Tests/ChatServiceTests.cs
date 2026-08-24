@@ -198,6 +198,42 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     }
 
     [Fact]
+    public async Task The_client_material_preset_picks_only_what_the_client_supplied()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var capturing = new CapturingAiService();
+        var chat = NewChat(capturing);
+
+        await using (var setup = db.CreateDbContext())
+        {
+            var mannaz = await setup.DocumentTypes
+                .SingleAsync(t => t.ProposalId == proposalId && t.Name == DocumentType.MannazMaterialName);
+            setup.Documents.Add(new Document
+            {
+                Id = Guid.NewGuid(),
+                ProposalId = proposalId,
+                DocumentTypeId = mannaz.Id,
+                Kind = DocumentKind.Note,
+                Name = "our-approach.md",
+                ExtractedText = "MANNAZ-TEXT: how we usually run this.",
+                CreatedAt = DateTimeOffset.UtcNow.AddSeconds(2),
+                UpdatedAt = DateTimeOffset.UtcNow,
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        var (documents, artifacts) = await chat.GetMaterialAsync(proposalId, elv);
+        var clientOnly = MaterialSelection.ForPreset(WorkingContextKind.ClientMaterial, documents, artifacts);
+
+        await chat.AskAsync(proposalId, null, elv, "Q", WorkingContextKind.ClientMaterial, clientOnly);
+
+        var context = capturing.Requests[0].Messages[0].Content;
+        Assert.Contains("TENDER-TEXT", context);
+        Assert.DoesNotContain("MANNAZ-TEXT", context);
+        Assert.DoesNotContain("SUMMARY-TEXT", context);
+    }
+
+    [Fact]
     public async Task Material_is_frozen_after_the_first_question()
     {
         var (elv, _, proposalId) = await SetupAsync();
