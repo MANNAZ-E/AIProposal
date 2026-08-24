@@ -481,5 +481,5 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# Local scratch scripts
-/elv/
+# Local scratch script archive
+/elv/Archive/
