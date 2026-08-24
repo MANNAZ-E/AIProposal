@@ -4,7 +4,7 @@
 <h2>Chat</h2>
 <div class="card" style="margin-bottom: 1rem;">
     <label for="chat-context" style="font-size: 0.85rem; font-weight: 600;">The AI answers from</label>
-    <select id="chat-context" @bind="_kind" disabled="@_busy" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
+    <select id="chat-context" @bind="_kind" disabled="@(_busy || _chatId is not null)" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
         <option value="@WorkingContextKind.SourceMaterial">Source material — client documents and notes only</option>
         <option value="@WorkingContextKind.Analysis">Analysis — source material + profile, summary, requirements</option>
         <option value="@WorkingContextKind.FullProject">Full project — everything, including the written proposal</option>
@@ -63,6 +63,7 @@
     [Parameter, EditorRequired] public Guid ProposalId { get; set; }
 
     private List<ChatMessage> _messages = [];
+    private Guid? _chatId;
     private WorkingContextKind _kind = WorkingContextKind.FullProject;
     private string _question = "";
     private string _streaming = "";
@@ -72,7 +73,12 @@
     protected override async Task OnParametersSetAsync()
     {
         var user = await CurrentUser.GetAsync();
-        _messages = await Chat.GetMessagesAsync(ProposalId, user.Id);
+        // The list pane lands in the next step; until then the newest visible chat is the one on
+        // screen, which is what the single-thread UI showed anyway.
+        var chats = await Chat.ListAsync(ProposalId, user.Id);
+        _chatId = chats.FirstOrDefault()?.Id;
+        _messages = _chatId is null ? [] : await Chat.GetMessagesAsync(_chatId.Value, user.Id);
+        if (_chatId is not null) _kind = chats[0].WorkingContext;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
@@ -103,12 +109,14 @@
 
         try
         {
-            await Chat.AskAsync(ProposalId, user.Id, question, _kind, async delta =>
-            {
-                _streaming += delta;
-                await InvokeAsync(StateHasChanged);
-            });
-            _messages = await Chat.GetMessagesAsync(ProposalId, user.Id);
+            var (chatId, _) = await Chat.AskAsync(ProposalId, _chatId, user.Id, question, _kind,
+                onChatCreated: id => { _chatId = id; return Task.CompletedTask; },
+                onDelta: async delta =>
+                {
+                    _streaming += delta;
+                    await InvokeAsync(StateHasChanged);
+                });
+            _messages = await Chat.GetMessagesAsync(chatId, user.Id);
         }
         catch (Exception ex)
         {
@@ -125,6 +133,7 @@
     {
         WorkingContextKind.SourceMaterial => "Source material",
         WorkingContextKind.Analysis => "Analysis",
+        WorkingContextKind.Custom => "Selected material",
         _ => "Full project",
     };
 }

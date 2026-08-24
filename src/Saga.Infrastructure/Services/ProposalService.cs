@@ -238,6 +238,15 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
     /// <summary>All roles at or above <paramref name="minimumRole"/> pass; others throw.</summary>
     internal static async Task EnsureRoleAsync(SagaDbContext db, Guid proposalId, Guid userId,
         ProposalRole minimumRole, CancellationToken ct)
+        => await RequireRoleAsync(db, proposalId, userId, minimumRole, ct);
+
+    /// <summary>
+    /// The same guard, but it hands back the caller's role. Chat needs it: reading a shared chat
+    /// takes Reader while posting into someone else's takes Editor, and both decisions should
+    /// come from one membership lookup.
+    /// </summary>
+    internal static async Task<ProposalRole> RequireRoleAsync(SagaDbContext db, Guid proposalId,
+        Guid userId, ProposalRole minimumRole, CancellationToken ct)
     {
         var role = await db.ProposalMembers
             .Where(m => m.ProposalId == proposalId && m.UserId == userId)
@@ -245,5 +254,6 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
             .FirstOrDefaultAsync(ct);
         if (role is null || role < minimumRole)
             throw new UnauthorizedAccessException($"This action requires the {minimumRole} role on the proposal.");
+        return role.Value;
     }
 }

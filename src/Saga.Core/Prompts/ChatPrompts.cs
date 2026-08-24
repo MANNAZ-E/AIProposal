@@ -30,6 +30,9 @@ public static class ChatPrompts
     {
         WorkingContextKind.SourceMaterial => "the client's documents and the consultant's notes",
         WorkingContextKind.Analysis => "the source material plus the client profile, summary and requirements",
+        // A hand-picked selection: the context block below is the authoritative list, so the
+        // prompt points at it instead of naming sources that may not be in it.
+        WorkingContextKind.Custom => "the material picked for this chat, shown in full below",
         _ => "the full project: source material and all proposal artifacts",
     };
 }

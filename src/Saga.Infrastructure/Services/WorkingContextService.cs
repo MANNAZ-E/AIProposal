@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Saga.Core.Domain;
+using Saga.Core.Models;
 using Saga.Core.Pipeline;
 using Saga.Infrastructure.Data;
 
@@ -36,6 +37,38 @@ public class WorkingContextService(
         await condensation.EnsureCondensedAsync(proposalId, userId, onCondenseProgress, ct);
         (documents, artifacts) = await LoadRawAsync(proposalId, ct);
         return new LoadedContext(documents, artifacts, UseCondensed: true);
+    }
+
+    /// <summary>
+    /// Loads only the material a chat froze at its start. The budget is assessed against that
+    /// subset, so unchecking a large appendix genuinely avoids condensing the whole proposal.
+    /// </summary>
+    public async Task<LoadedContext> LoadForSelectionAsync(Guid proposalId, MaterialSelection selection,
+        Guid? userId = null, CancellationToken ct = default)
+    {
+        var (documents, artifacts) = await LoadRawAsync(proposalId, ct);
+        var chosenDocuments = Filter(documents, selection);
+        var chosenArtifacts = Filter(artifacts, selection);
+
+        var status = TokenBudget.Assess(chosenDocuments, Budget);
+        if (!status.OverBudget)
+            return new LoadedContext(chosenDocuments, chosenArtifacts, UseCondensed: false);
+
+        await condensation.EnsureCondensedAsync(proposalId, userId, null, ct);
+        (documents, artifacts) = await LoadRawAsync(proposalId, ct);
+        return new LoadedContext(Filter(documents, selection), Filter(artifacts, selection), UseCondensed: true);
+    }
+
+    private static List<Document> Filter(List<Document> documents, MaterialSelection selection)
+    {
+        var ids = selection.DocumentIds.ToHashSet();
+        return documents.Where(d => ids.Contains(d.Id)).ToList();
+    }
+
+    private static List<Artifact> Filter(List<Artifact> artifacts, MaterialSelection selection)
+    {
+        var types = selection.ArtifactTypes.ToHashSet();
+        return artifacts.Where(a => types.Contains(a.Type)).ToList();
     }
 
     public async Task<BudgetStatus> AssessAsync(Guid proposalId, CancellationToken ct = default)
