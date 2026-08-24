@@ -1,107 +1,214 @@
 @inject ChatService Chat
 @inject CurrentUserService CurrentUser
+@implements IDisposable
 
-<h2>Chat</h2>
-<div class="card" style="margin-bottom: 1rem;">
-    <label for="chat-context" style="font-size: 0.85rem; font-weight: 600;">The AI answers from</label>
-    <select id="chat-context" @bind="_kind" disabled="@(_busy || _chatId is not null)" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
-        <option value="@WorkingContextKind.SourceMaterial">Source material — client documents and notes only</option>
-        <option value="@WorkingContextKind.Analysis">Analysis — source material + profile, summary, requirements</option>
-        <option value="@WorkingContextKind.FullProject">Full project — everything, including the written proposal</option>
-    </select>
-</div>
+<div class="chat-layout">
+    <ChatList Chats="_chats" SelectedId="_activeChatId" IsDraftActive="_isDraft"
+              Streaming="_streamingIds" OnSelect="SelectAsync" OnNew="NewChat" />
 
-<div class="chat-thread">
-    @if (_messages.Count == 0 && !_busy)
-    {
-        <p class="text-muted">No questions yet.</p>
-    }
-    @foreach (var message in _messages)
-    {
-        <div class="chat-message @(message.Role == ChatRole.User ? "chat-user" : "chat-assistant")">
-            <div class="chat-meta">
-                @(message.Role == ChatRole.User ? message.Author?.DisplayName ?? "You" : "Saga")
-                <span class="text-muted">· @ContextLabel(message.WorkingContext) · @message.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+    <div class="chat-pane">
+        @if (!_isDraft && _activeChatId is null)
+        {
+            <div></div>
+            <div class="chat-scroll">
+                <div class="empty-state">
+                    @if (_chats.Count == 0)
+                    {
+                        <p>No chats yet. A chat answers questions about this proposal's material.</p>
+                    }
+                    else
+                    {
+                        <p class="text-muted">Select a chat, or start a new one.</p>
+                    }
+                    <button class="btn btn-primary" @onclick="NewChat">Start a chat</button>
+                </div>
             </div>
-            @if (message.Role == ChatRole.User)
-            {
-                <p style="margin: 0; white-space: pre-wrap;">@message.Text</p>
-            }
-            else
-            {
-                <div class="markdown-body">@Markdown.Render(message.Text)</div>
-            }
-        </div>
-    }
-    @if (_busy)
-    {
-        <div class="chat-message chat-assistant">
-            <div class="chat-meta">Saga <span class="text-muted">· @ContextLabel(_kind)</span></div>
-            <div class="markdown-body">
-                @Markdown.Render(_streaming)
-                <span class="cursor-blink">▌</span>
+            <div></div>
+        }
+        else
+        {
+            <div class="chat-header">
+                <div class="chat-header-title">@(_isDraft ? "New chat" : ActiveChat?.Title)</div>
+                <div class="chat-header-meta">
+                    @if (_isDraft)
+                    {
+                        <text>Pick what this chat can read. It is locked once you ask the first question.</text>
+                    }
+                    else
+                    {
+                        <text>@ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)</text>
+                    }
+                </div>
             </div>
-        </div>
-    }
-</div>
 
-@if (_error is not null)
-{
-    <p class="error-text">@_error</p>
-}
+            <div class="chat-scroll">
+                @if (_isDraft)
+                {
+                    <div class="card" style="margin-bottom: 1rem;">
+                        <label for="chat-context" style="font-size: 0.85rem; font-weight: 600;">The AI answers from</label>
+                        <select id="chat-context" @bind="_draftKind" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
+                            <option value="@WorkingContextKind.SourceMaterial">Source material — client documents and notes only</option>
+                            <option value="@WorkingContextKind.Analysis">Analysis — source material + profile, summary, requirements</option>
+                            <option value="@WorkingContextKind.FullProject">Full project — everything, including the written proposal</option>
+                        </select>
+                    </div>
+                }
 
-<div class="chat-input">
-    <textarea rows="2" placeholder="Ask about the material, the requirements, the proposal…"
-              @bind="_question" @bind:event="oninput" disabled="@_busy"
-              @onkeydown="OnKeyDown"></textarea>
-    <button class="btn btn-primary" @onclick="AskAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_question))">
-        @(_busy ? "Answering…" : "Ask")
-    </button>
+                <div class="chat-thread">
+                    @foreach (var message in _messages)
+                    {
+                        <div class="chat-message @(message.Role == ChatRole.User ? "chat-user" : "chat-assistant")">
+                            <div class="chat-meta">
+                                @(message.Role == ChatRole.User ? message.Author?.DisplayName ?? "You" : "Saga")
+                                <span class="text-muted">· @message.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+                            </div>
+                            @if (message.Role == ChatRole.User)
+                            {
+                                <p style="margin: 0; white-space: pre-wrap;">@message.Text</p>
+                            }
+                            else
+                            {
+                                <div class="markdown-body">@Markdown.Render(message.Text)</div>
+                            }
+                        </div>
+                    }
+                    @if (ActiveStreaming is not null)
+                    {
+                        <div class="chat-message chat-assistant">
+                            <div class="chat-meta">Saga</div>
+                            <div class="markdown-body">
+                                @Markdown.Render(ActiveStreaming)
+                                <span class="cursor-blink">▌</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (_error is not null)
+                {
+                    <p class="error-text">@_error</p>
+                }
+            </div>
+
+            <div class="chat-composer">
+                <div class="chat-input">
+                    <textarea rows="2" placeholder="Ask about the material, the requirements, the proposal…"
+                              @bind="_question" @bind:event="oninput" disabled="@ActiveIsBusy"
+                              @onkeydown="OnKeyDown"></textarea>
+                    <button class="btn btn-primary" @onclick="AskAsync"
+                            disabled="@(ActiveIsBusy || string.IsNullOrWhiteSpace(_question))">
+                        @(ActiveIsBusy ? "Answering…" : "Ask")
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter] public ProposalRole MyRole { get; set; }
 
+    private List<ChatListItem> _chats = [];
     private List<ChatMessage> _messages = [];
-    private Guid? _chatId;
-    private WorkingContextKind _kind = WorkingContextKind.FullProject;
+
+    /// <summary>Null with <see cref="_isDraft"/> false means "nothing selected".</summary>
+    private Guid? _activeChatId;
+
+    /// <summary>
+    /// The one reusable unsaved chat. It has no database row until the first question lands, so
+    /// abandoning it leaves nothing behind and pressing New again just reuses this slot.
+    /// </summary>
+    private bool _isDraft;
+    private WorkingContextKind _draftKind = WorkingContextKind.FullProject;
+
+    /// <summary>Answers still streaming, keyed by chat id (the draft uses Guid.Empty), so
+    /// switching chats mid-answer keeps filling the right buffer and the right row spins.</summary>
+    private readonly Dictionary<Guid, string> _streaming = [];
+    private HashSet<Guid> _streamingIds = [];
+
     private string _question = "";
-    private string _streaming = "";
-    private bool _busy;
     private string? _error;
+    private bool _disposed;
+    private Guid _loadedProposalId;
+
+    private ChatListItem? ActiveChat => _chats.FirstOrDefault(c => c.Id == _activeChatId);
+    private Guid ActiveKey => _isDraft ? Guid.Empty : _activeChatId ?? Guid.Empty;
+    private string? ActiveStreaming => _streaming.TryGetValue(ActiveKey, out var text) ? text : null;
+    private bool ActiveIsBusy => _streaming.ContainsKey(ActiveKey);
+
+    public void Dispose() => _disposed = true;
 
     protected override async Task OnParametersSetAsync()
     {
+        if (_loadedProposalId == ProposalId) return;
+        _loadedProposalId = ProposalId;
+        await LoadChatsAsync();
+        if (_chats.Count > 0) await SelectAsync(_chats[0].Id);
+    }
+
+    private async Task LoadChatsAsync()
+    {
         var user = await CurrentUser.GetAsync();
-        // The list pane lands in the next step; until then the newest visible chat is the one on
-        // screen, which is what the single-thread UI showed anyway.
-        var chats = await Chat.ListAsync(ProposalId, user.Id);
-        _chatId = chats.FirstOrDefault()?.Id;
-        _messages = _chatId is null ? [] : await Chat.GetMessagesAsync(_chatId.Value, user.Id);
-        if (_chatId is not null) _kind = chats[0].WorkingContext;
+        _chats = await Chat.ListAsync(ProposalId, user.Id);
+        _streamingIds = _streaming.Keys.ToHashSet();
+    }
+
+    private async Task SelectAsync(Guid chatId)
+    {
+        if (_activeChatId == chatId && !_isDraft) return;
+        _error = null;
+        _isDraft = false;
+        _activeChatId = chatId;
+        var user = await CurrentUser.GetAsync();
+        try
+        {
+            _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+        }
+        catch (Exception ex)
+        {
+            // Unshared or deleted while it sat on screen: the list is the source of truth.
+            _error = ex.Message;
+            _messages = [];
+            _activeChatId = null;
+            await LoadChatsAsync();
+        }
+    }
+
+    private void NewChat()
+    {
+        _error = null;
+        _isDraft = true;
+        _activeChatId = null;
+        _messages = [];
+        _question = "";
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey && !_busy && !string.IsNullOrWhiteSpace(_question))
+        if (e.Key == "Enter" && !e.ShiftKey && !ActiveIsBusy && !string.IsNullOrWhiteSpace(_question))
             await AskAsync();
     }
 
     private async Task AskAsync()
     {
         var question = _question.Trim();
-        if (question.Length == 0 || _busy) return;
+        if (question.Length == 0 || ActiveIsBusy) return;
 
         _error = null;
-        _busy = true;
         _question = "";
-        _streaming = "";
         var user = await CurrentUser.GetAsync();
+        var askingDraft = _isDraft;
+        // This ask owns one buffer. The key follows the answer, not the screen, so switching
+        // chats mid-answer keeps the text landing in the right place.
+        var streamKey = ActiveKey;
+        _streaming[streamKey] = "";
+        _streamingIds = _streaming.Keys.ToHashSet();
+
         _messages.Add(new ChatMessage
         {
             Role = ChatRole.User,
             Text = question,
-            WorkingContext = _kind,
             Author = user,
             CreatedAt = DateTimeOffset.UtcNow,
         });
@@ -109,23 +216,40 @@
 
         try
         {
-            var (chatId, _) = await Chat.AskAsync(ProposalId, _chatId, user.Id, question, _kind,
-                onChatCreated: id => { _chatId = id; return Task.CompletedTask; },
+            var (chatId, _) = await Chat.AskAsync(ProposalId, askingDraft ? null : streamKey, user.Id,
+                question, _draftKind,
+                onChatCreated: async id =>
+                {
+                    // Re-key the buffer onto the real chat before the answer starts arriving, and
+                    // free the draft slot, so pressing New again cannot duplicate this chat.
+                    if (_streaming.Remove(streamKey, out var buffered)) _streaming[id] = buffered;
+                    streamKey = id;
+                    if (_isDraft)
+                    {
+                        _isDraft = false;
+                        _activeChatId = id;
+                    }
+                    await LoadChatsAsync();
+                    if (!_disposed) await InvokeAsync(StateHasChanged);
+                },
                 onDelta: async delta =>
                 {
-                    _streaming += delta;
-                    await InvokeAsync(StateHasChanged);
+                    _streaming[streamKey] += delta;
+                    if (!_disposed) await InvokeAsync(StateHasChanged);
                 });
-            _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+
+            _streaming.Remove(streamKey);
+            if (_activeChatId == chatId) _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+            await LoadChatsAsync();
         }
         catch (Exception ex)
         {
             _error = ex.Message;
+            _streaming.Remove(streamKey);
         }
         finally
         {
-            _busy = false;
-            _streaming = "";
+            _streamingIds = _streaming.Keys.ToHashSet();
         }
     }
 

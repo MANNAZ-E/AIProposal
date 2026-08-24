@@ -10,6 +10,7 @@
     --saga-bg: #f6f7f8;
     /* Workspace nav width, also used to line the app bar's proposal name up with the content. */
     --saga-nav-width: 250px;
+    --saga-chat-list-width: 240px;
     --saga-gutter: 1.5rem;
 }
 
@@ -902,6 +903,162 @@ button.upload-area {
     border-radius: 8px;
     font: inherit;
     resize: vertical;
+}
+
+/* ---------- Chat list pane ---------- */
+
+/* The workspace content column owns the gutter and the only scroll container, which a
+   full-height list pane cannot live inside. Chat takes both over. */
+.workspace-main.flush {
+    padding: 0;
+    overflow: hidden;
+}
+
+/* The height has to reach the chat grid through the content wrapper, or the pane collapses
+   to its content and the transcript scrolls the whole page instead of itself. */
+.workspace-main.flush > .workspace-content {
+    height: 100%;
+    min-height: 0;
+}
+
+.chat-layout {
+    display: grid;
+    grid-template-columns: var(--saga-chat-list-width) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+
+.chat-list {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--saga-border);
+    background: #fbfbfc;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.chat-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.9rem 0.8rem 0.5rem;
+}
+
+.chat-list-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.chat-group {
+    padding: 0.5rem 0.8rem 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--saga-muted);
+}
+
+.chat-row {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-left: 3px solid transparent;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    padding: 0.45rem 0.8rem;
+}
+
+.chat-row:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.chat-row.active {
+    background: var(--saga-primary-light);
+    border-left-color: var(--saga-primary);
+}
+
+.chat-row-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.chat-row-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-row-time {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    color: var(--saga-muted);
+}
+
+.chat-row-meta {
+    font-size: 0.75rem;
+    color: var(--saga-muted);
+}
+
+/* ---------- Chat thread pane ---------- */
+
+.chat-pane {
+    display: grid;
+    /* header / scrolling transcript / pinned composer */
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100%;
+    min-height: 0;
+}
+
+.chat-header {
+    padding: 0.9rem var(--saga-gutter) 0.7rem;
+    border-bottom: 1px solid var(--saga-border);
+}
+
+.chat-header-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.chat-header-meta {
+    margin-top: 0.15rem;
+    font-size: 0.8rem;
+    color: var(--saga-muted);
+}
+
+.chat-scroll {
+    overflow-y: auto;
+    min-height: 0;
+    padding: var(--saga-gutter);
+}
+
+.chat-composer {
+    border-top: 1px solid var(--saga-border);
+    padding: 0.75rem var(--saga-gutter);
+}
+
+.chat-composer .chat-input {
+    margin: 0;
+}
+
+/* Narrow windows: the list becomes a strip above the thread rather than a third column. */
+@media (max-width: 900px) {
+    .chat-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .chat-list {
+        border-right: none;
+        border-bottom: 1px solid var(--saga-border);
+        max-height: 40vh;
+    }
 }
 
 /* ---------- Blazor defaults ---------- */

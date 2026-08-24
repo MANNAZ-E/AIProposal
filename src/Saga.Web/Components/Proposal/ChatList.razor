@@ -1,0 +1,73 @@
+@* The chat list pane. Two groups, because the question you have when you open it is
+   "is this mine, or is someone else watching" — a badge on a flat list answers that slower. *@
+
+<div class="chat-list">
+    <div class="chat-list-header">
+        <span class="chat-list-title">Chats</span>
+        <button class="btn btn-outline btn-sm" @onclick="OnNew">＋ New</button>
+    </div>
+
+    @if (IsDraftActive)
+    {
+        <button class="chat-row active" type="button">
+            <span class="chat-row-line">
+                <span class="chat-row-title">New chat</span>
+                @if (Streaming.Contains(Guid.Empty))
+                {
+                    <span class="chat-row-time">⟳</span>
+                }
+            </span>
+        </button>
+    }
+
+    @if (Mine.Count > 0)
+    {
+        <div class="chat-group">Mine</div>
+        @foreach (var chat in Mine)
+        {
+            @Row(chat)
+        }
+    }
+
+    @if (SharedWithMe.Count > 0)
+    {
+        <div class="chat-group">Shared with me</div>
+        @foreach (var chat in SharedWithMe)
+        {
+            @Row(chat)
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<ChatListItem> Chats { get; set; } = [];
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public bool IsDraftActive { get; set; }
+    [Parameter] public HashSet<Guid> Streaming { get; set; } = [];
+    [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+    [Parameter] public EventCallback OnNew { get; set; }
+
+    private List<ChatListItem> Mine => Chats.Where(c => c.IsMine).ToList();
+    private List<ChatListItem> SharedWithMe => Chats.Where(c => !c.IsMine).ToList();
+
+    private RenderFragment Row(ChatListItem chat) =>
+        @<button class="chat-row @(SelectedId == chat.Id ? "active" : null)" type="button"
+                 @onclick="() => OnSelect.InvokeAsync(chat.Id)">
+            <span class="chat-row-line">
+                <span class="chat-row-title">
+                    @chat.Title
+                    @if (chat.IsMine && chat.Visibility == ChatVisibility.Shared)
+                    {
+                        <span class="text-muted" title="Shared with the team">👥</span>
+                    }
+                </span>
+                <span class="chat-row-time">
+                    @(Streaming.Contains(chat.Id) ? "⟳" : RelativeTime.Display(chat.LastMessageAt, DateTimeOffset.UtcNow))
+                </span>
+            </span>
+            @if (!chat.IsMine)
+            {
+                <span class="chat-row-meta">@chat.OwnerName</span>
+            }
+        </button>;
+}
