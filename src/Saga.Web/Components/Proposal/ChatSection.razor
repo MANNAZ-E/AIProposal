@@ -1,5 +1,6 @@
 @inject ChatService Chat
 @inject CurrentUserService CurrentUser
+@inject WorkingContextService WorkingContext
 @implements IDisposable
 
 <div class="chat-layout">
@@ -36,7 +37,14 @@
                     }
                     else
                     {
-                        <text>@ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)</text>
+                        <button class="link-button" @onclick="() => _showMaterial = !_showMaterial">
+                            @ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)
+                            · @SelectedDocumentCount of @_documents.Count files @(_showMaterial ? "▴" : "▾")
+                        </button>
+                        @if (MaterialHasChanged)
+                        {
+                            <span class="text-muted"> · Material has changed since this chat started.</span>
+                        }
                     }
                 </div>
             </div>
@@ -45,12 +53,21 @@
                 @if (_isDraft)
                 {
                     <div class="card" style="margin-bottom: 1rem;">
-                        <label for="chat-context" style="font-size: 0.85rem; font-weight: 600;">The AI answers from</label>
-                        <select id="chat-context" @bind="_draftKind" style="max-width: 480px; display: block; margin-top: 0.3rem; padding: 0.4rem 0.6rem; border: 1px solid var(--saga-border); border-radius: 6px; font: inherit;">
-                            <option value="@WorkingContextKind.SourceMaterial">Source material — client documents and notes only</option>
-                            <option value="@WorkingContextKind.Analysis">Analysis — source material + profile, summary, requirements</option>
-                            <option value="@WorkingContextKind.FullProject">Full project — everything, including the written proposal</option>
-                        </select>
+                        <ChatMaterial Documents="_documents" Artifacts="_artifacts"
+                                      SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
+                                      Budget="WorkingContext.Budget"
+                                      Preset="_draftKind" PresetChanged="k => _draftKind = k" />
+                    </div>
+                }
+                else if (_showMaterial)
+                {
+                    <div class="card" style="margin-bottom: 1rem;">
+                        <ChatMaterial Documents="_documents" Artifacts="_artifacts"
+                                      SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
+                                      ReadOnly="true" Preset="ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject" />
+                        <button class="btn btn-outline btn-sm" @onclick="NewChatWithSameMaterial">
+                            New chat with this material
+                        </button>
                     </div>
                 }
 
@@ -122,6 +139,16 @@
     private bool _isDraft;
     private WorkingContextKind _draftKind = WorkingContextKind.FullProject;
 
+    /// <summary>Everything the proposal has, for the picker and for naming what a chat froze.</summary>
+    private List<Document> _documents = [];
+    private List<Artifact> _artifacts = [];
+
+    /// <summary>The draft's choice, or the started chat's frozen choice shown read-only.</summary>
+    private HashSet<Guid> _selectedDocuments = [];
+    private HashSet<ArtifactType> _selectedArtifacts = [];
+    private bool _showMaterial;
+    private ChatSession? _activeSession;
+
     /// <summary>Answers still streaming, keyed by chat id (the draft uses Guid.Empty), so
     /// switching chats mid-answer keeps filling the right buffer and the right row spins.</summary>
     private readonly Dictionary<Guid, string> _streaming = [];
@@ -133,6 +160,16 @@
     private Guid _loadedProposalId;
 
     private ChatListItem? ActiveChat => _chats.FirstOrDefault(c => c.Id == _activeChatId);
+    private int SelectedDocumentCount => _selectedDocuments.Count;
+
+    /// <summary>
+    /// A chat answers from what it froze, so material edited since then is invisible to it. Say so
+    /// rather than letting someone wonder why a new upload is being ignored.
+    /// </summary>
+    private bool MaterialHasChanged
+        => _activeSession is not null
+           && (_documents.Any(d => _selectedDocuments.Contains(d.Id) && d.UpdatedAt > _activeSession.CreatedAt)
+               || _artifacts.Any(a => _selectedArtifacts.Contains(a.Type) && a.UpdatedAt > _activeSession.CreatedAt));
     private Guid ActiveKey => _isDraft ? Guid.Empty : _activeChatId ?? Guid.Empty;
     private string? ActiveStreaming => _streaming.TryGetValue(ActiveKey, out var text) ? text : null;
     private bool ActiveIsBusy => _streaming.ContainsKey(ActiveKey);
@@ -143,6 +180,8 @@
     {
         if (_loadedProposalId == ProposalId) return;
         _loadedProposalId = ProposalId;
+        var user = await CurrentUser.GetAsync();
+        (_documents, _artifacts) = await Chat.GetMaterialAsync(ProposalId, user.Id);
         await LoadChatsAsync();
         if (_chats.Count > 0) await SelectAsync(_chats[0].Id);
     }
@@ -159,11 +198,14 @@
         if (_activeChatId == chatId && !_isDraft) return;
         _error = null;
         _isDraft = false;
+        _showMaterial = false;
         _activeChatId = chatId;
         var user = await CurrentUser.GetAsync();
         try
         {
             _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+            _activeSession = await Chat.GetChatAsync(chatId, user.Id);
+            ShowFrozenSelection(_activeSession);
         }
         catch (Exception ex)
         {
@@ -171,17 +213,48 @@
             _error = ex.Message;
             _messages = [];
             _activeChatId = null;
+            _activeSession = null;
             await LoadChatsAsync();
         }
+    }
+
+    /// <summary>
+    /// A chat carried over from the single-thread era has nothing frozen yet, so it reads as
+    /// everything — which is what its next question will actually freeze.
+    /// </summary>
+    private void ShowFrozenSelection(ChatSession session)
+    {
+        var frozen = MaterialSelection.FromJson(session.MaterialSelectionJson)
+                     ?? MaterialSelection.Everything(_documents, _artifacts);
+        _selectedDocuments = frozen.DocumentIds.ToHashSet();
+        _selectedArtifacts = frozen.ArtifactTypes.ToHashSet();
     }
 
     private void NewChat()
     {
         _error = null;
         _isDraft = true;
+        _showMaterial = false;
         _activeChatId = null;
+        _activeSession = null;
         _messages = [];
         _question = "";
+        _draftKind = WorkingContextKind.FullProject;
+        var everything = MaterialSelection.Everything(_documents, _artifacts);
+        _selectedDocuments = everything.DocumentIds.ToHashSet();
+        _selectedArtifacts = everything.ArtifactTypes.ToHashSet();
+    }
+
+    /// <summary>The escape hatch from the lock: same material, fresh chat.</summary>
+    private void NewChatWithSameMaterial()
+    {
+        var documents = _selectedDocuments.ToHashSet();
+        var artifacts = _selectedArtifacts.ToHashSet();
+        var kind = ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject;
+        NewChat();
+        _selectedDocuments = documents;
+        _selectedArtifacts = artifacts;
+        _draftKind = kind;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
@@ -216,8 +289,14 @@
 
         try
         {
+            // The selection only travels on the first question; after that the chat replays what
+            // it froze and this argument is ignored.
+            var selection = askingDraft
+                ? new MaterialSelection(_selectedDocuments.ToList(), _selectedArtifacts.ToList())
+                : null;
+
             var (chatId, _) = await Chat.AskAsync(ProposalId, askingDraft ? null : streamKey, user.Id,
-                question, _draftKind,
+                question, _draftKind, selection,
                 onChatCreated: async id =>
                 {
                     // Re-key the buffer onto the real chat before the answer starts arriving, and
@@ -239,7 +318,11 @@
                 });
 
             _streaming.Remove(streamKey);
-            if (_activeChatId == chatId) _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+            if (_activeChatId == chatId)
+            {
+                _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+                _activeSession = await Chat.GetChatAsync(chatId, user.Id);
+            }
             await LoadChatsAsync();
         }
         catch (Exception ex)

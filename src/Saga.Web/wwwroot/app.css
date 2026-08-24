@@ -1047,6 +1047,61 @@ button.upload-area {
     margin: 0;
 }
 
+/* ---------- Chat material picker ---------- */
+
+.chat-material-presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.9rem;
+    padding-bottom: 0.7rem;
+    margin-bottom: 0.7rem;
+    border-bottom: 1px solid var(--saga-border);
+}
+
+.chat-material-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.chat-preset,
+.chat-material-head,
+.chat-material-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    cursor: pointer;
+}
+
+.chat-material-group {
+    margin-bottom: 0.6rem;
+}
+
+.chat-material-head {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.chat-material-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 1.2rem;
+    padding: 0.25rem 0 0 1.4rem;
+}
+
+.chat-material-item {
+    font-size: 0.85rem;
+    min-width: 12rem;
+}
+
+.chat-token-meter {
+    margin-top: 0.7rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--saga-border);
+    font-size: 0.8rem;
+    color: var(--saga-muted);
+}
+
 /* Narrow windows: the list becomes a strip above the thread rather than a third column. */
 @media (max-width: 900px) {
     .chat-layout {

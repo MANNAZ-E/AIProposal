@@ -1,0 +1,182 @@
+@using Saga.Core.Pipeline
+@* What a chat is allowed to read. Editable while the chat is a draft, read-only once it has
+   started: the selection is frozen so every question re-sends the same prefix and the provider
+   can serve it from its cache. *@
+
+<div class="chat-material">
+    @if (!ReadOnly)
+    {
+        <div class="chat-material-presets">
+            <span class="chat-material-label">Preset</span>
+            @foreach (var preset in Presets)
+            {
+                <label class="chat-preset">
+                    <input type="radio" name="chat-preset" checked="@(Preset == preset)"
+                           @onchange="() => ApplyPreset(preset)" />
+                    <span>@PresetLabel(preset)</span>
+                </label>
+            }
+            @if (Preset == WorkingContextKind.Custom)
+            {
+                <span class="badge badge-shared">Custom</span>
+            }
+        </div>
+    }
+
+    @Group("Client documents", Uploads)
+    @Group("Notes", Notes)
+
+    @if (Artifacts.Count > 0)
+    {
+        <div class="chat-material-group">
+            <label class="chat-material-head">
+                <input type="checkbox" disabled="@ReadOnly"
+                       checked="@Artifacts.All(a => SelectedArtifacts.Contains(a.Type))"
+                       @onchange="e => ToggleAllArtifacts((bool?)e.Value == true)" />
+                <span>Proposal artifacts (@Artifacts.Count(a => SelectedArtifacts.Contains(a.Type)))</span>
+            </label>
+            <div class="chat-material-items">
+                @foreach (var artifact in Artifacts)
+                {
+                    <label class="chat-material-item">
+                        <input type="checkbox" disabled="@ReadOnly"
+                               checked="@SelectedArtifacts.Contains(artifact.Type)"
+                               @onchange="() => ToggleArtifact(artifact.Type)" />
+                        <span>@ArtifactLabel(artifact.Type)</span>
+                    </label>
+                }
+            </div>
+        </div>
+    }
+
+    @if (ReadOnly)
+    {
+        <p class="form-hint" style="margin-top: 0.6rem;">
+            Locked for this chat — start a new chat to change it.
+        </p>
+    }
+    else
+    {
+        <div class="chat-token-meter">
+            ~@EstimatedTokens.ToString("N0") of @Budget.ToString("N0") tokens
+            @if (EstimatedTokens > Budget)
+            {
+                <span class="text-muted">· over budget, documents will be condensed</span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<Document> Documents { get; set; } = [];
+    [Parameter, EditorRequired] public List<Artifact> Artifacts { get; set; } = [];
+    [Parameter, EditorRequired] public HashSet<Guid> SelectedDocuments { get; set; } = [];
+    [Parameter, EditorRequired] public HashSet<ArtifactType> SelectedArtifacts { get; set; } = [];
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public int Budget { get; set; } = 100_000;
+    [Parameter] public WorkingContextKind Preset { get; set; }
+    [Parameter] public EventCallback<WorkingContextKind> PresetChanged { get; set; }
+
+    private static readonly WorkingContextKind[] Presets =
+        [WorkingContextKind.SourceMaterial, WorkingContextKind.Analysis, WorkingContextKind.FullProject];
+
+    private List<Document> Uploads => Documents.Where(d => d.Kind == DocumentKind.Upload).ToList();
+    private List<Document> Notes => Documents.Where(d => d.Kind == DocumentKind.Note).ToList();
+
+    private int EstimatedTokens
+        => Documents.Where(d => SelectedDocuments.Contains(d.Id))
+               .Sum(d => TokenBudget.EstimateTokens(d.ExtractedText))
+           + Artifacts.Where(a => SelectedArtifacts.Contains(a.Type))
+               .Sum(a => TokenBudget.EstimateTokens(a.ContentMarkdown ?? a.ContentJson));
+
+    private bool IsDocumentChecked(Document document) => SelectedDocuments.Contains(document.Id);
+
+    private async Task ToggleDocument(Document document)
+    {
+        if (ReadOnly) return;
+        if (!SelectedDocuments.Add(document.Id)) SelectedDocuments.Remove(document.Id);
+        await MarkCustomAsync();
+    }
+
+    private async Task ToggleAllDocuments(List<Document> documents, bool on)
+    {
+        if (ReadOnly) return;
+        foreach (var document in documents)
+        {
+            if (on) SelectedDocuments.Add(document.Id);
+            else SelectedDocuments.Remove(document.Id);
+        }
+        await MarkCustomAsync();
+    }
+
+    private async Task ToggleArtifact(ArtifactType type)
+    {
+        if (ReadOnly) return;
+        if (!SelectedArtifacts.Add(type)) SelectedArtifacts.Remove(type);
+        await MarkCustomAsync();
+    }
+
+    private async Task ToggleAllArtifacts(bool on)
+    {
+        if (ReadOnly) return;
+        foreach (var artifact in Artifacts)
+        {
+            if (on) SelectedArtifacts.Add(artifact.Type);
+            else SelectedArtifacts.Remove(artifact.Type);
+        }
+        await MarkCustomAsync();
+    }
+
+    /// <summary>Touching a checkbox means the selection is no longer one of the presets.</summary>
+    private async Task MarkCustomAsync()
+    {
+        var selection = new MaterialSelection(SelectedDocuments.ToList(), SelectedArtifacts.ToList());
+        await PresetChanged.InvokeAsync(selection.PresetOrCustom(Documents, Artifacts));
+    }
+
+    private async Task ApplyPreset(WorkingContextKind preset)
+    {
+        var selection = MaterialSelection.ForPreset(preset, Documents, Artifacts);
+        SelectedDocuments.Clear();
+        foreach (var id in selection.DocumentIds) SelectedDocuments.Add(id);
+        SelectedArtifacts.Clear();
+        foreach (var type in selection.ArtifactTypes) SelectedArtifacts.Add(type);
+        await PresetChanged.InvokeAsync(preset);
+    }
+
+    private RenderFragment? Group(string title, List<Document> documents)
+    {
+        if (documents.Count == 0) return null;
+        return @<div class="chat-material-group">
+            <label class="chat-material-head">
+                <input type="checkbox" disabled="@ReadOnly" checked="@documents.All(IsDocumentChecked)"
+                       @onchange="e => ToggleAllDocuments(documents, (bool?)e.Value == true)" />
+                <span>@title (@documents.Count(IsDocumentChecked))</span>
+            </label>
+            <div class="chat-material-items">
+                @foreach (var document in documents)
+                {
+                    <label class="chat-material-item">
+                        <input type="checkbox" disabled="@ReadOnly" checked="@IsDocumentChecked(document)"
+                               @onchange="() => ToggleDocument(document)" />
+                        <span>@document.Name</span>
+                    </label>
+                }
+            </div>
+        </div>;
+    }
+
+    private static string PresetLabel(WorkingContextKind kind) => kind switch
+    {
+        WorkingContextKind.SourceMaterial => "Source material",
+        WorkingContextKind.Analysis => "Analysis",
+        _ => "Full project",
+    };
+
+    public static string ArtifactLabel(ArtifactType type) => type switch
+    {
+        ArtifactType.ClientProfile => "Client profile",
+        ArtifactType.SolutionProposal => "Solution",
+        _ => type.ToString(),
+    };
+}
