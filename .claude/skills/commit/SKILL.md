@@ -15,8 +15,6 @@ description: Stage, commit, and push the current changes to git in one step. Use
    ```
    git commit -m "$(cat <<'MSG'
    Short imperative summary
-
-   Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
    MSG
    )"
    ```

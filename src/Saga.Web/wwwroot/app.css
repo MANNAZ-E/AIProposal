@@ -1209,17 +1209,10 @@ button.type-list-name {
     border-left-color: var(--saga-primary);
 }
 
-/* The list's first row is the unstarted chat: muted until you are standing on it. */
+/* The list's first row is the unstarted chat: a full-strength action, not a muted entry. */
 .chat-new-wrap {
+    border-top: 1px solid var(--saga-border);
     border-bottom: 1px solid var(--saga-border);
-}
-
-.chat-new-row {
-    color: var(--saga-muted);
-}
-
-.chat-new-row.active {
-    color: inherit;
 }
 
 .chat-row-line {
