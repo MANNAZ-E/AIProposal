@@ -25,6 +25,13 @@ public class Document
     /// <summary>Extracted plain text (uploads) or the note text itself.</summary>
     public string ExtractedText { get; set; } = "";
 
+    /// <summary>
+    /// Tokens in <see cref="ExtractedText"/>, counted on every write so the Materials table and
+    /// the context budget never re-tokenise on render. Null only on rows written before the
+    /// counts existed, until the startup backfill fills them in.
+    /// </summary>
+    public int? TokenCount { get; set; }
+
     /// <summary>JSON map of page/section offsets into ExtractedText, from Document Intelligence. Null for notes.</summary>
     public string? PageMapJson { get; set; }
 
@@ -33,6 +40,9 @@ public class Document
     /// context token budget. Cleared when the document changes.
     /// </summary>
     public string? CondensedText { get; set; }
+
+    /// <summary>Tokens in <see cref="CondensedText"/>. Cleared with it.</summary>
+    public int? CondensedTokenCount { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

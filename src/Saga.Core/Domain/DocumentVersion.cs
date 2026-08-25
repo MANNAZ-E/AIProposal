@@ -11,6 +11,9 @@ public class DocumentVersion
     public Document? Document { get; set; }
 
     public string Text { get; set; } = "";
+
+    /// <summary>Tokens in <see cref="Text"/>, counted when the snapshot is written.</summary>
+    public int? TokenCount { get; set; }
     public VersionOrigin Origin { get; set; }
 
     public Guid? CreatedById { get; set; }

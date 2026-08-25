@@ -1,4 +1,6 @@
 ﻿@using Saga.Core.Abstractions
+@using Saga.Core.Pipeline
+@using Saga.Core.Tokenization
 @inject DocumentService Documents
 @inject CurrentUserService CurrentUser
 @inject IDocumentTextExtractor TextExtractor
@@ -100,7 +102,7 @@
                     </button>
                 }
             </td>
-            <td class="text-muted">@FormatLength(doc.ExtractedText)</td>
+            <td class="text-muted" title="@TokenTitle(TokenBudget.TokensOf(doc))">@FormatTokens(TokenBudget.TokensOf(doc))</td>
             <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
             <td class="text-muted">@(doc.UpdatedAt > doc.CreatedAt ? doc.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm") : "—")</td>
             <td style="text-align: right; white-space: nowrap;">
@@ -136,7 +138,7 @@ else
                 <tr>
                     <th>Name</th>
                     <th>Type</th>
-                    <th>Length</th>
+                    <th>Tokens</th>
                     <th>Added</th>
                     <th>Last edited</th>
                     <th></th>
@@ -301,7 +303,7 @@ else
             {
                 <table class="table">
                     <thead>
-                        <tr><th>When</th><th>Origin</th><th>By</th><th>Length</th><th></th></tr>
+                        <tr><th>When</th><th>Origin</th><th>By</th><th>Tokens</th><th></th></tr>
                     </thead>
                     <tbody>
                         @foreach (var version in _historyVersions)
@@ -310,7 +312,7 @@ else
                                 <td>@version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
                                 <td><span class="badge badge-role">@OriginLabel(version.Origin)</span></td>
                                 <td>@(version.CreatedBy?.DisplayName ?? "—")</td>
-                                <td class="text-muted">@FormatLength(version.Text)</td>
+                                <td class="text-muted" title="@TokenTitle(VersionTokens(version))">@FormatTokens(VersionTokens(version))</td>
                                 <td style="text-align: right;">
                                     <button class="btn btn-outline btn-sm" @onclick="() => _viewHistoryVersion = version">View</button>
                                 </td>
@@ -918,15 +920,21 @@ else
         }
     }
 
-    /// <summary>Compact character counts: 740, 1.5k, 74k, 1.5M.</summary>
-    private static string FormatLength(string text)
-        => text.Length switch
+    private static int VersionTokens(DocumentVersion version)
+        => version.TokenCount ?? TokenCounter.Count(version.Text);
+
+    /// <summary>Compact token counts: 740, 1.5k, 74k, 1.5M. The exact figure is the cell's title.</summary>
+    private static string FormatTokens(int tokens)
+        => tokens switch
         {
             0 => "no text",
-            < 1_000 => text.Length.ToString(),
-            < 10_000 => $"{text.Length / 1_000d:0.#}k",
-            < 1_000_000 => $"{text.Length / 1_000d:0}k",
-            < 10_000_000 => $"{text.Length / 1_000_000d:0.#}M",
-            _ => $"{text.Length / 1_000_000d:0}M",
+            < 1_000 => tokens.ToString(),
+            < 10_000 => $"{tokens / 1_000d:0.#}k",
+            < 1_000_000 => $"{tokens / 1_000d:0}k",
+            < 10_000_000 => $"{tokens / 1_000_000d:0.#}M",
+            _ => $"{tokens / 1_000_000d:0}M",
         };
+
+    private static string? TokenTitle(int tokens)
+        => tokens == 0 ? null : $"{tokens:N0} tokens";
 }

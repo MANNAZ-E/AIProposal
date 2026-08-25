@@ -16,7 +16,7 @@
 @if (_budget is not null && _budget.OverBudget)
 {
     <div class="card budget-warning" style="margin-bottom: 1rem;">
-        <strong>Large material:</strong> the client material is roughly @_budget.EstimatedTokens.ToString("N0") tokens,
+        <strong>Large material:</strong> the client material is @_budget.Tokens.ToString("N0") tokens,
         above the @_budget.Budget.ToString("N0")-token budget. Generation will automatically use AI-condensed versions
         of the documents. Requirements extraction always reads the full text.
     </div>

@@ -112,16 +112,17 @@ public class PipelineTests
     [Fact]
     public void Token_budget_passes_small_material_untouched()
     {
+        // Counts are set explicitly: this is a test of the budget policy, not of the tokenizer.
         var documents = new List<Document>
         {
-            new() { Name = "small.pdf", Kind = DocumentKind.Upload, ExtractedText = new string('x', 400) },
+            new() { Name = "small.pdf", Kind = DocumentKind.Upload, ExtractedText = "small", TokenCount = 100 },
         };
 
         var status = TokenBudget.Assess(documents, budget: 1000);
 
         Assert.False(status.OverBudget);
         Assert.False(status.UsingCondensed);
-        Assert.Equal(100, status.EstimatedTokens);
+        Assert.Equal(100, status.Tokens);
     }
 
     [Fact]
@@ -129,7 +130,12 @@ public class PipelineTests
     {
         var oversized = new List<Document>
         {
-            new() { Name = "big.pdf", Kind = DocumentKind.Upload, ExtractedText = new string('x', 8000), CondensedText = new string('y', 400) },
+            new()
+            {
+                Name = "big.pdf", Kind = DocumentKind.Upload,
+                ExtractedText = "big", TokenCount = 2000,
+                CondensedText = "condensed", CondensedTokenCount = 100,
+            },
         };
 
         var status = TokenBudget.Assess(oversized, budget: 1000);
@@ -138,6 +144,7 @@ public class PipelineTests
 
         // No condensed version yet: over budget but the fallback isn't available.
         oversized[0].CondensedText = null;
+        oversized[0].CondensedTokenCount = null;
         status = TokenBudget.Assess(oversized, budget: 1000);
         Assert.True(status.OverBudget);
         Assert.False(status.UsingCondensed);

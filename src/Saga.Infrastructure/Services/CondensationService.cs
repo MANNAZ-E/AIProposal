@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Pipeline;
+using Saga.Core.Tokenization;
 using Saga.Infrastructure.Data;
 
 namespace Saga.Infrastructure.Services;
@@ -53,6 +54,7 @@ public class CondensationService(IDbContextFactory<SagaDbContext> dbFactory, IAi
                 parts.Add(completion.Text.Trim());
             }
             document.CondensedText = string.Join("\n\n", parts);
+            document.CondensedTokenCount = TokenCounter.Count(document.CondensedText);
         }
         await db.SaveChangesAsync(ct);
     }

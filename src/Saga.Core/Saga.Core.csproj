@@ -6,4 +6,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The Data package embeds o200k_base.tiktoken as a resource: without it the tokenizer
+         downloads the vocab from openaipublic.blob.core.windows.net on first use. -->
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+    <PackageReference Include="Microsoft.ML.Tokenizers.Data.O200kBase" Version="2.0.0" />
+    <!-- Tokenizers pulls 9.0.4 transitively, which carries CVE-2026-26127 (GHSA-73j8-2gch-69rq).
+         First patched release on the 10.x line is 10.0.4. -->
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.11" />
+  </ItemGroup>
+
 </Project>

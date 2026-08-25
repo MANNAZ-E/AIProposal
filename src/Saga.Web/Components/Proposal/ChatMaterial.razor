@@ -1,4 +1,5 @@
 @using Saga.Core.Pipeline
+@using Saga.Core.Tokenization
 @* What a chat is allowed to read. Editable while the chat is a draft, read-only once it has
    started: the selection is frozen so every question re-sends the same prefix and the provider
    can serve it from its cache. *@
@@ -74,8 +75,8 @@
     else if (!IsEmpty)
     {
         <div class="chat-token-meter">
-            @EstimatedTokens.ToString("N0") tokens
-            @if (EstimatedTokens > Budget)
+            @SelectedTokens.ToString("N0") tokens
+            @if (SelectedTokens > Budget)
             {
                 <span class="text-muted">· over budget, documents will be condensed</span>
             }
@@ -115,11 +116,15 @@
             .OrderBy(g => g.Min(d => d.DocumentType?.SortOrder ?? int.MaxValue))
             .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
-    private int EstimatedTokens
+    /// <summary>
+    /// What the selection costs the context, in the same tokens the Materials tab shows per
+    /// document. Documents carry a stored count; artifacts are small and counted on the spot.
+    /// </summary>
+    private int SelectedTokens
         => Documents.Where(d => SelectedDocuments.Contains(d.Id))
-               .Sum(d => TokenBudget.EstimateTokens(d.ExtractedText))
+               .Sum(TokenBudget.TokensOf)
            + Artifacts.Where(a => SelectedArtifacts.Contains(a.Type))
-               .Sum(a => TokenBudget.EstimateTokens(a.ContentMarkdown ?? a.ContentJson));
+               .Sum(a => TokenCounter.Count(a.ContentMarkdown ?? a.ContentJson));
 
     private bool IsDocumentChecked(Document document) => SelectedDocuments.Contains(document.Id);
 

@@ -68,6 +68,7 @@ builder.Services.AddScoped<Saga.Web.Components.Proposal.ChatDraftState>();
 builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();
 
 builder.Services.AddSingleton<PricingService>();
+builder.Services.AddScoped<TokenCountBackfill>();
 
 // Impersonation state: shared across every circuit for the same admin, not owned by one circuit
 // — see ImpersonationState's doc comment for why.
@@ -191,6 +192,12 @@ if (app.Environment.IsDevelopment())
     var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<SagaDbContext>>();
     await using var db = await dbFactory.CreateDbContextAsync();
     await db.Database.MigrateAsync();
+}
+
+// Rows written before material token counts existed have none; this fills them once.
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<TokenCountBackfill>().RunAsync();
 }
 
 // The in-memory impersonation registry does not survive a restart, so any session left open

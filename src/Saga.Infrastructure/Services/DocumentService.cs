@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
+using Saga.Core.Tokenization;
 using Saga.Infrastructure.Data;
 using System.Text.Json;
 
@@ -227,6 +228,7 @@ public class DocumentService(
             OriginalFilePath = storagePath,
             OriginalFileName = Path.GetFileName(fileName),
             ExtractedText = extractedText,
+            TokenCount = TokenCounter.Count(extractedText),
             PageMapJson = pageMapJson,
             CreatedAt = now,
             UpdatedAt = now,
@@ -251,8 +253,10 @@ public class DocumentService(
 
         var now = DateTimeOffset.UtcNow;
         document.ExtractedText = text;
+        document.TokenCount = TokenCounter.Count(text);
         document.PageMapJson = null;   // Page offsets no longer match the edited text.
         document.CondensedText = null; // Re-condense from the edited text when needed.
+        document.CondensedTokenCount = null;
         document.UpdatedAt = now;
         db.DocumentVersions.Add(NewVersion(document.Id, text, VersionOrigin.Edited, userId, now));
         await MarkMaterialChangedAsync(db, document.ProposalId, now, ct);
@@ -281,8 +285,10 @@ public class DocumentService(
 
         var now = DateTimeOffset.UtcNow;
         document.ExtractedText = version.Text;
+        document.TokenCount = version.TokenCount ?? TokenCounter.Count(version.Text);
         document.PageMapJson = null;   // The page map only ever matches the original extraction.
         document.CondensedText = null;
+        document.CondensedTokenCount = null;
         document.UpdatedAt = now;
         db.DocumentVersions.Add(NewVersion(document.Id, version.Text, VersionOrigin.Restored, userId, now));
         await MarkMaterialChangedAsync(db, document.ProposalId, now, ct);
@@ -296,6 +302,7 @@ public class DocumentService(
             Id = Guid.NewGuid(),
             DocumentId = documentId,
             Text = text,
+            TokenCount = TokenCounter.Count(text),
             Origin = origin,
             CreatedById = userId,
             CreatedAt = now,
@@ -317,6 +324,7 @@ public class DocumentService(
             DocumentTypeId = typeId,
             Name = string.IsNullOrWhiteSpace(title) ? "Note" : title.Trim(),
             ExtractedText = text,
+            TokenCount = TokenCounter.Count(text),
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -338,6 +346,7 @@ public class DocumentService(
         var now = DateTimeOffset.UtcNow;
         note.Name = string.IsNullOrWhiteSpace(title) ? "Note" : title.Trim();
         note.ExtractedText = text;
+        note.TokenCount = TokenCounter.Count(text);
         note.UpdatedAt = now;
         db.DocumentVersions.Add(NewVersion(note.Id, text, VersionOrigin.Edited, userId, now));
         await MarkMaterialChangedAsync(db, note.ProposalId, now, ct);
