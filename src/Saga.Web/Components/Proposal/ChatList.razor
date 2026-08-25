@@ -81,7 +81,7 @@
             {
                 <div class="chat-row chat-row-editing">
                     <input class="chat-rename-input" @ref="_renameInput" value="@_renameText" @oninput="OnRenameInput"
-                           @onkeydown="e => OnRenameKey(e, chat)" />
+                           @onkeydown="e => OnRenameKey(e, chat)" @onblur="() => OnRenameBlur(chat)" />
                 </div>
             }
             else if (_deleteFor == chat.Id)
@@ -187,6 +187,17 @@
     {
         if (e.Key == "Enter") await CommitRenameAsync(chat);
         else if (e.Key == "Escape") _renameFor = null;
+    }
+
+    /// <summary>
+    /// Clicking away from the field (another row, "new chat", a different page) ends the
+    /// edit without a keypress, so it needs the same save Enter gives it. Escape already
+    /// cleared <see cref="_renameFor"/> before any blur reaches here, so this only fires
+    /// for an edit that is still actually in progress.
+    /// </summary>
+    private async Task OnRenameBlur(ChatListItem chat)
+    {
+        if (_renameFor == chat.Id) await CommitRenameAsync(chat);
     }
 
     private async Task CommitRenameAsync(ChatListItem chat)

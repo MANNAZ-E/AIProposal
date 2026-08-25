@@ -187,14 +187,28 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             {
                 Id = Guid.Parse("6f9e2f9e-0001-4a7e-9f10-000000000001"),
                 Email = "elv@mannaz.com",
-                DisplayName = "Emil",
+                DisplayName = "Emil Lindeløv Vestergaard",
                 CreatedAt = DateTimeOffset.Parse("2026-07-03T00:00:00Z"),
             },
             new User
             {
                 Id = Guid.Parse("6f9e2f9e-0001-4a7e-9f10-000000000002"),
                 Email = "sda@mannaz.com",
-                DisplayName = "sda",
+                DisplayName = "Stefanie Baptiste",
+                CreatedAt = DateTimeOffset.Parse("2026-07-03T00:00:00Z"),
+            },
+            new User
+            {
+                Id = Guid.Parse("6f9e2f9e-0001-4a7e-9f10-000000000003"),
+                Email = "mkn@mannaz.com",
+                DisplayName = "Mikkel Kjær Nielsen",
+                CreatedAt = DateTimeOffset.Parse("2026-07-03T00:00:00Z"),
+            },
+            new User
+            {
+                Id = Guid.Parse("6f9e2f9e-0001-4a7e-9f10-000000000004"),
+                Email = "jth@mannaz.com",
+                DisplayName = "Pauline Thorsen Holm",
                 CreatedAt = DateTimeOffset.Parse("2026-07-03T00:00:00Z"),
             });
 

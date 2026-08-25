@@ -117,15 +117,15 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var chat = NewChat();
         var threadId = await ThreadAsync(chat, proposalId, elv);
 
-        await chat.PostAsync(threadId, elv, "Over to you @sda, deadline is Friday.");
+        await chat.PostAsync(threadId, elv, "Over to you @Stefanie Baptiste, deadline is Friday.");
 
         var message = (await chat.ListAsync(threadId, elv))[^1];
         var mention = Assert.Single(message.Mentions);
         Assert.Equal(sda, mention.UserId);
         Assert.Equal(12, mention.Start);
-        Assert.Equal("@sda".Length, mention.Length);
+        Assert.Equal("@Stefanie Baptiste".Length, mention.Length);
         // The offsets are what makes rendering a pure splice rather than a second scan.
-        Assert.Equal("@sda", message.Text.Substring(mention.Start, mention.Length));
+        Assert.Equal("@Stefanie Baptiste", message.Text.Substring(mention.Start, mention.Length));
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
 
-        var threadId = await chat.StartThreadAsync(proposalId, elv, "@sda can you take this one?");
+        var threadId = await chat.StartThreadAsync(proposalId, elv, "@Stefanie Baptiste can you take this one?");
 
         var mention = Assert.Single(Assert.Single(await chat.ListAsync(threadId, elv)).Mentions);
         Assert.Equal(sda, mention.UserId);
@@ -148,12 +148,12 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var chat = NewChat();
         var threadId = await ThreadAsync(chat, proposalId, elv);
 
-        await chat.PostAsync(threadId, elv, "@Bystander @nobody @sda");
+        await chat.PostAsync(threadId, elv, "@Bystander @nobody @Stefanie Baptiste");
 
         var message = (await chat.ListAsync(threadId, elv))[^1];
         // Only the teammate resolves: a user who exists but is not on this bid team does not.
         var mention = Assert.Single(message.Mentions);
-        Assert.Equal("@sda", message.Text.Substring(mention.Start, mention.Length));
+        Assert.Equal("@Stefanie Baptiste", message.Text.Substring(mention.Start, mention.Length));
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var chat = NewChat();
         var threadId = await ThreadAsync(chat, proposalId, elv);
 
-        await chat.PostAsync(threadId, elv, "Note to self, @Emil: book the room.");
+        await chat.PostAsync(threadId, elv, "Note to self, @Emil Lindeløv Vestergaard: book the room.");
 
         Assert.Empty((await chat.ListAsync(threadId, elv))[^1].Mentions);
     }
