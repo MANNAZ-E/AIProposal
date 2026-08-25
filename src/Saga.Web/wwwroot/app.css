@@ -237,15 +237,16 @@ a {
     overflow: hidden;
 }
 
+/* Header row carries the app bar's colour, so a table reads as part of the same chrome. */
 .table th {
     text-align: left;
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--saga-muted);
+    color: #fff;
     padding: 0.6rem 0.9rem;
-    border-bottom: 1px solid var(--saga-border);
-    background: var(--saga-primary-light);
+    border-bottom: 1px solid var(--saga-primary);
+    background: var(--saga-primary);
 }
 
 .table td {
