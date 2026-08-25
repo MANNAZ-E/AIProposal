@@ -1,0 +1,15 @@
+.impersonation-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.5rem var(--saga-gutter);
+    background: #fff3cd;
+    color: var(--saga-warning);
+    border-bottom: 1px solid #f0d78c;
+    font-weight: 600;
+}
+
+.impersonation-banner .btn {
+    font-weight: 400;
+}

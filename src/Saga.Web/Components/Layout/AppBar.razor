@@ -1,6 +1,8 @@
 @rendermode InteractiveServer
 @implements IDisposable
+@using Saga.Web.Auth
 @inject AppHeaderState Header
+@inject CurrentUserService CurrentUser
 
 <header class="app-bar">
     <a class="app-brand" href="/">
@@ -21,7 +23,10 @@
         }
     </div>
     <div class="app-user">
-        <a class="app-nav-link" href="/admin">Admin</a>
+        @if (_isAdmin)
+        {
+            <a class="app-nav-link" href="/admin">Admin</a>
+        }
         <AuthorizeView>
             <Authorized>@context.User.Identity?.Name</Authorized>
         </AuthorizeView>
@@ -29,7 +34,15 @@
 </header>
 
 @code {
-    protected override void OnInitialized() => Header.Changed += OnHeaderChanged;
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Header.Changed += OnHeaderChanged;
+        try { _isAdmin = (await CurrentUser.GetAsync()).IsAdmin; }
+        catch (UnauthorizedAccessException) { _isAdmin = false; }
+        catch (AccessRevokedException) { _isAdmin = false; }
+    }
 
     public void Dispose() => Header.Changed -= OnHeaderChanged;
 

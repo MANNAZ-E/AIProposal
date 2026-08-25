@@ -79,3 +79,9 @@ public enum GenerationOutcome
     Cancelled = 2,
     Rejected = 3,
 }
+
+public enum ImpersonationEndReason
+{
+    StoppedByAdmin = 0,
+    CircuitDisconnected = 1,
+}

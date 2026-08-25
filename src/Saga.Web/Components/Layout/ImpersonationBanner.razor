@@ -1,0 +1,40 @@
+@rendermode InteractiveServer
+@using Saga.Web.Auth
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Navigation
+
+@if (CurrentUser.IsImpersonating)
+{
+    <div class="impersonation-banner">
+        <span>Viewing as @CurrentUser.ImpersonatedDisplayName</span>
+        <button class="btn btn-sm" @onclick="StopAsync" disabled="@_stopping">Stop impersonating</button>
+    </div>
+}
+
+@code {
+    private bool _stopping;
+
+    // IsImpersonating reads cached state populated by GetAsync — nothing else in this
+    // component calls it, so without this it would always read as false.
+    protected override async Task OnInitializedAsync()
+    {
+        try { await CurrentUser.GetAsync(); }
+        catch (UnauthorizedAccessException) { }
+        catch (AccessRevokedException) { }
+    }
+
+    private async Task StopAsync()
+    {
+        _stopping = true;
+        try
+        {
+            await CurrentUser.StopImpersonationAsync();
+            // Full reload: see AdminPage.ImpersonateAsync for why Refresh isn't enough here.
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _stopping = false;
+        }
+    }
+}

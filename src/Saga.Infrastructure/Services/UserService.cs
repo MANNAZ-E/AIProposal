@@ -51,4 +51,10 @@ public class UserService(IDbContextFactory<SagaDbContext> dbFactory)
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await db.Users.FirstOrDefaultAsync(u => u.Email == email.Trim().ToLowerInvariant(), ct);
     }
+
+    public async Task<User?> FindByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
+    }
 }

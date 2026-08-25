@@ -24,6 +24,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<MannazVoiceSettings> MannazVoiceSettings => Set<MannazVoiceSettings>();
     public DbSet<FinalProposalVersion> FinalProposalVersions => Set<FinalProposalVersion>();
     public DbSet<FinalProposalFile> FinalProposalFiles => Set<FinalProposalFile>();
+    public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -181,6 +182,15 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.HasOne(r => r.StartedBy).WithMany().HasForeignKey(r => r.StartedById).OnDelete(DeleteBehavior.SetNull);
         });
 
+        modelBuilder.Entity<ImpersonationSession>(b =>
+        {
+            b.HasIndex(s => s.StartedAt);
+            // Restrict, not SetNull/Cascade: both ids are non-nullable, and the audit trail
+            // must survive any User row it references.
+            b.HasOne(s => s.AdminUser).WithMany().HasForeignKey(s => s.AdminUserId).OnDelete(DeleteBehavior.Restrict);
+            b.HasOne(s => s.TargetUser).WithMany().HasForeignKey(s => s.TargetUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
         // Stable ids so the default users exist in every environment (spec: elv@ and sda@).
         modelBuilder.Entity<User>().HasData(
             new User
@@ -189,6 +199,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
                 Email = "elv@mannaz.com",
                 DisplayName = "Emil Lindeløv Vestergaard",
                 CreatedAt = DateTimeOffset.Parse("2026-07-03T00:00:00Z"),
+                IsAdmin = true,
             },
             new User
             {
