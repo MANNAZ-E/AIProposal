@@ -32,6 +32,41 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
     public static readonly WorkingContextKind[] ChatPresets =
         [WorkingContextKind.ClientMaterial, WorkingContextKind.SourceMaterial, WorkingContextKind.FullProject];
 
+    /// <summary>Broadest first, the reverse of <see cref="ChatPresets"/> — the order the picker
+    /// lists the presets in, and the order <see cref="DefaultPreset"/> falls through them.</summary>
+    public static readonly WorkingContextKind[] DisplayPresets = ChatPresets.Reverse().ToArray();
+
+    /// <summary>
+    /// Whether a preset picks anything beyond a narrower preset already on offer: "Client materials
+    /// only" and "All materials" need matching documents to exist at all, and "Everything" needs
+    /// artifacts — without them it would just select the same rows as "All materials". The picker
+    /// greys out what is unavailable, and <see cref="DefaultPreset"/> skips it.
+    /// </summary>
+    public static bool IsPresetAvailable(
+        WorkingContextKind kind, IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
+        => kind switch
+        {
+            WorkingContextKind.ClientMaterial => documents.Any(IsClientMaterial),
+            WorkingContextKind.SourceMaterial => documents.Any(),
+            WorkingContextKind.FullProject => artifacts.Any(a => a.Status != ArtifactStatus.Empty),
+            _ => true,
+        };
+
+    /// <summary>
+    /// What a new chat starts on: the broadest preset that is actually available, so a proposal
+    /// with no artifacts yet opens on "All materials" rather than on a greyed-out "Everything".
+    /// <see cref="WorkingContextKind.Custom"/> when the proposal has nothing to read at all.
+    /// </summary>
+    public static WorkingContextKind DefaultPreset(
+        IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
+    {
+        var material = documents as IReadOnlyCollection<Document> ?? documents.ToList();
+        var built = artifacts as IReadOnlyCollection<Artifact> ?? artifacts.ToList();
+        foreach (var preset in DisplayPresets)
+            if (IsPresetAvailable(preset, material, built)) return preset;
+        return WorkingContextKind.Custom;
+    }
+
     /// <summary>What a preset picks, so the presets stay a shortcut into the same selection.</summary>
     public static MaterialSelection ForPreset(
         WorkingContextKind kind, IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)

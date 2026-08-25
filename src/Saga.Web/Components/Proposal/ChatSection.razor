@@ -77,7 +77,7 @@
                     <div class="card" style="margin-bottom: 1rem;">
                         <ChatMaterial Documents="_documents" Artifacts="_artifacts"
                                       SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
-                                      Budget="WorkingContext.Budget"
+                                      Budget="WorkingContext.Budget" OnAddMaterials="OnAddMaterials"
                                       Preset="_draftKind" PresetChanged="k => _draftKind = k" />
                     </div>
                 }
@@ -188,6 +188,10 @@
 
     /// <summary>Lets the page refresh the unread badge on the Chat nav item.</summary>
     [Parameter] public EventCallback OnUnreadChanged { get; set; }
+
+    /// <summary>Opens the Materials tab, for the empty-picker link — the tabs are page state
+    /// rather than routes, so the page has to do the switching.</summary>
+    [Parameter] public EventCallback OnAddMaterials { get; set; }
 
     private List<ChatListItem> _chats = [];
     private List<ChatMessage> _messages = [];
@@ -316,10 +320,12 @@
         _activeSession = null;
         _messages = [];
         _question = "";
-        _draftKind = WorkingContextKind.FullProject;
-        var everything = MaterialSelection.Everything(_documents, _artifacts);
-        _selectedDocuments = everything.DocumentIds.ToHashSet();
-        _selectedArtifacts = everything.ArtifactTypes.ToHashSet();
+        // The broadest preset that has anything to offer, so a proposal with no artifacts yet
+        // starts on "All materials" instead of on a greyed-out "Everything".
+        _draftKind = MaterialSelection.DefaultPreset(_documents, _artifacts);
+        var selection = MaterialSelection.ForPreset(_draftKind, _documents, _artifacts);
+        _selectedDocuments = selection.DocumentIds.ToHashSet();
+        _selectedArtifacts = selection.ArtifactTypes.ToHashSet();
     }
 
     private async Task SetVisibilityAsync(ChatVisibility visibility)

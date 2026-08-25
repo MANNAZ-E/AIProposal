@@ -14,7 +14,7 @@
 
         <div class="form-field">
             <label for="title">Proposal title</label>
-            <InputText id="title" type="text" autofocus @bind-Value="_model.Title" />
+            <AutoFocusInputText id="title" type="text" autofocus @bind-Value="_model.Title" />
             <ValidationMessage For="() => _model.Title" />
         </div>
 

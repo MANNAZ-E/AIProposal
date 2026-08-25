@@ -25,8 +25,7 @@
         }
     </label>
     <div class="type-picker">
-        <label for="upload-type">Document type</label>
-        <select id="upload-type" class="material-input" @bind="_uploadTypeId" disabled="@_uploading">
+        <select id="upload-type" class="material-input" aria-label="Document type" @bind="_uploadTypeId" disabled="@_uploading">
             @foreach (var type in _types)
             {
                 <option value="@type.Id">@type.Name</option>
@@ -39,8 +38,7 @@
         <span><strong>Add note</strong></span>
     </button>
     <div class="type-picker">
-        <label for="note-type">Document type</label>
-        <select id="note-type" class="material-input" @bind="_noteTypeId">
+        <select id="note-type" class="material-input" aria-label="Document type" @bind="_noteTypeId">
             @foreach (var type in _types)
             {
                 <option value="@type.Id">@type.Name</option>

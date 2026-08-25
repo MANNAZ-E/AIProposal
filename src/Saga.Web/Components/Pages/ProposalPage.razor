@@ -121,7 +121,8 @@ else
                 {
                     <ChatSection ProposalId="ProposalId" MyRole="_myRole"
                                  TeammateCount="_proposal.Members.Count - 1"
-                                 OnUnreadChanged="RefreshUnreadAsync" />
+                                 OnUnreadChanged="RefreshUnreadAsync"
+                                 OnAddMaterials="() => SelectSectionAsync(Section.Material)" />
                 }
                 else if (_section == Section.BidTeamChat)
                 {

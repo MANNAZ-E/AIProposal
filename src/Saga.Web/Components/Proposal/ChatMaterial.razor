@@ -17,11 +17,19 @@
                     <span>@ContextLabel(preset)</span>
                 </label>
             }
-            @if (Preset == WorkingContextKind.Custom)
+            @if (Preset == WorkingContextKind.Custom && Documents.Count + Artifacts.Count > 0)
             {
                 <span class="badge badge-shared">Custom</span>
             }
         </div>
+        @if (Documents.Count == 0)
+        {
+            @* Nothing to pick from is a dead end unless the way out is on screen: the Materials
+               tab is a section of this page, not a URL, so it takes a callback rather than a link. *@
+            <p class="form-hint" style="margin-top: 0.35rem;">
+                No materials yet — <button class="link-button" @onclick="OnAddMaterials">Add materials</button>
+            </p>
+        }
     }
 
     @foreach (var category in Categories)
@@ -81,25 +89,14 @@
     [Parameter] public WorkingContextKind Preset { get; set; }
     [Parameter] public EventCallback<WorkingContextKind> PresetChanged { get; set; }
 
-    private static readonly WorkingContextKind[] Presets = MaterialSelection.ChatPresets;
+    /// <summary>Opens the Materials tab when there is nothing here to choose from.</summary>
+    [Parameter] public EventCallback OnAddMaterials { get; set; }
 
-    /// <summary>Broadest first, the reverse of <see cref="MaterialSelection.ChatPresets"/>'s
-    /// narrowest-first tie-break order — "All" reads before "Client materials only".</summary>
-    private static readonly WorkingContextKind[] DisplayPresets = Presets.Reverse().ToArray();
+    /// <summary>Broadest first — "Everything" reads before "Client materials only".</summary>
+    private static readonly WorkingContextKind[] DisplayPresets = MaterialSelection.DisplayPresets;
 
-    /// <summary>
-    /// A preset is greyed out when it would pick nothing beyond a narrower preset already showing:
-    /// "Client materials only" and "All materials" need matching documents to exist at all, and
-    /// "All" needs artifacts — without them it would just select the same rows as "All materials".
-    /// </summary>
-    private bool IsPresetDisabled(WorkingContextKind kind) => kind switch
-    {
-        WorkingContextKind.ClientMaterial => !Documents.Any(d => string.Equals(
-            d.DocumentType?.Name, DocumentType.ClientMaterialName, StringComparison.OrdinalIgnoreCase)),
-        WorkingContextKind.SourceMaterial => Documents.Count == 0,
-        WorkingContextKind.FullProject => Artifacts.Count == 0,
-        _ => false,
-    };
+    private bool IsPresetDisabled(WorkingContextKind kind)
+        => !MaterialSelection.IsPresetAvailable(kind, Documents, Artifacts);
 
     /// <summary>
     /// The proposal's own document types, in their priority order — the same grouping the
@@ -208,7 +205,7 @@
         WorkingContextKind.SourceMaterial => "All materials",
         WorkingContextKind.Analysis => "Analysis",
         WorkingContextKind.Custom => "Selected material",
-        _ => "All",
+        _ => "Everything",
     };
 
     public static string ArtifactLabel(ArtifactType type) => type switch

@@ -179,16 +179,24 @@ public class ProposalServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
             () => _proposals.UpdateDetailsAsync(id, sda, "Hijacked", "Client"));
     }
 
+    /// <summary>
+    /// A proposal is always named, but the client is not: work often starts before anyone knows
+    /// whose it is, so blanking the client name clears it rather than being refused.
+    /// </summary>
     [Fact]
-    public async Task Settings_rename_rejects_blank_names()
+    public async Task Settings_rename_requires_a_title_but_not_a_client()
     {
         var (elv, _) = await GetSeededUsersAsync();
         var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _proposals.UpdateDetailsAsync(id, elv, "   ", "C"));
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _proposals.UpdateDetailsAsync(id, elv, "P", "   "));
+
+        await _proposals.UpdateDetailsAsync(id, elv, "P", "   ");
+
+        var (proposal, _) = (await _proposals.GetForUserAsync(id, elv))!.Value;
+        Assert.Equal("P", proposal.Title);
+        Assert.Equal("", proposal.ClientName);
     }
 
     [Fact]

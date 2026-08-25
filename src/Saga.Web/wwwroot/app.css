@@ -642,12 +642,6 @@ button.upload-area {
     margin-bottom: 1.25rem;
 }
 
-.type-picker label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--saga-muted);
-}
-
 /* A shorter, slightly smaller control than the page's other inputs: it is a one-word
    choice sitting under a drop area, not a field being filled in. */
 .type-picker select {
