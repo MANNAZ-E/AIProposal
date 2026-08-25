@@ -1,0 +1,225 @@
+@inject TeamChatService TeamChat
+@inject CurrentUserService CurrentUser
+@inject TeamChatNotifier Notifier
+@implements IDisposable
+
+<div class="chat-pane">
+    <div class="chat-header team-chat-header">
+        <h2 class="section-heading">Bid Team Chat</h2>
+        <div class="chat-header-meta">
+            Everyone on the bid team reads and writes this thread. Type <strong>@@</strong> to mention someone.
+        </div>
+    </div>
+
+    @* Reversed flex column: with a single child the container opens scrolled to the bottom and
+       stays pinned there as messages arrive, which is what a chat wants and what the project's
+       no-JavaScript rule leaves as the only way to get it. *@
+    <div class="team-scroll">
+        <div class="team-thread">
+            @if (_messages.Count == 0)
+            {
+                <p class="text-muted">No messages yet. Start the conversation.</p>
+            }
+            @foreach (var message in _messages)
+            {
+                <div class="team-msg @BubbleClass(message)">
+                    <div class="chat-meta">
+                        @(message.AuthorId == _me ? "You" : message.Author?.DisplayName ?? "Someone")
+                        <span class="text-muted">· @message.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+                    </div>
+                    <div class="team-msg-body">@TeamMessageText.Render(message.Text, message.Mentions, _me)</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="chat-composer">
+        <div class="team-composer">
+            @if (Suggestions is { Count: > 0 } suggestions)
+            {
+                @* Real buttons, rendered after the textarea, so Tab-then-Enter selects natively.
+                   Arrow keys would need a static preventDefault on keydown, which would swallow
+                   ordinary typing. *@
+                <div class="team-mention-picker">
+                    @foreach (var member in suggestions)
+                    {
+                        <button type="button" @onclick="() => Select(member)">
+                            <span class="team-mention-name">@member.DisplayName</span>
+                            <span class="text-muted">@member.Email</span>
+                        </button>
+                    }
+                </div>
+            }
+            <div class="chat-input">
+                <textarea rows="2" placeholder="Message the bid team…"
+                          @bind="_draft" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
+                <button class="btn btn-primary" @onclick="SendAsync"
+                        disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))">Send</button>
+            </div>
+            @if (_error is not null)
+            {
+                <p class="error-text" style="margin: 0.4rem 0 0;">@_error</p>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+
+    /// <summary>Lets the page refresh the unread badge on the Bid Team Chat nav item.</summary>
+    [Parameter] public EventCallback OnUnreadChanged { get; set; }
+
+    /// <summary>At most this many names in the picker; past that it stops being a shortcut.</summary>
+    private const int MaxSuggestions = 6;
+
+    /// <summary>A run longer than this is prose that happens to follow an '@', not a name.</summary>
+    private const int MaxQueryLength = 40;
+
+    private List<TeamMessage> _messages = [];
+    private List<TeamChatMember> _members = [];
+    private Guid _me;
+    private string _draft = "";
+    private string? _error;
+    private bool _sending;
+    private bool _disposed;
+    private Guid _loadedProposalId;
+
+    /// <summary>
+    /// The '@' whose picker Escape closed. Kept as an index rather than a flag so that starting a
+    /// fresh mention opens the picker again without having to notice the keystroke that did it.
+    /// </summary>
+    private int _dismissedAt = -1;
+
+    protected override void OnInitialized() => Notifier.Posted += OnPosted;
+
+    public void Dispose()
+    {
+        _disposed = true;
+        Notifier.Posted -= OnPosted;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProposalId == ProposalId) return;
+        _loadedProposalId = ProposalId;
+        _me = (await CurrentUser.GetAsync()).Id;
+        _members = await TeamChat.MembersAsync(ProposalId, _me);
+        await ReloadAsync();
+    }
+
+    /// <summary>
+    /// Someone posted. The event fires on whichever circuit did the posting, so the work has to
+    /// hop back onto this component's own synchronization context before it touches state.
+    /// </summary>
+    private void OnPosted(Guid proposalId)
+    {
+        if (_disposed || proposalId != ProposalId) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await ReloadAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task ReloadAsync()
+    {
+        _messages = await TeamChat.ListAsync(ProposalId, _me);
+        // Reading the thread is what clears the badge; the service skips the write when the
+        // watermark is already current, so this costs nothing on a reload that changed nothing.
+        await TeamChat.MarkSeenAsync(ProposalId, _me);
+        await OnUnreadChanged.InvokeAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _dismissedAt = MentionStart;
+            return;
+        }
+        // Enter sends, as it does in AI Chat. Shift+Enter is the newline.
+        if (e.Key == "Enter" && !e.ShiftKey) await SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        var text = _draft.Trim();
+        if (text.Length == 0 || _sending) return;
+
+        _sending = true;
+        _error = null;
+        try
+        {
+            await TeamChat.PostAsync(ProposalId, _me, text);
+            _draft = "";
+            _dismissedAt = -1;
+            // The notifier reaches this circuit too, but reloading here keeps the send
+            // synchronous with the click rather than with an event we also raised.
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    /// <summary>Replaces the half-typed run with the full name, at the caret's own position.</summary>
+    private void Select(TeamChatMember member)
+    {
+        var start = MentionStart;
+        if (start < 0) return;
+        _draft = string.Concat(_draft.AsSpan(0, start), "@", member.DisplayName, " ");
+        _dismissedAt = -1;
+    }
+
+    /// <summary>
+    /// Index of the '@' that starts the mention being typed, or -1. The run has to sit at the end
+    /// of the draft — that is where the caret is — start a word, and stay short enough to be a name.
+    /// </summary>
+    private int MentionStart
+    {
+        get
+        {
+            var at = _draft.LastIndexOf('@');
+            if (at < 0) return -1;
+            if (at > 0 && !char.IsWhiteSpace(_draft[at - 1])) return -1;
+            var query = _draft[(at + 1)..];
+            if (query.Length > MaxQueryLength || query.Any(char.IsWhiteSpace)) return -1;
+            return at;
+        }
+    }
+
+    private List<TeamChatMember>? Suggestions
+    {
+        get
+        {
+            var start = MentionStart;
+            if (start < 0 || start == _dismissedAt) return null;
+            var query = _draft[(start + 1)..];
+            return _members
+                .Where(m => m.UserId != _me)
+                .Where(m => query.Length == 0
+                            || m.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
+                            || m.Email.Contains(query, StringComparison.OrdinalIgnoreCase))
+                .Take(MaxSuggestions)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Own messages are cream on the right; everyone else takes their colour from their position
+    /// on the team, so a given person looks the same in everybody's window.
+    /// </summary>
+    private string BubbleClass(TeamMessage message)
+    {
+        if (message.AuthorId == _me) return "team-msg-mine";
+        var slot = _members.FirstOrDefault(m => m.UserId == message.AuthorId)?.ColourSlot ?? 0;
+        return $"team-msg-{slot + 1}";
+    }
+}

@@ -3,6 +3,8 @@
 @inject ProposalService Proposals
 @inject ArtifactService Artifacts
 @inject ChatService Chat
+@inject TeamChatService TeamChat
+@inject TeamChatNotifier TeamChatNotifier
 @inject CurrentUserService CurrentUser
 @inject AppHeaderState Header
 @inject NavigationManager Nav
@@ -33,7 +35,7 @@ else
             <button class="nav-item @(_section == Section.Chat ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Chat)">AI Chat @ChatBadge()</button>
             <button class="nav-item @(_section == Section.BidTeamChat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Bid Team Chat</button>
+                    @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Bid Team Chat @TeamBadge()</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.ClientProfile ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</button>
@@ -65,7 +67,7 @@ else
                     @onclick="() => SelectSectionAsync(Section.Settings)">Settings</button>
         </nav>
 
-        <div class="workspace-main @(_section == Section.Chat ? "flush" : null)">
+        <div class="workspace-main @(_section is Section.Chat or Section.BidTeamChat ? "flush" : null)">
             <div class="workspace-content">
                 @if (_section == Section.Material)
                 {
@@ -123,10 +125,7 @@ else
                 }
                 else if (_section == Section.BidTeamChat)
                 {
-                    <h2>Bid Team Chat</h2>
-                    <div class="empty-state">
-                        <p class="text-muted">Group chat with the bid team is not built yet.</p>
-                    </div>
+                    <BidTeamChatSection ProposalId="ProposalId" OnUnreadChanged="RefreshTeamUnreadAsync" />
                 }
                 else if (_section == Section.Export)
                 {
@@ -293,11 +292,13 @@ else
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
     private int _unreadChats;
+    private int _unreadTeam;
     private ProposalRole _myRole;
     private Section _section = Section.Material;
     private bool _notFound;
     private bool _showDelete;
     private bool _busy;
+    private bool _disposed;
     private string _shareEmail = "";
     private ProposalRole _shareRole = ProposalRole.Editor;
     private string? _shareError;
@@ -312,7 +313,29 @@ else
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
-    public void Dispose() => Header.Clear();
+    protected override void OnInitialized() => TeamChatNotifier.Posted += OnTeamPosted;
+
+    public void Dispose()
+    {
+        _disposed = true;
+        TeamChatNotifier.Posted -= OnTeamPosted;
+        Header.Clear();
+    }
+
+    /// <summary>
+    /// Keeps the team badge live while you are sitting on another tab, where the section
+    /// component is not rendered at all and cannot hear the post for us.
+    /// </summary>
+    private void OnTeamPosted(Guid proposalId)
+    {
+        if (_disposed || proposalId != ProposalId) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await RefreshTeamUnreadAsync();
+            StateHasChanged();
+        });
+    }
 
     private async Task LoadAsync()
     {
@@ -327,6 +350,7 @@ else
         (_proposal, _myRole) = result.Value;
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
         _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
+        _unreadTeam = await TeamChat.UnreadCountAsync(ProposalId, user.Id);
         Header.Set(_proposal.Title, _proposal.ClientName, _proposal.IsArchived ? "Archived" : null);
     }
 
@@ -357,6 +381,18 @@ else
     {
         var user = await CurrentUser.GetAsync();
         _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
+    }
+
+    /// <summary>Messages in the team thread this user has not read.</summary>
+    private RenderFragment? TeamBadge()
+        => _unreadTeam == 0
+            ? null
+            : @<span class="nav-flag nav-flag-count" title="Unread team messages">@_unreadTeam</span>;
+
+    private async Task RefreshTeamUnreadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _unreadTeam = await TeamChat.UnreadCountAsync(ProposalId, user.Id);
     }
 
     private RenderFragment? ArtifactBadge(ArtifactType type)

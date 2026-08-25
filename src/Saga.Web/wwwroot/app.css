@@ -1217,6 +1217,16 @@ button.type-list-name {
     font-weight: 600;
 }
 
+/* The bid team pane has no chat list beside it, so its header carries the section
+   headline itself and has to line up with the headline on every other tab. */
+.team-chat-header {
+    padding-top: var(--saga-gutter);
+}
+
+.team-chat-header > .section-heading {
+    margin-bottom: 0;
+}
+
 .chat-header-meta {
     margin-top: 0.15rem;
     font-size: 0.8rem;
@@ -1354,6 +1364,113 @@ button.type-list-name {
     background: rgba(255, 255, 255, 0.25);
     border-radius: 999px;
     padding: 0 0.4rem;
+    font-weight: 600;
+}
+
+/* ---------- Bid team chat ---------- */
+
+/* No JavaScript in this project, so autoscroll is the reversed-column trick rather than
+   scrollIntoView: a column-reverse container with a single child opens scrolled to the bottom
+   and stays anchored there as messages arrive. */
+.team-scroll {
+    display: flex;
+    flex-direction: column-reverse;
+    overflow-y: auto;
+    min-height: 0;
+    padding: var(--saga-gutter);
+}
+
+.team-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.team-msg {
+    max-width: 70%;
+    align-self: flex-start;
+    border-radius: 10px;
+    padding: 0.55rem 0.85rem;
+    border: 1px solid var(--saga-border);
+    background: #fff;
+}
+
+.team-msg-body {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+/* A fixed palette: your own messages on the right in cream, everyone else on the left in the
+   colour their position on the team gives them, so a person looks the same in every window. */
+.team-msg-mine {
+    align-self: flex-end;
+    background: #f7f4e9;
+}
+
+.team-msg-1 {
+    background: #d6d7da;
+}
+
+.team-msg-2 {
+    background: #e0e2df;
+}
+
+.team-msg-3 {
+    background: #f9f5f5;
+}
+
+.team-mention {
+    font-weight: 600;
+}
+
+/* Being mentioned yourself is the one thing worth spotting from across the thread. */
+.team-mention-me {
+    background: #fde9a8;
+    border-radius: 3px;
+    padding: 0 0.15rem;
+}
+
+.team-composer {
+    position: relative;
+}
+
+/* Sits above the composer, in the menu panel's visual language. */
+.team-mention-picker {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 0.35rem;
+    z-index: 21;
+    min-width: 16rem;
+    max-width: 100%;
+    background: #fff;
+    border: 1px solid var(--saga-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    padding: 0.25rem;
+}
+
+.team-mention-picker button {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 0.88rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.team-mention-picker button:hover,
+.team-mention-picker button:focus {
+    background: var(--saga-primary-light);
+}
+
+.team-mention-name {
     font-weight: 600;
 }
 

@@ -16,6 +16,9 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ChatSeen> ChatSeen => Set<ChatSeen>();
+    public DbSet<TeamMessage> TeamMessages => Set<TeamMessage>();
+    public DbSet<TeamMessageMention> TeamMessageMentions => Set<TeamMessageMention>();
+    public DbSet<TeamChatSeen> TeamChatSeen => Set<TeamChatSeen>();
     public DbSet<AiUsageRecord> AiUsage => Set<AiUsageRecord>();
     public DbSet<MannazVoiceSettings> MannazVoiceSettings => Set<MannazVoiceSettings>();
     public DbSet<FinalProposalVersion> FinalProposalVersions => Set<FinalProposalVersion>();
@@ -128,6 +131,31 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.HasIndex(m => new { m.ChatSessionId, m.CreatedAt });
             b.HasOne(m => m.ChatSession).WithMany(s => s.Messages).HasForeignKey(m => m.ChatSessionId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(m => m.Author).WithMany().HasForeignKey(m => m.AuthorId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TeamMessage>(b =>
+        {
+            // Text stays nvarchar(max) like a chat message's; the service caps it at 4000 chars.
+            b.HasIndex(m => new { m.ProposalId, m.CreatedAt });
+            b.HasOne(m => m.Proposal).WithMany(p => p.TeamMessages).HasForeignKey(m => m.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            // Restrict, not SetNull: the author is non-nullable, and a second cascade path from
+            // User onto a row Proposal already cascades to is more than SQL Server will take.
+            b.HasOne(m => m.Author).WithMany().HasForeignKey(m => m.AuthorId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TeamMessageMention>(b =>
+        {
+            b.HasIndex(m => m.UserId);
+            b.HasOne(m => m.TeamMessage).WithMany(t => t.Mentions).HasForeignKey(m => m.TeamMessageId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TeamChatSeen>(b =>
+        {
+            b.HasIndex(s => new { s.ProposalId, s.UserId }).IsUnique();
+            b.HasOne(s => s.Proposal).WithMany().HasForeignKey(s => s.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            // The same two-root shape ChatSeen already proves SQL Server accepts.
+            b.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<AiUsageRecord>(b =>

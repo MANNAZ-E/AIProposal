@@ -52,6 +52,7 @@ builder.Services.AddScoped<GenerationService>();
 builder.Services.AddScoped<CondensationService>();
 builder.Services.AddScoped<WorkingContextService>();
 builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<TeamChatService>();
 builder.Services.AddScoped<ReviewService>();
 builder.Services.AddScoped<ProposalReviewService>();
 builder.Services.AddScoped<ExportService>();
@@ -65,6 +66,10 @@ builder.Services.AddScoped<Saga.Web.Components.Layout.AppHeaderState>();
 builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();
 
 builder.Services.AddSingleton<PricingService>();
+
+// One event per process is the whole live-update mechanism for the bid team chat: every open
+// circuit subscribes, and a post wakes the ones watching that proposal.
+builder.Services.AddSingleton<TeamChatNotifier>();
 
 // Every LLM call goes through the usage decorator — the fake included, so a dev session
 // produces the same usage rows as production.
