@@ -23,16 +23,6 @@
             <InputText id="client" type="text" @bind-Value="_model.ClientName" />
         </div>
 
-        <div class="form-field">
-            <label>Format</label>
-            <div class="radio-row">
-                <label><input type="radio" name="new-format" checked="@(_model.OutputFormat == OutputFormat.PowerPoint)"
-                              @onchange="() => _model.OutputFormat = OutputFormat.PowerPoint" /> PowerPoint</label>
-                <label><input type="radio" name="new-format" checked="@(_model.OutputFormat == OutputFormat.Word)"
-                              @onchange="() => _model.OutputFormat = OutputFormat.Word" /> Word</label>
-            </div>
-        </div>
-
         @if (_error is not null)
         {
             <p class="error-text">@_error</p>

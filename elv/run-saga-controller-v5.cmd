@@ -73,6 +73,12 @@ if "!KEY!"=="4" (
     goto MAIN
 )
 
+if "!KEY!"=="5" (
+    rem B = Rebuild and restart
+    call :REBUILD_AND_RESTART
+    goto MAIN
+)
+
 goto MAIN
 
 
@@ -87,14 +93,16 @@ if "!RUNNING!"=="1" (
     )
     echo   %URL%
     echo.
-    echo   ESC         = Stop
+    echo   ESC           = Stop
     echo   R / Backspace = Restart
+    echo   B             = Rebuild ^& Restart
     echo   O / Space     = Open browser
 ) else (
     echo   SAGA: STOPPED
     echo.
-    echo   ENTER       = Start
+    echo   ENTER         = Start
     echo   R / Backspace = Start
+    echo   B             = Rebuild ^& Start
 )
 echo ============================================================
 echo.
@@ -111,6 +119,7 @@ powershell -NoLogo -NoProfile -Command ^
   "  'R'         { exit 3 }" ^
   "  'O'         { exit 4 }" ^
   "  'Spacebar'  { exit 4 }" ^
+  "  'B'         { exit 5 }" ^
   "  default     { exit 99 }" ^
   "}"
 exit /b !ERRORLEVEL!
@@ -159,6 +168,51 @@ timeout /t 1 /nobreak >nul
 echo.
 echo Saga started successfully.
 exit /b 0
+
+
+:REBUILD_AND_RESTART
+echo.
+echo ============================================================
+echo   REBUILDING SAGA
+echo ============================================================
+echo.
+
+rem Stop the current instance first so files are not locked.
+if "!RUNNING!"=="1" (
+    call :STOP_APP
+)
+
+echo.
+echo Rebuilding Saga...
+echo.
+
+rem Perform a full rebuild.
+dotnet build -t:Rebuild
+
+if errorlevel 1 (
+    set "RUNNING=0"
+    set "ADOPTED=0"
+    echo.
+    echo ============================================================
+    echo   REBUILD FAILED
+    echo ============================================================
+    echo.
+    echo Saga was NOT restarted.
+    echo Fix the build errors above, then press B to try again.
+    echo.
+    exit /b 1
+)
+
+echo.
+echo ============================================================
+echo   REBUILD SUCCESSFUL
+echo ============================================================
+echo.
+echo Starting Saga...
+echo.
+
+call :START_APP
+exit /b !ERRORLEVEL!
 
 
 :STOP_APP
