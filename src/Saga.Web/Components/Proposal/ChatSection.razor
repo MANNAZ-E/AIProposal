@@ -32,11 +32,7 @@
             <div class="chat-header">
                 <div class="chat-header-title">@(_isDraft ? "New chat" : ActiveChat?.Title)</div>
                 <div class="chat-header-meta">
-                    @if (_isDraft)
-                    {
-                        <text>Pick what this chat can read. It is locked once you ask the first question.</text>
-                    }
-                    else
+                    @if (!_isDraft)
                     {
                         <span class="chat-visibility">
                             @if (ActiveChat?.IsMine == true)
@@ -137,12 +133,12 @@
                 @if (CanPost)
                 {
                     <div class="chat-input">
-                        <textarea rows="2" placeholder="Ask about the material, the requirements, the proposal…"
+                        <textarea rows="2" placeholder="Type a message"
                                   @bind="_question" @bind:event="oninput" disabled="@ActiveIsBusy"
                                   @onkeydown="OnKeyDown"></textarea>
                         <button class="btn btn-primary" @onclick="AskAsync"
                                 disabled="@(ActiveIsBusy || string.IsNullOrWhiteSpace(_question))">
-                            @(ActiveIsBusy ? "Answering…" : "Ask")
+                            @(ActiveIsBusy ? "Answering…" : "Send")
                         </button>
                     </div>
                 }
@@ -259,6 +255,7 @@
         (_documents, _artifacts) = await Chat.GetMaterialAsync(ProposalId, user.Id);
         await LoadChatsAsync();
         if (_chats.Count > 0) await SelectAsync(_chats[0].Id);
+        else NewChat();
     }
 
     private async Task LoadChatsAsync()

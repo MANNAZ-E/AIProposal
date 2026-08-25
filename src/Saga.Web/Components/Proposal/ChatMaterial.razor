@@ -6,12 +6,13 @@
 <div class="chat-material">
     @if (!ReadOnly)
     {
+        <div class="section-title" style="margin-top: 0;">Choose materials</div>
         <div class="chat-material-presets">
-            <span class="chat-material-label">Preset</span>
-            @foreach (var preset in Presets)
+            @foreach (var preset in DisplayPresets)
             {
-                <label class="chat-preset">
+                <label class="chat-preset @(IsPresetDisabled(preset) ? "disabled" : "")">
                     <input type="radio" name="chat-preset" checked="@(Preset == preset)"
+                           disabled="@IsPresetDisabled(preset)"
                            @onchange="() => ApplyPreset(preset)" />
                     <span>@ContextLabel(preset)</span>
                 </label>
@@ -61,7 +62,7 @@
     else
     {
         <div class="chat-token-meter">
-            ~@EstimatedTokens.ToString("N0") of @Budget.ToString("N0") tokens
+            @EstimatedTokens.ToString("N0") tokens
             @if (EstimatedTokens > Budget)
             {
                 <span class="text-muted">· over budget, documents will be condensed</span>
@@ -81,6 +82,24 @@
     [Parameter] public EventCallback<WorkingContextKind> PresetChanged { get; set; }
 
     private static readonly WorkingContextKind[] Presets = MaterialSelection.ChatPresets;
+
+    /// <summary>Broadest first, the reverse of <see cref="MaterialSelection.ChatPresets"/>'s
+    /// narrowest-first tie-break order — "All" reads before "Client materials only".</summary>
+    private static readonly WorkingContextKind[] DisplayPresets = Presets.Reverse().ToArray();
+
+    /// <summary>
+    /// A preset is greyed out when it would pick nothing beyond a narrower preset already showing:
+    /// "Client materials only" and "All materials" need matching documents to exist at all, and
+    /// "All" needs artifacts — without them it would just select the same rows as "All materials".
+    /// </summary>
+    private bool IsPresetDisabled(WorkingContextKind kind) => kind switch
+    {
+        WorkingContextKind.ClientMaterial => !Documents.Any(d => string.Equals(
+            d.DocumentType?.Name, DocumentType.ClientMaterialName, StringComparison.OrdinalIgnoreCase)),
+        WorkingContextKind.SourceMaterial => Documents.Count == 0,
+        WorkingContextKind.FullProject => Artifacts.Count == 0,
+        _ => false,
+    };
 
     /// <summary>
     /// The proposal's own document types, in their priority order — the same grouping the
@@ -185,11 +204,11 @@
     /// </summary>
     public static string ContextLabel(WorkingContextKind kind) => kind switch
     {
-        WorkingContextKind.ClientMaterial => "Client materials",
-        WorkingContextKind.SourceMaterial => "Materials",
+        WorkingContextKind.ClientMaterial => "Client materials only",
+        WorkingContextKind.SourceMaterial => "All materials",
         WorkingContextKind.Analysis => "Analysis",
         WorkingContextKind.Custom => "Selected material",
-        _ => "Materials & artefacts",
+        _ => "All",
     };
 
     public static string ArtifactLabel(ArtifactType type) => type switch

@@ -27,6 +27,7 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
     /// The presets a chat can be started from, narrowest first — which is also the order
     /// <see cref="PresetOrCustom"/> resolves ties in, so a proposal holding nothing but client
     /// material reads as "Client materials" rather than as the wider preset selecting the same rows.
+    /// The picker itself lists them broadest-first, so it reverses this order for display.
     /// </summary>
     public static readonly WorkingContextKind[] ChatPresets =
         [WorkingContextKind.ClientMaterial, WorkingContextKind.SourceMaterial, WorkingContextKind.FullProject];

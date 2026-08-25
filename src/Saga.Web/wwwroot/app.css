@@ -1481,11 +1481,6 @@ button.type-list-name {
     border-bottom: 1px solid var(--saga-border);
 }
 
-.chat-material-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
 .chat-preset,
 .chat-material-head,
 .chat-material-item {
@@ -1493,6 +1488,11 @@ button.type-list-name {
     align-items: center;
     gap: 0.35rem;
     cursor: pointer;
+}
+
+.chat-preset.disabled {
+    opacity: 0.55;
+    cursor: default;
 }
 
 .chat-material-group {
