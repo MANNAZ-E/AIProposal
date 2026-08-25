@@ -39,24 +39,32 @@
                             @if (ActiveChat?.IsMine == true)
                             {
                                 <button class="link-button" @onclick="() => _showVisibility = !_showVisibility">
-                                    @VisibilityLabel(ActiveChat.Visibility) ▾
+                                    @if (ActiveChat.Visibility == ChatVisibility.Shared)
+                                    {
+                                        <PeopleIcon /> <text>Shared with bid team</text>
+                                    }
+                                    else
+                                    {
+                                        <LockIcon Class="lock-icon-muted" /> <text>Private</text>
+                                    }
+                                    <text> ▾</text>
                                 </button>
                                 @if (_showVisibility)
                                 {
                                     <div class="menu-backdrop" @onclick="() => _showVisibility = false"></div>
                                     <div class="menu-panel">
                                         <button @onclick="() => SetVisibilityAsync(ChatVisibility.Private)">
-                                            🔒 Private
+                                            <LockIcon Class="lock-icon-muted" /> Private
                                         </button>
                                         <button @onclick="() => SetVisibilityAsync(ChatVisibility.Shared)">
-                                            👥 Shared with bid team
+                                            <PeopleIcon /> Shared with bid team
                                         </button>
                                     </div>
                                 }
                             }
                             else
                             {
-                                <text>👥 Shared by @ActiveChat?.OwnerName</text>
+                                <PeopleIcon /> <text>Shared by @ActiveChat?.OwnerName</text>
                             }
                         </span>
                         <text> · </text>
@@ -502,8 +510,5 @@
             _streamingIds = _streaming.Keys.ToHashSet();
         }
     }
-
-    private static string VisibilityLabel(ChatVisibility visibility)
-        => visibility == ChatVisibility.Shared ? "👥 Shared with bid team" : "🔒 Private";
 
 }

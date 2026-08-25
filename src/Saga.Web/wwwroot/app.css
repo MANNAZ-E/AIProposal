@@ -1034,6 +1034,22 @@ button.type-list-name {
     vertical-align: baseline;
 }
 
+/* Private chat: the same padlock, but gray since it isn't a security lock. */
+.lock-icon-muted {
+    color: var(--saga-muted);
+}
+
+/* Shared with bid team: two people in the app's primary nav color. */
+.people-icon {
+    color: var(--saga-primary);
+    vertical-align: -0.15em;
+}
+
+/* Extra breathing room between a chat row's title and its shared-icon flag. */
+.chat-row-shared-flag {
+    margin-left: 0.35rem;
+}
+
 .cursor-blink {
     animation: blink 1s step-end infinite;
     color: var(--saga-primary);
@@ -1284,6 +1300,12 @@ button.type-list-name {
 .chat-row-wrap .chat-row {
     flex: 1;
     min-width: 0;
+}
+
+/* The ⋯ button floats over the row, so a row that carries one keeps a gutter clear for it:
+   otherwise the timestamp, which sits at the row's right end, ends up underneath the dots. */
+.chat-row-wrap:has(.chat-row-menu) .chat-row {
+    padding-right: 2.1rem;
 }
 
 .chat-row-editing {

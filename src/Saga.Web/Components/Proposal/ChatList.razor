@@ -55,6 +55,8 @@
     private Guid? _renameFor;
     private Guid? _deleteFor;
     private string _renameText = "";
+    private ElementReference _renameInput;
+    private bool _focusRename;
 
     private List<ChatListItem> Mine => Chats.Where(c => c.IsMine).ToList();
     private List<ChatListItem> SharedWithMe => Chats.Where(c => !c.IsMine).ToList();
@@ -78,12 +80,8 @@
             @if (_renameFor == chat.Id)
             {
                 <div class="chat-row chat-row-editing">
-                    <input class="chat-rename-input" value="@_renameText" @oninput="OnRenameInput"
+                    <input class="chat-rename-input" @ref="_renameInput" value="@_renameText" @oninput="OnRenameInput"
                            @onkeydown="e => OnRenameKey(e, chat)" />
-                    <div class="chat-row-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="() => CommitRenameAsync(chat)">Save</button>
-                        <button class="btn btn-outline btn-sm" @onclick="() => _renameFor = null">Cancel</button>
-                    </div>
                 </div>
             }
             else if (_deleteFor == chat.Id)
@@ -105,7 +103,8 @@
             else
             {
                 <button class="chat-row @(SelectedId == chat.Id ? "active" : null)" type="button"
-                        @onclick="() => OnSelect.InvokeAsync(chat.Id)">
+                        @onclick="() => OnSelect.InvokeAsync(chat.Id)"
+                        @ondblclick="() => TryStartRename(chat)">
                     <span class="chat-row-line">
                         <span class="chat-row-title @(chat.HasUnread ? "chat-unread" : null)">
                             @if (chat.HasUnread)
@@ -115,7 +114,7 @@
                             @chat.Title
                             @if (chat.IsMine && chat.Visibility == ChatVisibility.Shared)
                             {
-                                <span class="text-muted" title="Shared with bid team">👥</span>
+                                <span class="text-muted chat-row-shared-flag" title="Shared with bid team"><PeopleIcon /></span>
                             }
                         </span>
                         <span class="chat-row-time">
@@ -152,12 +151,27 @@
             }
         </div>;
 
+    private void TryStartRename(ChatListItem chat)
+    {
+        if (CanRename(chat)) StartRename(chat);
+    }
+
     private void StartRename(ChatListItem chat)
     {
         _menuFor = null;
         _deleteFor = null;
         _renameText = chat.Title;
         _renameFor = chat.Id;
+        _focusRename = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusRename)
+        {
+            _focusRename = false;
+            await _renameInput.FocusAsync();
+        }
     }
 
     private void StartDelete(ChatListItem chat)

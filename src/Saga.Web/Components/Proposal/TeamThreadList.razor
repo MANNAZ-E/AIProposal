@@ -36,6 +36,8 @@
     private Guid? _renameFor;
     private Guid? _deleteFor;
     private string _renameText = "";
+    private ElementReference _renameInput;
+    private bool _focusRename;
 
     /// <summary>
     /// Pressing the row you are already standing on would reset the draft's material picker,
@@ -48,12 +50,8 @@
             @if (_renameFor == thread.Id)
             {
                 <div class="chat-row chat-row-editing">
-                    <input class="chat-rename-input" value="@_renameText" @oninput="OnRenameInput"
+                    <input class="chat-rename-input" @ref="_renameInput" value="@_renameText" @oninput="OnRenameInput"
                            @onkeydown="e => OnRenameKey(e, thread)" />
-                    <div class="chat-row-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="() => CommitRenameAsync(thread)">Save</button>
-                        <button class="btn btn-outline btn-sm" @onclick="() => _renameFor = null">Cancel</button>
-                    </div>
                 </div>
             }
             else if (_deleteFor == thread.Id)
@@ -72,7 +70,8 @@
             else
             {
                 <button class="chat-row @(SelectedId == thread.Id ? "active" : null)" type="button"
-                        @onclick="() => OnSelect.InvokeAsync(thread.Id)">
+                        @onclick="() => OnSelect.InvokeAsync(thread.Id)"
+                        @ondblclick="() => TryStartRename(thread)">
                     <span class="chat-row-line">
                         <span class="chat-row-title @(thread.HasUnread ? "chat-unread" : null)">
                             @if (thread.HasUnread)
@@ -115,12 +114,27 @@
             }
         </div>;
 
+    private void TryStartRename(TeamThreadListItem thread)
+    {
+        if (thread.CanRename) StartRename(thread);
+    }
+
     private void StartRename(TeamThreadListItem thread)
     {
         _menuFor = null;
         _deleteFor = null;
         _renameText = thread.Title;
         _renameFor = thread.Id;
+        _focusRename = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusRename)
+        {
+            _focusRename = false;
+            await _renameInput.FocusAsync();
+        }
     }
 
     private void StartDelete(TeamThreadListItem thread)
