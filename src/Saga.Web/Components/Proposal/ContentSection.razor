@@ -1,4 +1,4 @@
-@using Saga.Core.Models
+﻿@using Saga.Core.Models
 @inject ArtifactService Artifacts
 @inject GenerationService Generation
 @inject ContentGenerationService ContentGeneration
@@ -160,8 +160,8 @@ else
                           placeholder="e.g. Shorter and sharper, emphasise measurable effect"></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
                 <button class="btn btn-primary" @onclick="() => { _showRegenerate = false; return GenerateAllAsync(_instruction); }">Generate</button>
+                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
             </div>
         </div>
     </div>
@@ -177,8 +177,8 @@ else
                 <textarea id="unit-instruction" rows="3" @bind="_instruction"></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="() => _unitInstructionFor = null">Cancel</button>
                 <button class="btn btn-primary" @onclick="RegenerateUnitAsync">Generate</button>
+                <button class="btn btn-outline" @onclick="() => _unitInstructionFor = null">Cancel</button>
             </div>
         </div>
     </div>

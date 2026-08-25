@@ -1,4 +1,4 @@
-@inject ChatService Chat
+﻿@inject ChatService Chat
 @inject CurrentUserService CurrentUser
 @inject WorkingContextService WorkingContext
 @inject ChatDraftState Drafts
@@ -181,8 +181,8 @@
                 }
             </p>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="() => _confirmUnshare = false">Cancel</button>
                 <button class="btn btn-danger" @onclick="UnshareAsync">Make private</button>
+                <button class="btn btn-outline" @onclick="() => _confirmUnshare = false">Cancel</button>
             </div>
         </div>
     </div>

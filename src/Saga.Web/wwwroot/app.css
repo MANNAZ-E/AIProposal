@@ -194,6 +194,10 @@ a {
     background: var(--saga-primary-dark);
 }
 
+.note-add-button {
+    font-size: 14px;
+}
+
 .btn-outline {
     border-color: var(--saga-border);
     background: #fff;
@@ -242,7 +246,7 @@ a {
     text-align: left;
     font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     color: #fff;
     padding: 0.6rem 0.9rem;
     border-bottom: 1px solid var(--saga-primary);
@@ -263,7 +267,7 @@ a {
     font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.02em;
     color: var(--saga-muted);
     background: var(--saga-bg);
     padding: 0.5rem 0.9rem;
@@ -476,6 +480,12 @@ a {
     overflow-y: auto;
 }
 
+/* The panel takes focus so Escape reaches a dialog with no field of its own; that is
+   plumbing, not a place the user tabbed to, so it draws no ring. */
+.modal-panel:focus {
+    outline: none;
+}
+
 .modal-title {
     margin: 0 0 1rem;
 }
@@ -673,6 +683,20 @@ button.upload-area {
     padding-top: 0.2rem;
     padding-bottom: 0.2rem;
     font-size: 0.84rem;
+}
+
+/* Name is what a consultant scans the list for, but it is also the shortest string in the
+   row, so the automatic layout — which shares spare width out in proportion to what each
+   column already holds — leaves it narrower than a timestamp. A floor fixes that without
+   a width claim: asking for 100% instead would give Name every spare pixel, which on a
+   wide desktop opens a hand's width of nothing between the name and its type. */
+.material-table th:first-child {
+    min-width: 10em;
+}
+
+.material-table th:not(:first-child),
+.material-table tbody td:not(:first-child) {
+    white-space: nowrap;
 }
 
 /* The row's name cell: the title, its rename handle, and the file it came from. */

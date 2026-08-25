@@ -285,10 +285,10 @@ else
                            @oninput="e => _deleteConfirm = (string?)e.Value ?? string.Empty" />
                 </div>
                 <div class="modal-actions">
-                    <button class="btn btn-outline" @onclick="() => _showDelete = false">Cancel</button>
                     <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@(_busy || !DeleteConfirmed)">
                         Delete proposal
                     </button>
+                    <button class="btn btn-outline" @onclick="() => _showDelete = false">Cancel</button>
                 </div>
             </div>
         </div>

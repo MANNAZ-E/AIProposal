@@ -1,4 +1,4 @@
-@using Saga.Core.Abstractions
+﻿@using Saga.Core.Abstractions
 @using Saga.Core.Models
 @inject ProposalReviewService ProposalReview
 @inject CurrentUserService CurrentUser
@@ -184,8 +184,8 @@ else
                 and its review report? This cannot be undone.
             </p>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="() => _deleteVersion = null">Cancel</button>
                 <button class="btn btn-danger" @onclick="DeleteVersionAsync" disabled="@_busy">Delete</button>
+                <button class="btn btn-outline" @onclick="() => _deleteVersion = null">Cancel</button>
             </div>
         </div>
     </div>

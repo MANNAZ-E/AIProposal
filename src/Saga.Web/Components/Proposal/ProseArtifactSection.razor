@@ -1,4 +1,4 @@
-@inject ArtifactService Artifacts
+﻿@inject ArtifactService Artifacts
 @inject GenerationService Generation
 @inject CurrentUserService CurrentUser
 
@@ -110,8 +110,8 @@ else if (_mode == Mode.DiffReview)
                           placeholder="e.g. Make it shorter and put more emphasis on change management"></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
                 <button class="btn btn-primary" @onclick="() => { _showRegenerate = false; return GenerateAsync(_instruction); }">Generate</button>
+                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
             </div>
         </div>
     </div>
@@ -121,7 +121,7 @@ else if (_mode == Mode.DiffReview)
 {
     <div class="modal-backdrop" @onclick="() => _showHistory = false">
         <div class="modal-panel modal-wide" @onclick:stopPropagation>
-            <h2 class="modal-title">History — @Title</h2>
+            <h2 class="modal-title">History: @Title</h2>
             @if (_versions is null)
             {
                 <p class="text-muted">Loading…</p>
@@ -134,12 +134,12 @@ else if (_mode == Mode.DiffReview)
                 </p>
                 <div class="preview-text markdown-body">@Markdown.Render(_viewVersion.ContentMarkdown)</div>
                 <div class="modal-actions">
-                    <button class="btn btn-outline" @onclick="() => _viewVersion = null">Back to list</button>
                     @if (CanEdit)
                     {
                         <button class="btn btn-primary" @onclick="() => RestoreVersionAsync(_viewVersion.Id)"
                                 disabled="@(_busy || _artifact?.IsLocked == true)">Restore this version</button>
                     }
+                    <button class="btn btn-outline" @onclick="() => _viewVersion = null">Back to list</button>
                 </div>
             }
             else
@@ -187,8 +187,8 @@ else if (_mode == Mode.DiffReview)
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="TakeTheirsAsync">Take their version</button>
                 <button class="btn btn-primary" @onclick="OverwriteWithMineAsync" disabled="@_busy">Save my version anyway</button>
+                <button class="btn btn-outline" @onclick="TakeTheirsAsync">Take their version</button>
             </div>
         </div>
     </div>

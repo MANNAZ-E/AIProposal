@@ -1,4 +1,4 @@
-@page "/admin"
+﻿@page "/admin"
 @using Saga.Core.Abstractions
 @using Saga.Web.Auth
 @inject AdminService Admin
@@ -320,8 +320,8 @@
                 <h2 class="modal-title">Remove user</h2>
                 <p>Remove <strong>@_removeTarget.DisplayName</strong>? They will no longer be able to sign in, but everything of theirs stays and can be restored here.</p>
                 <div class="modal-actions">
-                    <button class="btn btn-outline" @onclick="CloseRemove">Cancel</button>
                     <button class="btn btn-danger" @onclick="RemoveUserAsync" disabled="@_userBusy">Remove</button>
+                    <button class="btn btn-outline" @onclick="CloseRemove">Cancel</button>
                 </div>
             </div>
         </div>

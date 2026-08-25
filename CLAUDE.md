@@ -10,6 +10,17 @@ proposal documents. Solution: `Saga.slnx` (`src/Saga.Core`, `src/Saga.Infrastruc
   heading explaining what the section does, no caption spelling out what a control
   accepts. The consultants using Saga know their job; a label and a placeholder are
   enough, and prose that only restates the visible UI is deleted as soon as it ships.
+- **Windows button order: the action goes left, Cancel right.** In every dialog the
+  affirmative button (Save, Delete, Generate, Restore…) comes first in the markup and
+  Cancel/Close/Back last, so the group reads action-then-dismiss inside the
+  right-aligned `.modal-actions` row. Saga runs on Windows desktops; matching the
+  platform matters more than the web's habit of putting Cancel first.
+- **Dialogs answer the keyboard.** Opening one puts the caret in its first field
+  (an `_focusX` flag set on open, honoured in `OnAfterRenderAsync` — the `autofocus`
+  attribute does nothing for markup patched into an already-parsed page). Escape backs
+  out, Ctrl+Enter commits, and Enter in a title box moves to the body. `MaterialSection`'s
+  `DialogKeyAsync` on the modal panel is the pattern; a dialog with no field of its own
+  needs `tabindex="-1"` on the panel and focus moved there, or the keydown never fires.
 
 ## Running the app
 

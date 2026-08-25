@@ -1,4 +1,4 @@
-@using Saga.Core.Models
+﻿@using Saga.Core.Models
 @inject ArtifactService Artifacts
 @inject GenerationService Generation
 @inject ProposalService Proposals
@@ -89,8 +89,8 @@ else
                           placeholder="e.g. Max 10 slides, and add a slide about our references"></textarea>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
                 <button class="btn btn-primary" @onclick="() => { _showRegenerate = false; return GenerateAsync(_instruction); }">Generate</button>
+                <button class="btn btn-outline" @onclick="() => _showRegenerate = false">Cancel</button>
             </div>
         </div>
     </div>
