@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Identity.Web;
@@ -61,6 +61,7 @@ builder.Services.AddScoped<RequirementsExtractionService>();
 builder.Services.AddScoped<ContentGenerationService>();
 builder.Services.AddScoped<AiUsageService>();
 builder.Services.AddScoped<Saga.Web.Components.Layout.AppHeaderState>();
+builder.Services.AddScoped<Saga.Web.Components.Proposal.ChatDraftState>();
 
 // Bing-grounded research is wired up with the Foundry project in the deployment milestone.
 builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();

@@ -1,6 +1,7 @@
 @inject ChatService Chat
 @inject CurrentUserService CurrentUser
 @inject WorkingContextService WorkingContext
+@inject ChatDraftState Drafts
 @implements IDisposable
 
 <div class="chat-layout">
@@ -134,10 +135,10 @@
                 {
                     <div class="chat-input">
                         <textarea rows="2" placeholder="Type a message"
-                                  @bind="_question" @bind:event="oninput" disabled="@ActiveIsBusy"
+                                  @bind="Question" @bind:event="oninput" disabled="@ActiveIsBusy"
                                   @onkeydown="OnKeyDown"></textarea>
                         <button class="btn btn-primary" @onclick="AskAsync"
-                                disabled="@(ActiveIsBusy || string.IsNullOrWhiteSpace(_question))">
+                                disabled="@(ActiveIsBusy || string.IsNullOrWhiteSpace(Question))">
                             @(ActiveIsBusy ? "Answering…" : "Send")
                         </button>
                     </div>
@@ -223,7 +224,16 @@
     private readonly Dictionary<Guid, string> _streaming = [];
     private HashSet<Guid> _streamingIds = [];
 
-    private string _question = "";
+    /// <summary>
+    /// The composer's text, kept in the circuit rather than in a field: leaving the AI Chat tab
+    /// destroys this component, and an unsent question should survive the trip to Materials.
+    /// </summary>
+    private string Question
+    {
+        get => Drafts.Get(ProposalId, ChatDraftKind.AiChat, ActiveKey);
+        set => Drafts.Set(ProposalId, ChatDraftKind.AiChat, ActiveKey, value);
+    }
+
     private string? _error;
     private bool _disposed;
     private Guid _loadedProposalId;
@@ -319,7 +329,6 @@
         _activeChatId = null;
         _activeSession = null;
         _messages = [];
-        _question = "";
         // The broadest preset that has anything to offer, so a proposal with no artifacts yet
         // starts on "All materials" instead of on a greyed-out "Everything".
         _draftKind = MaterialSelection.DefaultPreset(_documents, _artifacts);
@@ -417,17 +426,17 @@
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey && !ActiveIsBusy && !string.IsNullOrWhiteSpace(_question))
+        if (e.Key == "Enter" && !e.ShiftKey && !ActiveIsBusy && !string.IsNullOrWhiteSpace(Question))
             await AskAsync();
     }
 
     private async Task AskAsync()
     {
-        var question = _question.Trim();
+        var question = Question.Trim();
         if (question.Length == 0 || ActiveIsBusy) return;
 
         _error = null;
-        _question = "";
+        Question = "";
         var user = await CurrentUser.GetAsync();
         var askingDraft = _isDraft;
         // This ask owns one buffer. The key follows the answer, not the screen, so switching

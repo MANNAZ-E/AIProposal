@@ -7,28 +7,32 @@
     @if (!ReadOnly)
     {
         <div class="section-title" style="margin-top: 0;">Choose materials</div>
-        <div class="chat-material-presets">
-            @foreach (var preset in DisplayPresets)
-            {
-                <label class="chat-preset @(IsPresetDisabled(preset) ? "disabled" : "")">
-                    <input type="radio" name="chat-preset" checked="@(Preset == preset)"
-                           disabled="@IsPresetDisabled(preset)"
-                           @onchange="() => ApplyPreset(preset)" />
-                    <span>@ContextLabel(preset)</span>
-                </label>
-            }
-            @if (Preset == WorkingContextKind.Custom && Documents.Count + Artifacts.Count > 0)
-            {
-                <span class="badge badge-shared">Custom</span>
-            }
-        </div>
-        @if (Documents.Count == 0)
+        @if (IsEmpty)
         {
             @* Nothing to pick from is a dead end unless the way out is on screen: the Materials
-               tab is a section of this page, not a URL, so it takes a callback rather than a link. *@
+               tab is a section of this page, not a URL, so it takes a callback rather than a link.
+               The presets and the token meter would all read zero here, so they stay off screen. *@
             <p class="form-hint" style="margin-top: 0.35rem;">
-                No materials yet — <button class="link-button" @onclick="OnAddMaterials">Add materials</button>
+                No materials yet — <button class="link-button" @onclick="OnAddMaterials">Go to materials</button>
             </p>
+        }
+        else
+        {
+            <div class="chat-material-presets">
+                @foreach (var preset in DisplayPresets)
+                {
+                    <label class="chat-preset @(IsPresetDisabled(preset) ? "disabled" : "")">
+                        <input type="radio" name="chat-preset" checked="@(Preset == preset)"
+                               disabled="@IsPresetDisabled(preset)"
+                               @onchange="() => ApplyPreset(preset)" />
+                        <span>@ContextLabel(preset)</span>
+                    </label>
+                }
+                @if (Preset == WorkingContextKind.Custom)
+                {
+                    <span class="badge badge-shared">Custom</span>
+                }
+            </div>
         }
     }
 
@@ -67,7 +71,7 @@
             <p class="form-hint">Materials are locked when a chat is started - start a new chat to change</p>
         </div>
     }
-    else
+    else if (!IsEmpty)
     {
         <div class="chat-token-meter">
             @EstimatedTokens.ToString("N0") tokens
@@ -94,6 +98,9 @@
 
     /// <summary>Broadest first — "Everything" reads before "Client materials only".</summary>
     private static readonly WorkingContextKind[] DisplayPresets = MaterialSelection.DisplayPresets;
+
+    /// <summary>Nothing to read: every preset would be greyed out and every count zero.</summary>
+    private bool IsEmpty => Documents.Count == 0 && Artifacts.Count == 0;
 
     private bool IsPresetDisabled(WorkingContextKind kind)
         => !MaterialSelection.IsPresetAvailable(kind, Documents, Artifacts);

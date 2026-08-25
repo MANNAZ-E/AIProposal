@@ -4,6 +4,13 @@ Saga is an ASP.NET Core Blazor Server app (.NET 10) that generates and reviews
 proposal documents. Solution: `Saga.slnx` (`src/Saga.Core`, `src/Saga.Infrastructure`,
 `src/Saga.Web`, `tests/Saga.Tests`).
 
+## UI
+
+- **Do not add explanatory help text to new features.** No intro paragraph under a
+  heading explaining what the section does, no caption spelling out what a control
+  accepts. The consultants using Saga know their job; a label and a placeholder are
+  enough, and prose that only restates the visible UI is deleted as soon as it ships.
+
 ## Running the app
 
 Prereqs: .NET 10 SDK, SQL Server LocalDB (`sqllocaldb info` should list `MSSQLLocalDB`).

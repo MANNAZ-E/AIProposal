@@ -29,9 +29,6 @@ public class TeamChatService(
     /// <summary>How many teammate colours the palette cycles through (own messages take the fourth).</summary>
     private const int ColourSlots = 3;
 
-    /// <summary>The standing thread every proposal has, so there is always somewhere to post.</summary>
-    private const string DefaultThreadTitle = "Bid Chat";
-
     /// <summary>
     /// The bid team, in the order they joined. The position is what the colour is taken from, so
     /// it has to be stable and total — hence <c>UserId</c> behind <c>AddedAt</c>, since the owner
@@ -46,42 +43,38 @@ public class TeamChatService(
     }
 
     /// <summary>
-    /// The proposal's threads, default first and then by recency. Creates the default thread if it
-    /// is missing, which is what makes every proposal — including ones that existed before threads
-    /// did — open with somewhere to post rather than an empty pane.
+    /// The proposal's threads, newest conversation first. A proposal with none lists none: the
+    /// section opens on an unsaved draft instead, the way a new chat does, so nothing is created
+    /// until somebody actually has something to say.
     /// </summary>
     public async Task<List<TeamThreadListItem>> ListThreadsAsync(Guid proposalId, Guid userId,
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var role = await ProposalService.RequireRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
-        await EnsureDefaultThreadAsync(db, proposalId, ct);
 
         var rows = await db.TeamThreads
             .Where(t => t.ProposalId == proposalId)
-            .OrderByDescending(t => t.IsDefault)
-            .ThenByDescending(t => t.LastMessageAt)
+            .OrderByDescending(t => t.LastMessageAt)
             .Select(t => new
             {
                 t.Id,
                 t.Title,
-                t.IsDefault,
                 t.CreatedById,
                 CreatedByName = t.CreatedBy!.DisplayName,
                 t.LastMessageAt,
-                // The Any() guard is what stops a thread nobody has posted in — the default one on
-                // a fresh proposal — showing an unread dot to everybody who has never opened it.
-                HasUnread = t.Messages.Any(m => m.AuthorId != userId)
-                            && !t.Seen.Any(s => s.UserId == userId && s.LastSeenAt >= t.LastMessageAt),
+                // A thread always holds at least the message that started it, and posting moves
+                // the poster's own watermark, so the watermark alone decides this.
+                HasUnread = !t.Seen.Any(s => s.UserId == userId && s.LastSeenAt >= t.LastMessageAt),
             })
             .ToListAsync(ct);
 
         return rows
             .Select(t => new TeamThreadListItem(
-                t.Id, t.Title, t.IsDefault, t.CreatedById,
+                t.Id, t.Title, t.CreatedById,
                 t.CreatedById is null ? null : t.CreatedByName,
-                CanRename: CanManage(t.IsDefault, t.CreatedById, userId, role, deleting: false),
-                CanDelete: CanManage(t.IsDefault, t.CreatedById, userId, role, deleting: true),
+                CanRename: CanManage(t.CreatedById, userId, role),
+                CanDelete: CanManage(t.CreatedById, userId, role),
                 t.LastMessageAt, t.HasUnread))
             .ToList();
     }
@@ -119,7 +112,6 @@ public class TeamChatService(
             ProposalId = proposalId,
             Title = ChatTitle.FromQuestion(text, "New thread"),
             CreatedById = userId,
-            IsDefault = false,
             CreatedAt = now,
             LastMessageAt = now,
         };
@@ -170,8 +162,8 @@ public class TeamChatService(
     }
 
     /// <summary>
-    /// Deletes a thread and everything in it. The default thread is refused: it is the one place
-    /// the team can always post, and losing it would leave a proposal with nowhere to talk.
+    /// Deletes a thread and everything in it. Every thread may go: a proposal with none opens on a
+    /// draft, so there is nothing to protect by keeping the last one alive.
     /// </summary>
     public async Task DeleteAsync(Guid threadId, Guid userId, CancellationToken ct = default)
     {
@@ -265,41 +257,6 @@ public class TeamChatService(
     }
 
     /// <summary>
-    /// Creates the proposal's default thread if it has none. The unique filtered index is what
-    /// makes this safe: two circuits opening the section at once both find nothing, and the one
-    /// that loses re-reads instead of failing — a race lost here is a success, not an error.
-    /// </summary>
-    private static async Task EnsureDefaultThreadAsync(SagaDbContext db, Guid proposalId,
-        CancellationToken ct)
-    {
-        if (await db.TeamThreads.AnyAsync(t => t.ProposalId == proposalId && t.IsDefault, ct)) return;
-
-        var now = DateTimeOffset.UtcNow;
-        db.TeamThreads.Add(new TeamThread
-        {
-            Id = Guid.NewGuid(),
-            ProposalId = proposalId,
-            Title = DefaultThreadTitle,
-            CreatedById = null,
-            IsDefault = true,
-            CreatedAt = now,
-            LastMessageAt = now,
-        });
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException)
-        {
-            // Somebody else created it between the check and the insert. Drop our copy and carry
-            // on; the caller's query will find theirs.
-            foreach (var entry in db.ChangeTracker.Entries<TeamThread>().ToList())
-                entry.State = EntityState.Detached;
-        }
-    }
-
-    /// <summary>
     /// Loads a thread the user is on the bid team for, along with their role on the proposal.
     /// There is no per-thread visibility to check — the team sees every thread.
     /// </summary>
@@ -315,23 +272,15 @@ public class TeamChatService(
 
     /// <summary>
     /// Who may rename or delete a thread: the person who started it, or the proposal owner —
-    /// without the second, a thread started by somebody since removed from the team could never be
-    /// cleaned up. The default thread has no creator, so only the owner renames it and nobody
-    /// deletes it.
+    /// without the second, a thread started by somebody since removed from the team, or one left
+    /// over from the old standing thread and so started by nobody, could never be cleaned up.
     /// </summary>
-    private static bool CanManage(bool isDefault, Guid? createdById, Guid userId, ProposalRole role,
-        bool deleting)
-    {
-        if (isDefault) return !deleting && role == ProposalRole.Owner;
-        return createdById == userId || role == ProposalRole.Owner;
-    }
+    private static bool CanManage(Guid? createdById, Guid userId, ProposalRole role)
+        => createdById == userId || role == ProposalRole.Owner;
 
     private static void EnsureCanManage(TeamThread thread, Guid userId, ProposalRole role, bool deleting)
     {
-        if (CanManage(thread.IsDefault, thread.CreatedById, userId, role, deleting)) return;
-        if (thread.IsDefault && deleting)
-            throw new InvalidOperationException(
-                $"“{thread.Title}” is the team's standing thread and cannot be deleted.");
+        if (CanManage(thread.CreatedById, userId, role)) return;
         throw new InvalidOperationException(
             $"Only the person who started a thread, or the proposal owner, can {(deleting ? "delete" : "rename")} it.");
     }

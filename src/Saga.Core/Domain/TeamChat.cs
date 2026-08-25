@@ -16,17 +16,13 @@ public class TeamThread
     public required string Title { get; set; }
 
     /// <summary>
-    /// Who started it. Nullable, unlike <see cref="ChatSession.OwnerId"/>, because the default
-    /// thread is created by the proposal existing rather than by anybody's click.
+    /// Who started it. Nullable, unlike <see cref="ChatSession.OwnerId"/>, only because of the
+    /// standing "Bid Chat" thread the app used to create by itself: one that collected messages
+    /// before that was dropped survives as an ordinary thread with nobody behind it. Nothing
+    /// creates a thread without a creator any more.
     /// </summary>
     public Guid? CreatedById { get; set; }
     public User? CreatedBy { get; set; }
-
-    /// <summary>
-    /// The proposal's standing thread. Pinned to the top of the list and never deletable, so the
-    /// team always has somewhere to post without first deciding on a topic.
-    /// </summary>
-    public bool IsDefault { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 

@@ -1,6 +1,7 @@
 @inject TeamChatService TeamChat
 @inject CurrentUserService CurrentUser
 @inject TeamChatNotifier Notifier
+@inject ChatDraftState Drafts
 @implements IDisposable
 
 <div class="chat-layout">
@@ -11,8 +12,8 @@
     <div class="chat-pane">
         @if (!_isDraft && _activeThreadId is null)
         {
-            @* Unreachable while the standing thread exists, but a thread deleted from another
-               circuit while it is on screen lands here rather than on a blank pane. *@
+            @* A thread deleted from another circuit while it is on screen lands here rather than
+               on a blank pane; opening the section always starts on a thread or on the draft. *@
             <div></div>
             <div class="chat-scroll">
                 <div class="empty-state">
@@ -65,9 +66,9 @@
                     }
                     <div class="chat-input">
                         <textarea rows="2" placeholder="Type a message - use @@ to tag and notify"
-                                  @bind="_draft" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
+                                  @bind="Draft" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
                         <button class="btn btn-primary" @onclick="SendAsync"
-                                disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))">Send</button>
+                                disabled="@(_sending || string.IsNullOrWhiteSpace(Draft))">Send</button>
                     </div>
                     @if (_error is not null)
                     {
@@ -95,9 +96,13 @@
     private List<TeamMessage> _messages = [];
     private List<TeamChatMember> _members = [];
     private Guid? _activeThreadId;
+
+    /// <summary>
+    /// The one reusable unstarted thread. Nothing is written until the first message lands, so
+    /// abandoning it leaves nothing behind and pressing New again reuses this slot.
+    /// </summary>
     private bool _isDraft;
     private Guid _me;
-    private string _draft = "";
     private string? _error;
     private bool _sending;
     private bool _disposed;
@@ -110,6 +115,20 @@
     private int _dismissedAt = -1;
 
     private TeamThreadListItem? ActiveThread => _threads.FirstOrDefault(t => t.Id == _activeThreadId);
+
+    /// <summary>The thread a draft belongs to; the unstarted one uses Guid.Empty.</summary>
+    private Guid ActiveKey => _isDraft ? Guid.Empty : _activeThreadId ?? Guid.Empty;
+
+    /// <summary>
+    /// The composer's text, kept in the circuit rather than in a field: leaving the Bid Team Chat
+    /// tab destroys this component, and a message half typed should survive that, exactly as an
+    /// unsent question does in AI Chat.
+    /// </summary>
+    private string Draft
+    {
+        get => Drafts.Get(ProposalId, ChatDraftKind.TeamThread, ActiveKey);
+        set => Drafts.Set(ProposalId, ChatDraftKind.TeamThread, ActiveKey, value);
+    }
 
     protected override void OnInitialized() => Notifier.Posted += OnPosted;
 
@@ -126,8 +145,9 @@
         _me = (await CurrentUser.GetAsync()).Id;
         _members = await TeamChat.MembersAsync(ProposalId, _me);
         await LoadThreadsAsync();
-        // The standing thread always exists, so this lands on it rather than on an empty pane.
+        // The newest conversation, or a fresh draft on a proposal nobody has posted to yet.
         if (_threads.Count > 0) await SelectAsync(_threads[0].Id);
+        else NewThread();
     }
 
     /// <summary>
@@ -170,7 +190,6 @@
         if (!_isDraft && _activeThreadId == threadId) return;
         _isDraft = false;
         _error = null;
-        _draft = "";
         _dismissedAt = -1;
         _activeThreadId = threadId;
         try
@@ -187,17 +206,12 @@
         }
     }
 
-    /// <summary>
-    /// A draft writes nothing to the database, so abandoning it leaves nothing behind and pressing
-    /// New again reuses the slot instead of piling up empty threads.
-    /// </summary>
     private void NewThread()
     {
         _isDraft = true;
         _activeThreadId = null;
         _messages = [];
         _error = null;
-        _draft = "";
         _dismissedAt = -1;
     }
 
@@ -214,9 +228,12 @@
 
     private async Task SendAsync()
     {
-        var text = _draft.Trim();
+        var text = Draft.Trim();
         if (text.Length == 0 || _sending) return;
 
+        // Where this text lives now: starting a thread re-keys the composer onto the new thread,
+        // and the slot to empty afterwards is the one it was typed into.
+        var draftKey = ActiveKey;
         _sending = true;
         _error = null;
         try
@@ -237,7 +254,8 @@
                 return;
             }
 
-            _draft = "";
+            // Only once it is safely posted; a send that throws leaves the text to try again.
+            Drafts.Set(ProposalId, ChatDraftKind.TeamThread, draftKey, "");
             _dismissedAt = -1;
             // The notifier reaches this circuit too, but reloading here keeps the send
             // synchronous with the click rather than with an event we also raised.
@@ -277,7 +295,9 @@
             if (_activeThreadId != threadId) return;
             _activeThreadId = null;
             _messages = [];
+            // Land on the neighbour, or on a fresh draft once the last thread is gone.
             if (_threads.Count > 0) await SelectAsync(_threads[0].Id);
+            else NewThread();
         }
         catch (Exception ex)
         {
@@ -290,7 +310,7 @@
     {
         var start = MentionStart;
         if (start < 0) return;
-        _draft = string.Concat(_draft.AsSpan(0, start), "@", member.DisplayName, " ");
+        Draft = string.Concat(Draft.AsSpan(0, start), "@", member.DisplayName, " ");
         _dismissedAt = -1;
     }
 
@@ -302,10 +322,11 @@
     {
         get
         {
-            var at = _draft.LastIndexOf('@');
+            var draft = Draft;
+            var at = draft.LastIndexOf('@');
             if (at < 0) return -1;
-            if (at > 0 && !char.IsWhiteSpace(_draft[at - 1])) return -1;
-            var query = _draft[(at + 1)..];
+            if (at > 0 && !char.IsWhiteSpace(draft[at - 1])) return -1;
+            var query = draft[(at + 1)..];
             if (query.Length > MaxQueryLength || query.Any(char.IsWhiteSpace)) return -1;
             return at;
         }
@@ -317,7 +338,7 @@
         {
             var start = MentionStart;
             if (start < 0 || start == _dismissedAt) return null;
-            var query = _draft[(start + 1)..];
+            var query = Draft[(start + 1)..];
             return _members
                 .Where(m => m.UserId != _me)
                 .Where(m => query.Length == 0

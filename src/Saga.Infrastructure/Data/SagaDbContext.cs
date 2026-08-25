@@ -138,9 +138,6 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
         {
             b.Property(t => t.Title).HasMaxLength(200);
             b.HasIndex(t => new { t.ProposalId, t.LastMessageAt });
-            // One default thread per proposal, enforced by the database rather than by a read
-            // followed by a write: two circuits opening the section at once would both find none.
-            b.HasIndex(t => t.ProposalId).IsUnique().HasFilter("[IsDefault] = 1");
             b.HasOne(t => t.Proposal).WithMany(p => p.TeamThreads).HasForeignKey(t => t.ProposalId).OnDelete(DeleteBehavior.Cascade);
             b.HasOne(t => t.CreatedBy).WithMany().HasForeignKey(t => t.CreatedById).OnDelete(DeleteBehavior.Restrict);
         });

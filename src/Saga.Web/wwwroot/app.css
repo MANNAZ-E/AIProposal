@@ -317,8 +317,11 @@ a {
     margin-bottom: 0.3rem;
 }
 
+/* The gap belongs to the hint, not to a literal space in the markup: inside a Razor
+   @if block a whitespace-only <text> node is dropped and the hint runs into the label. */
 .label-hint {
     font-weight: 400;
+    margin-left: 0.35em;
 }
 
 .form-field input[type="text"],
@@ -358,6 +361,7 @@ a {
     align-items: center;
     gap: 1rem;
     margin-top: 0.25rem;
+    margin-bottom: 1rem;
 }
 
 .radio-row label {

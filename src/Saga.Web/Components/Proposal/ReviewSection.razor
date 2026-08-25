@@ -11,16 +11,8 @@
     <p class="error-text">@_error</p>
 }
 
-<p class="text-muted" style="margin-top: 0;">
-    Upload your proposal files (PowerPoint, Word, PDF) to review it.
-</p>
-
 @if (CanEdit)
 {
-    <div class="form-field" style="max-width: 420px;">
-        <label for="fp-label">Version label (optional)</label>
-        <input id="fp-label" type="text" @bind="_uploadLabel" placeholder="e.g. Final before QA" disabled="@_uploading" />
-    </div>
     <label class="upload-area">
         <InputFile OnChange="UploadVersionAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
@@ -32,6 +24,10 @@
             <span><strong>Choose files</strong> or drop them here — all files together become one new version</span>
         }
     </label>
+    <div class="form-field" style="max-width: 420px; margin-top: 1rem;">
+        <label for="fp-label">Version label<span class="label-hint">(optional)</span></label>
+        <input id="fp-label" type="text" @bind="_uploadLabel" placeholder="e.g. Final before QA" disabled="@_uploading" />
+    </div>
 }
 
 @if (_versions is null)

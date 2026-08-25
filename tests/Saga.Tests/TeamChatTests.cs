@@ -22,26 +22,21 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         return (elv, sda, proposalId);
     }
 
-    /// <summary>The standing thread, which listing creates on a proposal that has none.</summary>
-    private static async Task<Guid> StandingThreadAsync(TeamChatService chat, Guid proposalId, Guid userId)
-        => (await chat.ListThreadsAsync(proposalId, userId)).Single(t => t.IsDefault).Id;
+    /// <summary>An ordinary thread to post into, since nothing creates one by itself any more.</summary>
+    private static Task<Guid> ThreadAsync(TeamChatService chat, Guid proposalId, Guid userId)
+        => chat.StartThreadAsync(proposalId, userId, "Kickoff");
 
     [Fact]
-    public async Task Every_proposal_starts_with_one_standing_thread()
+    public async Task A_proposal_starts_with_no_threads()
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
 
-        var thread = Assert.Single(await chat.ListThreadsAsync(proposalId, elv));
-        Assert.Equal("Bid Chat", thread.Title);
-        Assert.True(thread.IsDefault);
-        // Nobody started it, so there is no name to show under it.
-        Assert.Null(thread.CreatedById);
-        Assert.Null(thread.CreatedByName);
-
-        // Listing again, and from the other side, must not pile up a second one.
-        Assert.Single(await chat.ListThreadsAsync(proposalId, elv));
-        Assert.Single(await chat.ListThreadsAsync(proposalId, sda));
+        // Listing creates nothing: the section opens on an unstarted draft, so a proposal nobody
+        // has posted to has no conversation and no unread badge.
+        Assert.Empty(await chat.ListThreadsAsync(proposalId, elv));
+        Assert.Empty(await chat.ListThreadsAsync(proposalId, sda));
+        Assert.Equal(0, await chat.UnreadCountAsync(proposalId, elv));
     }
 
     [Fact]
@@ -49,15 +44,15 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await chat.PostAsync(threadId, sda, "Reading only, but I still have opinions.");
 
         // Both sides see it: every team thread is shared by definition.
         var mine = await chat.ListAsync(threadId, sda);
         var theirs = await chat.ListAsync(threadId, elv);
-        Assert.Equal("Reading only, but I still have opinions.", Assert.Single(mine).Text);
-        Assert.Equal(sda, Assert.Single(theirs).AuthorId);
+        Assert.Equal("Reading only, but I still have opinions.", mine[^1].Text);
+        Assert.Equal(sda, theirs[^1].AuthorId);
     }
 
     [Fact]
@@ -71,23 +66,28 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var thread = (await chat.ListThreadsAsync(proposalId, elv)).Single(t => t.Id == threadId);
         // Trailing punctuation is dropped: the title is a label, not a sentence.
         Assert.Equal("Pricing for the Q3 renewal", thread.Title);
-        Assert.False(thread.IsDefault);
         Assert.Equal(sda, thread.CreatedById);
         // A thread that exists always has its first message in it.
         Assert.Equal("Pricing for the Q3 renewal?", Assert.Single(await chat.ListAsync(threadId, elv)).Text);
     }
 
     [Fact]
-    public async Task The_standing_thread_is_listed_first_however_stale_it_is()
+    public async Task Threads_are_listed_newest_message_first()
     {
         var (elv, _, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var standing = await StandingThreadAsync(chat, proposalId, elv);
+        var older = await chat.StartThreadAsync(proposalId, elv, "Started first");
+        // The clock behind LastMessageAt ticks in tens of milliseconds; without the pause the two
+        // threads can share a timestamp and the order stops being a fact about the code.
+        await Task.Delay(25);
+        var newer = await chat.StartThreadAsync(proposalId, elv, "Started second");
 
-        await chat.StartThreadAsync(proposalId, elv, "Something much more recent");
+        Assert.Equal([newer, older], (await chat.ListThreadsAsync(proposalId, elv)).Select(t => t.Id));
 
-        var threads = await chat.ListThreadsAsync(proposalId, elv);
-        Assert.Equal(standing, threads[0].Id);
+        // Recency is the newest message, not the start: replying lifts an old thread back to the top.
+        await Task.Delay(25);
+        await chat.PostAsync(older, elv, "Reviving this one");
+        Assert.Equal([older, newer], (await chat.ListThreadsAsync(proposalId, elv)).Select(t => t.Id));
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var (elv, _, proposalId) = await SetupAsync();
         var outsider = (await _users.GetOrCreateAsync("outsider@mannaz.com", "Outsider", null)).Id;
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => chat.PostAsync(threadId, outsider, "Let me in"));
@@ -115,11 +115,11 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await chat.PostAsync(threadId, elv, "Over to you @sda, deadline is Friday.");
 
-        var message = Assert.Single(await chat.ListAsync(threadId, elv));
+        var message = (await chat.ListAsync(threadId, elv))[^1];
         var mention = Assert.Single(message.Mentions);
         Assert.Equal(sda, mention.UserId);
         Assert.Equal(12, mention.Start);
@@ -146,11 +146,11 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var (elv, _, proposalId) = await SetupAsync();
         await _users.GetOrCreateAsync("bystander@mannaz.com", "Bystander", null);
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await chat.PostAsync(threadId, elv, "@Bystander @nobody @sda");
 
-        var message = Assert.Single(await chat.ListAsync(threadId, elv));
+        var message = (await chat.ListAsync(threadId, elv))[^1];
         // Only the teammate resolves: a user who exists but is not on this bid team does not.
         var mention = Assert.Single(message.Mentions);
         Assert.Equal("@sda", message.Text.Substring(mention.Start, mention.Length));
@@ -161,11 +161,11 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, _, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await chat.PostAsync(threadId, elv, "Note to self, @Emil: book the room.");
 
-        Assert.Empty(Assert.Single(await chat.ListAsync(threadId, elv)).Mentions);
+        Assert.Empty((await chat.ListAsync(threadId, elv))[^1].Mentions);
     }
 
     [Fact]
@@ -173,9 +173,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
-
-        await chat.PostAsync(threadId, elv, "Mine");
+        var threadId = await chat.StartThreadAsync(proposalId, elv, "Mine");
         Assert.Equal(0, await chat.UnreadCountAsync(proposalId, elv));
 
         await chat.PostAsync(threadId, sda, "Theirs");
@@ -193,36 +191,40 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var standing = await StandingThreadAsync(chat, proposalId, elv);
+        var mine = await ThreadAsync(chat, proposalId, elv);
 
         var started = await chat.StartThreadAsync(proposalId, sda, "About the site visit");
-        await chat.PostAsync(standing, sda, "And a separate thing");
+        await chat.PostAsync(mine, sda, "And a separate thing");
 
         // The badge is one number across the proposal; the dots are per thread.
         Assert.Equal(2, await chat.UnreadCountAsync(proposalId, elv));
         var before = await chat.ListThreadsAsync(proposalId, elv);
         Assert.True(before.Single(t => t.Id == started).HasUnread);
-        Assert.True(before.Single(t => t.Id == standing).HasUnread);
+        Assert.True(before.Single(t => t.Id == mine).HasUnread);
 
         await chat.MarkSeenAsync(started, elv);
 
         Assert.Equal(1, await chat.UnreadCountAsync(proposalId, elv));
         var after = await chat.ListThreadsAsync(proposalId, elv);
         Assert.False(after.Single(t => t.Id == started).HasUnread);
-        Assert.True(after.Single(t => t.Id == standing).HasUnread);
+        Assert.True(after.Single(t => t.Id == mine).HasUnread);
     }
 
     [Fact]
-    public async Task A_thread_nobody_has_posted_in_is_not_unread()
+    public async Task A_thread_you_started_is_unread_to_everybody_but_you()
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
 
-        // Neither of them has ever opened it, so there is no watermark to compare against —
-        // without the "has somebody else posted" guard this would show a dot to everyone.
+        await chat.StartThreadAsync(proposalId, elv, "Starting this myself");
+
+        // Starting a thread moves your own watermark with it, which is what lets the dot be
+        // decided by the watermark alone now that no thread can exist without a message in it.
         Assert.False(Assert.Single(await chat.ListThreadsAsync(proposalId, elv)).HasUnread);
-        Assert.False(Assert.Single(await chat.ListThreadsAsync(proposalId, sda)).HasUnread);
-        Assert.Equal(0, await chat.UnreadCountAsync(proposalId, sda));
+        Assert.Equal(0, await chat.UnreadCountAsync(proposalId, elv));
+
+        Assert.True(Assert.Single(await chat.ListThreadsAsync(proposalId, sda)).HasUnread);
+        Assert.Equal(1, await chat.UnreadCountAsync(proposalId, sda));
     }
 
     [Fact]
@@ -230,7 +232,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, sda, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
         await chat.PostAsync(threadId, sda, "Hello");
 
         await chat.MarkSeenAsync(threadId, elv);
@@ -249,19 +251,19 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     }
 
     [Fact]
-    public async Task The_standing_thread_cannot_be_deleted_even_by_the_owner()
+    public async Task The_last_thread_can_be_deleted_and_leaves_the_proposal_with_none()
     {
         var (elv, _, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => chat.DeleteAsync(threadId, elv));
-        Assert.Single(await chat.ListThreadsAsync(proposalId, elv));
-
-        // Renaming it is fine — the owner may, a reader may not.
         await chat.RenameAsync(threadId, elv, "Everything else");
         Assert.Equal("Everything else",
-            (await chat.ListThreadsAsync(proposalId, elv)).Single(t => t.Id == threadId).Title);
+            Assert.Single(await chat.ListThreadsAsync(proposalId, elv)).Title);
+
+        // Nothing is pinned open: the section falls back to a draft rather than to a kept thread.
+        await chat.DeleteAsync(threadId, elv);
+        Assert.Empty(await chat.ListThreadsAsync(proposalId, elv));
     }
 
     [Fact]
@@ -327,7 +329,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     {
         var (elv, _, proposalId) = await SetupAsync();
         var chat = NewChat();
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => chat.PostAsync(threadId, elv, "   "));
@@ -336,7 +338,7 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
             () => chat.StartThreadAsync(proposalId, elv, "   "));
 
         await chat.PostAsync(threadId, elv, new string('x', 5000));
-        Assert.Equal(4000, Assert.Single(await chat.ListAsync(threadId, elv)).Text.Length);
+        Assert.Equal(4000, (await chat.ListAsync(threadId, elv))[^1].Text.Length);
     }
 
     [Fact]
@@ -347,13 +349,15 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var seen = new List<(Guid Proposal, Guid Thread)>();
         notifier.Posted += (p, t) => seen.Add((p, t));
         var chat = new TeamChatService(db, notifier);
-        var threadId = await StandingThreadAsync(chat, proposalId, elv);
+        var threadId = await ThreadAsync(chat, proposalId, elv);
 
         await chat.PostAsync(threadId, elv, "Anyone there?");
         var started = await chat.StartThreadAsync(proposalId, elv, "A second conversation");
 
         // The thread id is what lets a listening circuit tell "reload the list" from
-        // "reload the transcript I am looking at".
-        Assert.Equal([(proposalId, threadId), (proposalId, started)], seen);
+        // "reload the transcript I am looking at". Starting one publishes too — the first entry
+        // is the thread the helper started.
+        Assert.Equal(
+            [(proposalId, threadId), (proposalId, threadId), (proposalId, started)], seen);
     }
 }
