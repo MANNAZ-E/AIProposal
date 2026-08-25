@@ -4,8 +4,8 @@
 @inject ProposalService Proposals
 @inject CurrentUserService CurrentUser
 
-<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;">
-    <h2 style="margin-bottom: 0.25rem;">
+<div class="section-header">
+    <h2 class="section-heading">
         Structure
         @if (_artifact is not null && _artifact.Status != ArtifactStatus.Empty)
         {
@@ -16,7 +16,7 @@
             }
         }
     </h2>
-    <div style="display: flex; gap: 0.4rem; white-space: nowrap;">
+    <div class="section-actions">
         @if (CanEdit)
         {
             @if (_artifact is null || _artifact.Status == ArtifactStatus.Empty)

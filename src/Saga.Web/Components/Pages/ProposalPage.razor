@@ -138,7 +138,7 @@ else
                 }
                 else if (_section == Section.People)
                 {
-                    <h2>Bid Team</h2>
+                    <h2 class="section-heading">Bid Team</h2>
                     @if (_myRole == ProposalRole.Owner)
                     {
                         <div class="card">
@@ -199,7 +199,7 @@ else
                 }
                 else if (_section == Section.Settings)
                 {
-                    <h2>Settings</h2>
+                    <h2 class="section-heading">Settings</h2>
                     @if (_myRole != ProposalRole.Owner)
                     {
                         <p class="text-muted">Only the owner can change the proposal's settings.</p>

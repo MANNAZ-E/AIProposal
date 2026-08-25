@@ -3,7 +3,7 @@
 @inject CurrentUserService CurrentUser
 @inject IDocumentTextExtractor TextExtractor
 
-<h2>Materials</h2>
+<h2 class="section-heading">Materials</h2>
 
 @if (_error is not null)
 {
@@ -145,7 +145,7 @@ else
                 <tr class="table-group"><td colspan="6">@type.Name</td></tr>
                 @if (inType.Count == 0)
                 {
-                    <tr><td colspan="6" class="text-muted">Nothing filed here yet</td></tr>
+                    <tr><td colspan="6" class="text-muted">Add files/notes above</td></tr>
                 }
                 else
                 {
@@ -426,13 +426,22 @@ else
         var user = await CurrentUser.GetAsync();
         _types = await Documents.GetTypesAsync(ProposalId, user.Id);
         _documents = await Documents.GetForProposalAsync(ProposalId, user.Id);
-        _uploadTypeId = KeepOrDefault(_uploadTypeId);
-        _noteTypeId = KeepOrDefault(_noteTypeId);
+        // The two pickers start on different categories because that is what each is nearly
+        // always used for: files arrive from the client, notes are written by us.
+        _uploadTypeId = KeepOrDefault(_uploadTypeId, DocumentType.MannazMaterialName);
+        _noteTypeId = KeepOrDefault(_noteTypeId, DocumentType.ClientMaterialName);
     }
 
-    /// <summary>Holds a picked type across reloads, falling back to the first (highest-priority) one.</summary>
-    private Guid KeepOrDefault(Guid selected)
-        => _types.Any(t => t.Id == selected) ? selected : _types.FirstOrDefault()?.Id ?? Guid.Empty;
+    /// <summary>Holds a picked type across reloads, falling back to the named seeded category
+    /// and, if a proposal no longer has it, to the first (highest-priority) type.</summary>
+    private Guid KeepOrDefault(Guid selected, string preferredName)
+    {
+        if (_types.Any(t => t.Id == selected))
+            return selected;
+
+        var preferred = _types.FirstOrDefault(t => string.Equals(t.Name, preferredName, StringComparison.OrdinalIgnoreCase));
+        return preferred?.Id ?? _types.FirstOrDefault()?.Id ?? Guid.Empty;
+    }
 
     private List<Document> DocumentsIn(Guid typeId)
         => _documents?.Where(d => d.DocumentTypeId == typeId).ToList() ?? [];
