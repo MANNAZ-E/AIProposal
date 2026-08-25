@@ -7,13 +7,14 @@ using Saga.Infrastructure.Data;
 namespace Saga.Infrastructure.Services;
 
 /// <summary>
-/// The bid team's group chat: one thread per proposal, people talking to each other rather than
-/// to a model. No AI call is made here and nothing is billed.
+/// The bid team's group chat: threads of people talking to each other rather than to a model.
+/// No AI call is made here and nothing is billed.
 ///
-/// Every method takes <see cref="ProposalRole.Reader"/> and nothing more — deliberately unlike
-/// <see cref="ChatService"/>, where a Reader may not post into a shared chat. Being on the bid
-/// team is the whole permission: someone brought in to read the proposal still has to be able to
-/// say something about it.
+/// Every thread belongs to the whole team — deliberately unlike <see cref="ChatService"/>, where a
+/// chat is private until shared and a Reader may not post into someone else's. Here every method
+/// takes <see cref="ProposalRole.Reader"/> and nothing more: being on the bid team is the whole
+/// permission, and someone brought in to read the proposal still has to be able to say something
+/// about it. Only renaming and deleting a thread ask for more than that.
 /// </summary>
 public class TeamChatService(
     IDbContextFactory<SagaDbContext> dbFactory,
@@ -22,8 +23,14 @@ public class TeamChatService(
     /// <summary>Long enough for anything anybody types in a chat box; the column is unbounded.</summary>
     private const int MaxLength = 4000;
 
+    /// <summary>Matches ChatSession.Title, and the column.</summary>
+    private const int MaxTitleLength = 200;
+
     /// <summary>How many teammate colours the palette cycles through (own messages take the fourth).</summary>
     private const int ColourSlots = 3;
+
+    /// <summary>The standing thread every proposal has, so there is always somewhere to post.</summary>
+    private const string DefaultThreadTitle = "Bid Chat";
 
     /// <summary>
     /// The bid team, in the order they joined. The position is what the colour is taken from, so
@@ -38,44 +45,199 @@ public class TeamChatService(
         return await MembersAsync(db, proposalId, ct);
     }
 
-    public async Task<List<TeamMessage>> ListAsync(Guid proposalId, Guid userId,
+    /// <summary>
+    /// The proposal's threads, default first and then by recency. Creates the default thread if it
+    /// is missing, which is what makes every proposal — including ones that existed before threads
+    /// did — open with somewhere to post rather than an empty pane.
+    /// </summary>
+    public async Task<List<TeamThreadListItem>> ListThreadsAsync(Guid proposalId, Guid userId,
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        var role = await ProposalService.RequireRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await EnsureDefaultThreadAsync(db, proposalId, ct);
+
+        var rows = await db.TeamThreads
+            .Where(t => t.ProposalId == proposalId)
+            .OrderByDescending(t => t.IsDefault)
+            .ThenByDescending(t => t.LastMessageAt)
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.IsDefault,
+                t.CreatedById,
+                CreatedByName = t.CreatedBy!.DisplayName,
+                t.LastMessageAt,
+                // The Any() guard is what stops a thread nobody has posted in — the default one on
+                // a fresh proposal — showing an unread dot to everybody who has never opened it.
+                HasUnread = t.Messages.Any(m => m.AuthorId != userId)
+                            && !t.Seen.Any(s => s.UserId == userId && s.LastSeenAt >= t.LastMessageAt),
+            })
+            .ToListAsync(ct);
+
+        return rows
+            .Select(t => new TeamThreadListItem(
+                t.Id, t.Title, t.IsDefault, t.CreatedById,
+                t.CreatedById is null ? null : t.CreatedByName,
+                CanRename: CanManage(t.IsDefault, t.CreatedById, userId, role, deleting: false),
+                CanDelete: CanManage(t.IsDefault, t.CreatedById, userId, role, deleting: true),
+                t.LastMessageAt, t.HasUnread))
+            .ToList();
+    }
+
+    public async Task<List<TeamMessage>> ListAsync(Guid threadId, Guid userId,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await LoadThreadAsync(db, threadId, userId, ct);
         return await db.TeamMessages
             .Include(m => m.Author)
             .Include(m => m.Mentions)
-            .Where(m => m.ProposalId == proposalId)
+            .Where(m => m.TeamThreadId == threadId)
             .OrderBy(m => m.CreatedAt)
             .ToListAsync(ct);
     }
 
     /// <summary>
-    /// Posts a message. The text is re-scanned server-side against the current bid team, so a
-    /// mention typed by hand resolves exactly like one picked from the composer's list, and the
-    /// offsets it found are stored with the message rather than recomputed at render time.
+    /// Starts a thread and posts its first message in one save, so a thread that exists always has
+    /// something in it — the same reason a chat is created by its first question. The title comes
+    /// from that message; nobody is asked to name a thread before they know what it is about.
     /// </summary>
-    public async Task<Guid> PostAsync(Guid proposalId, Guid userId, string text,
+    public async Task<Guid> StartThreadAsync(Guid proposalId, Guid userId, string text,
         CancellationToken ct = default)
     {
-        text = (text ?? "").Trim();
-        if (text.Length == 0) throw new InvalidOperationException("Write something first.");
-        if (text.Length > MaxLength) text = text[..MaxLength];
+        text = Clean(text);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
 
+        var now = DateTimeOffset.UtcNow;
+        var thread = new TeamThread
+        {
+            Id = Guid.NewGuid(),
+            ProposalId = proposalId,
+            Title = ChatTitle.FromQuestion(text, "New thread"),
+            CreatedById = userId,
+            IsDefault = false,
+            CreatedAt = now,
+            LastMessageAt = now,
+        };
+        db.TeamThreads.Add(thread);
+
+        await AddMessageAsync(db, thread, proposalId, userId, text, now, ct);
+        await db.SaveChangesAsync(ct);
+
+        notifier.Publish(proposalId, thread.Id);
+        return thread.Id;
+    }
+
+    /// <summary>
+    /// Posts a message into an existing thread. The text is re-scanned server-side against the
+    /// current bid team, so a mention typed by hand resolves exactly like one picked from the
+    /// composer's list, and the offsets it found are stored with the message rather than
+    /// recomputed at render time.
+    /// </summary>
+    public async Task<Guid> PostAsync(Guid threadId, Guid userId, string text,
+        CancellationToken ct = default)
+    {
+        text = Clean(text);
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var (thread, _) = await LoadThreadAsync(db, threadId, userId, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        var message = await AddMessageAsync(db, thread, thread.ProposalId, userId, text, now, ct);
+        await db.SaveChangesAsync(ct);
+
+        // After the save, so a circuit that reloads on the event reads the message it was told about.
+        notifier.Publish(thread.ProposalId, threadId);
+        return message.Id;
+    }
+
+    public async Task RenameAsync(Guid threadId, Guid userId, string title, CancellationToken ct = default)
+    {
+        title = (title ?? "").Trim();
+        if (title.Length == 0) throw new InvalidOperationException("A thread needs a title.");
+        if (title.Length > MaxTitleLength) title = title[..MaxTitleLength];
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var (thread, role) = await LoadThreadAsync(db, threadId, userId, ct);
+        EnsureCanManage(thread, userId, role, deleting: false);
+
+        thread.Title = title;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Deletes a thread and everything in it. The default thread is refused: it is the one place
+    /// the team can always post, and losing it would leave a proposal with nowhere to talk.
+    /// </summary>
+    public async Task DeleteAsync(Guid threadId, Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var (thread, role) = await LoadThreadAsync(db, threadId, userId, ct);
+        EnsureCanManage(thread, userId, role, deleting: true);
+
+        db.TeamThreads.Remove(thread);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Messages across every thread of the proposal that this user did not write and has not read
+    /// — the nav badge. It counts messages rather than threads so the number keeps meaning what it
+    /// meant when there was only one thread.
+    /// </summary>
+    public async Task<int> UnreadCountAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+
+        return await db.TeamMessages.CountAsync(
+            m => m.Thread!.ProposalId == proposalId
+                 && m.AuthorId != userId
+                 && !db.TeamChatSeen.Any(s => s.TeamThreadId == m.TeamThreadId
+                                              && s.UserId == userId
+                                              && s.LastSeenAt >= m.CreatedAt), ct);
+    }
+
+    public async Task MarkSeenAsync(Guid threadId, Guid userId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await LoadThreadAsync(db, threadId, userId, ct);
+
+        var latest = await db.TeamMessages
+            .Where(m => m.TeamThreadId == threadId)
+            .MaxAsync(m => (DateTimeOffset?)m.CreatedAt, ct);
+        if (latest is null) return;
+
+        if (!await MarkSeenAsync(db, threadId, userId, latest.Value, ct)) return;
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static string Clean(string? text)
+    {
+        text = (text ?? "").Trim();
+        if (text.Length == 0) throw new InvalidOperationException("Write something first.");
+        return text.Length > MaxLength ? text[..MaxLength] : text;
+    }
+
+    /// <summary>
+    /// The message, its resolved mentions and the poster's own read mark — everything that makes
+    /// one post, minus the save, so starting a thread and posting into one share it.
+    /// </summary>
+    private static async Task<TeamMessage> AddMessageAsync(SagaDbContext db, TeamThread thread,
+        Guid proposalId, Guid userId, string text, DateTimeOffset now, CancellationToken ct)
+    {
         // Mentioning yourself is a typo, not a notification, so you are not a candidate.
         var candidates = (await MembersAsync(db, proposalId, ct))
             .Where(m => m.UserId != userId)
             .ToList();
 
-        var now = DateTimeOffset.UtcNow;
         var message = new TeamMessage
         {
             Id = Guid.NewGuid(),
-            ProposalId = proposalId,
+            TeamThreadId = thread.Id,
             AuthorId = userId,
             Text = text,
             CreatedAt = now,
@@ -94,61 +256,97 @@ public class TeamChatService(
             });
         }
 
+        // Monotonic, so two people posting into one thread cannot move it backwards in the list.
+        if (now > thread.LastMessageAt) thread.LastMessageAt = now;
+
         // Your own message never counts as unread against you.
-        await MarkSeenAsync(db, proposalId, userId, now, ct);
-        await db.SaveChangesAsync(ct);
-
-        // After the save, so a circuit that reloads on the event reads the message it was told about.
-        notifier.Publish(proposalId);
-        return message.Id;
-    }
-
-    /// <summary>Messages since this user's watermark that they did not write — the nav badge.</summary>
-    public async Task<int> UnreadCountAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
-
-        var seenAt = await db.TeamChatSeen
-            .Where(s => s.ProposalId == proposalId && s.UserId == userId)
-            .Select(s => (DateTimeOffset?)s.LastSeenAt)
-            .FirstOrDefaultAsync(ct);
-
-        return await db.TeamMessages.CountAsync(
-            m => m.ProposalId == proposalId
-                 && m.AuthorId != userId
-                 && (seenAt == null || m.CreatedAt > seenAt), ct);
-    }
-
-    public async Task MarkSeenAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
-
-        var latest = await db.TeamMessages
-            .Where(m => m.ProposalId == proposalId)
-            .MaxAsync(m => (DateTimeOffset?)m.CreatedAt, ct);
-        if (latest is null) return;
-
-        if (!await MarkSeenAsync(db, proposalId, userId, latest.Value, ct)) return;
-        await db.SaveChangesAsync(ct);
+        await MarkSeenAsync(db, thread.Id, userId, now, ct);
+        return message;
     }
 
     /// <summary>
-    /// Moves this user's read mark forward. Returns false when it was already caught up, which is
-    /// what makes the method safe to call from a component lifecycle method: no write per render.
+    /// Creates the proposal's default thread if it has none. The unique filtered index is what
+    /// makes this safe: two circuits opening the section at once both find nothing, and the one
+    /// that loses re-reads instead of failing — a race lost here is a success, not an error.
     /// </summary>
-    private static async Task<bool> MarkSeenAsync(SagaDbContext db, Guid proposalId, Guid userId,
+    private static async Task EnsureDefaultThreadAsync(SagaDbContext db, Guid proposalId,
+        CancellationToken ct)
+    {
+        if (await db.TeamThreads.AnyAsync(t => t.ProposalId == proposalId && t.IsDefault, ct)) return;
+
+        var now = DateTimeOffset.UtcNow;
+        db.TeamThreads.Add(new TeamThread
+        {
+            Id = Guid.NewGuid(),
+            ProposalId = proposalId,
+            Title = DefaultThreadTitle,
+            CreatedById = null,
+            IsDefault = true,
+            CreatedAt = now,
+            LastMessageAt = now,
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Somebody else created it between the check and the insert. Drop our copy and carry
+            // on; the caller's query will find theirs.
+            foreach (var entry in db.ChangeTracker.Entries<TeamThread>().ToList())
+                entry.State = EntityState.Detached;
+        }
+    }
+
+    /// <summary>
+    /// Loads a thread the user is on the bid team for, along with their role on the proposal.
+    /// There is no per-thread visibility to check — the team sees every thread.
+    /// </summary>
+    private static async Task<(TeamThread Thread, ProposalRole Role)> LoadThreadAsync(
+        SagaDbContext db, Guid threadId, Guid userId, CancellationToken ct)
+    {
+        var thread = await db.TeamThreads.FirstOrDefaultAsync(t => t.Id == threadId, ct)
+            // A business condition, not an auth failure: the UI shows this sentence verbatim.
+            ?? throw new InvalidOperationException("That thread no longer exists.");
+        var role = await ProposalService.RequireRoleAsync(db, thread.ProposalId, userId, ProposalRole.Reader, ct);
+        return (thread, role);
+    }
+
+    /// <summary>
+    /// Who may rename or delete a thread: the person who started it, or the proposal owner —
+    /// without the second, a thread started by somebody since removed from the team could never be
+    /// cleaned up. The default thread has no creator, so only the owner renames it and nobody
+    /// deletes it.
+    /// </summary>
+    private static bool CanManage(bool isDefault, Guid? createdById, Guid userId, ProposalRole role,
+        bool deleting)
+    {
+        if (isDefault) return !deleting && role == ProposalRole.Owner;
+        return createdById == userId || role == ProposalRole.Owner;
+    }
+
+    private static void EnsureCanManage(TeamThread thread, Guid userId, ProposalRole role, bool deleting)
+    {
+        if (CanManage(thread.IsDefault, thread.CreatedById, userId, role, deleting)) return;
+        if (thread.IsDefault && deleting)
+            throw new InvalidOperationException(
+                $"“{thread.Title}” is the team's standing thread and cannot be deleted.");
+        throw new InvalidOperationException(
+            $"Only the person who started a thread, or the proposal owner, can {(deleting ? "delete" : "rename")} it.");
+    }
+
+    private static async Task<bool> MarkSeenAsync(SagaDbContext db, Guid threadId, Guid userId,
         DateTimeOffset seenAt, CancellationToken ct)
     {
         var seen = await db.TeamChatSeen
-            .FirstOrDefaultAsync(s => s.ProposalId == proposalId && s.UserId == userId, ct);
+            .FirstOrDefaultAsync(s => s.TeamThreadId == threadId && s.UserId == userId, ct);
         if (seen is null)
         {
             db.TeamChatSeen.Add(new TeamChatSeen
             {
                 Id = Guid.NewGuid(),
-                ProposalId = proposalId,
+                TeamThreadId = threadId,
                 UserId = userId,
                 LastSeenAt = seenAt,
             });

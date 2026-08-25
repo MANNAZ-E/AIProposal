@@ -1,0 +1,148 @@
+@* The bid team's thread list. One flat list, unlike the AI chat list beside it: every thread
+   belongs to the whole team, so there is no "is this mine" question for groups to answer. *@
+
+<div class="chat-list">
+    <div class="chat-list-header">
+        <span class="chat-list-title">Threads</span>
+        <button class="btn btn-outline btn-sm" @onclick="OnNew">＋ New</button>
+    </div>
+
+    @if (IsDraftActive)
+    {
+        <div class="chat-row-wrap">
+            <button class="chat-row active" type="button">
+                <span class="chat-row-line">
+                    <span class="chat-row-title">New thread</span>
+                </span>
+            </button>
+        </div>
+    }
+
+    @foreach (var thread in Threads)
+    {
+        @Row(thread)
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<TeamThreadListItem> Threads { get; set; } = [];
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public bool IsDraftActive { get; set; }
+    [Parameter] public EventCallback<Guid> OnSelect { get; set; }
+    [Parameter] public EventCallback OnNew { get; set; }
+    [Parameter] public EventCallback<(Guid Id, string Title)> OnRename { get; set; }
+    [Parameter] public EventCallback<Guid> OnDelete { get; set; }
+
+    private Guid? _menuFor;
+    private Guid? _renameFor;
+    private Guid? _deleteFor;
+    private string _renameText = "";
+
+    private RenderFragment Row(TeamThreadListItem thread) =>
+        @<div class="chat-row-wrap">
+            @if (_renameFor == thread.Id)
+            {
+                <div class="chat-row chat-row-editing">
+                    <input class="chat-rename-input" value="@_renameText" @oninput="OnRenameInput"
+                           @onkeydown="e => OnRenameKey(e, thread)" />
+                    <div class="chat-row-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="() => CommitRenameAsync(thread)">Save</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => _renameFor = null">Cancel</button>
+                    </div>
+                </div>
+            }
+            else if (_deleteFor == thread.Id)
+            {
+                @* Confirming in the row itself: a thread is cheap, and a modal for each one would
+                   be heavier than the thing it is protecting. It still says who else loses it,
+                   because every thread here belongs to the whole team. *@
+                <div class="chat-row chat-row-editing">
+                    <div class="chat-row-meta">Delete this thread? The team loses it too.</div>
+                    <div class="chat-row-actions">
+                        <button class="btn btn-danger btn-sm" @onclick="() => ConfirmDeleteAsync(thread)">Delete</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => _deleteFor = null">Cancel</button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <button class="chat-row @(SelectedId == thread.Id ? "active" : null)" type="button"
+                        @onclick="() => OnSelect.InvokeAsync(thread.Id)">
+                    <span class="chat-row-line">
+                        <span class="chat-row-title @(thread.HasUnread ? "chat-unread" : null)">
+                            @if (thread.HasUnread)
+                            {
+                                <span class="chat-unread-dot" title="New messages">●</span>
+                            }
+                            @thread.Title
+                        </span>
+                        <span class="chat-row-time">
+                            @RelativeTime.Display(thread.LastMessageAt, DateTimeOffset.UtcNow)
+                        </span>
+                    </span>
+                    @if (thread.CreatedByName is { } name)
+                    {
+                        <span class="chat-row-meta">Started by @name</span>
+                    }
+                </button>
+
+                @if (thread.CanRename || thread.CanDelete)
+                {
+                    <button class="chat-row-menu" title="More" @onclick="() => _menuFor = thread.Id">⋯</button>
+                }
+
+                @if (_menuFor == thread.Id)
+                {
+                    @* No JS interop in this app, so dismissing on an outside click is a
+                       transparent full-viewport catcher, the way the modals already work. *@
+                    <div class="menu-backdrop" @onclick="() => _menuFor = null"></div>
+                    <div class="menu-panel">
+                        @if (thread.CanRename)
+                        {
+                            <button @onclick="() => StartRename(thread)">Rename</button>
+                        }
+                        @if (thread.CanDelete)
+                        {
+                            <button @onclick="() => StartDelete(thread)">Delete</button>
+                        }
+                    </div>
+                }
+            }
+        </div>;
+
+    private void StartRename(TeamThreadListItem thread)
+    {
+        _menuFor = null;
+        _deleteFor = null;
+        _renameText = thread.Title;
+        _renameFor = thread.Id;
+    }
+
+    private void StartDelete(TeamThreadListItem thread)
+    {
+        _menuFor = null;
+        _renameFor = null;
+        _deleteFor = thread.Id;
+    }
+
+    private void OnRenameInput(ChangeEventArgs e) => _renameText = (string?)e.Value ?? "";
+
+    private async Task OnRenameKey(KeyboardEventArgs e, TeamThreadListItem thread)
+    {
+        if (e.Key == "Enter") await CommitRenameAsync(thread);
+        else if (e.Key == "Escape") _renameFor = null;
+    }
+
+    private async Task CommitRenameAsync(TeamThreadListItem thread)
+    {
+        _renameFor = null;
+        if (!string.IsNullOrWhiteSpace(_renameText) && _renameText != thread.Title)
+            await OnRename.InvokeAsync((thread.Id, _renameText.Trim()));
+    }
+
+    private async Task ConfirmDeleteAsync(TeamThreadListItem thread)
+    {
+        _deleteFor = null;
+        await OnDelete.InvokeAsync(thread.Id);
+    }
+}

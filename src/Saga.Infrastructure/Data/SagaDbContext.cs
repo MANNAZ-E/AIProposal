@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Domain;
 
 namespace Saga.Infrastructure.Data;
@@ -16,6 +16,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
     public DbSet<ChatSeen> ChatSeen => Set<ChatSeen>();
+    public DbSet<TeamThread> TeamThreads => Set<TeamThread>();
     public DbSet<TeamMessage> TeamMessages => Set<TeamMessage>();
     public DbSet<TeamMessageMention> TeamMessageMentions => Set<TeamMessageMention>();
     public DbSet<TeamChatSeen> TeamChatSeen => Set<TeamChatSeen>();
@@ -133,11 +134,22 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
             b.HasOne(m => m.Author).WithMany().HasForeignKey(m => m.AuthorId).OnDelete(DeleteBehavior.SetNull);
         });
 
+        modelBuilder.Entity<TeamThread>(b =>
+        {
+            b.Property(t => t.Title).HasMaxLength(200);
+            b.HasIndex(t => new { t.ProposalId, t.LastMessageAt });
+            // One default thread per proposal, enforced by the database rather than by a read
+            // followed by a write: two circuits opening the section at once would both find none.
+            b.HasIndex(t => t.ProposalId).IsUnique().HasFilter("[IsDefault] = 1");
+            b.HasOne(t => t.Proposal).WithMany(p => p.TeamThreads).HasForeignKey(t => t.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne(t => t.CreatedBy).WithMany().HasForeignKey(t => t.CreatedById).OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<TeamMessage>(b =>
         {
             // Text stays nvarchar(max) like a chat message's; the service caps it at 4000 chars.
-            b.HasIndex(m => new { m.ProposalId, m.CreatedAt });
-            b.HasOne(m => m.Proposal).WithMany(p => p.TeamMessages).HasForeignKey(m => m.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(m => new { m.TeamThreadId, m.CreatedAt });
+            b.HasOne(m => m.Thread).WithMany(t => t.Messages).HasForeignKey(m => m.TeamThreadId).OnDelete(DeleteBehavior.Cascade);
             // Restrict, not SetNull: the author is non-nullable, and a second cascade path from
             // User onto a row Proposal already cascades to is more than SQL Server will take.
             b.HasOne(m => m.Author).WithMany().HasForeignKey(m => m.AuthorId).OnDelete(DeleteBehavior.Restrict);
@@ -152,8 +164,8 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
 
         modelBuilder.Entity<TeamChatSeen>(b =>
         {
-            b.HasIndex(s => new { s.ProposalId, s.UserId }).IsUnique();
-            b.HasOne(s => s.Proposal).WithMany().HasForeignKey(s => s.ProposalId).OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(s => new { s.TeamThreadId, s.UserId }).IsUnique();
+            b.HasOne(s => s.Thread).WithMany(t => t.Seen).HasForeignKey(s => s.TeamThreadId).OnDelete(DeleteBehavior.Cascade);
             // The same two-root shape ChatSeen already proves SQL Server accepts.
             b.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });

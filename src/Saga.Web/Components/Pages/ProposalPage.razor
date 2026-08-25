@@ -326,7 +326,7 @@ else
     /// Keeps the team badge live while you are sitting on another tab, where the section
     /// component is not rendered at all and cannot hear the post for us.
     /// </summary>
-    private void OnTeamPosted(Guid proposalId)
+    private void OnTeamPosted(Guid proposalId, Guid threadId)
     {
         if (_disposed || proposalId != ProposalId) return;
         _ = InvokeAsync(async () =>

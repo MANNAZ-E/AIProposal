@@ -1217,16 +1217,6 @@ button.type-list-name {
     font-weight: 600;
 }
 
-/* The bid team pane has no chat list beside it, so its header carries the section
-   headline itself and has to line up with the headline on every other tab. */
-.team-chat-header {
-    padding-top: var(--saga-gutter);
-}
-
-.team-chat-header > .section-heading {
-    margin-bottom: 0;
-}
-
 .chat-header-meta {
     margin-top: 0.15rem;
     font-size: 0.8rem;

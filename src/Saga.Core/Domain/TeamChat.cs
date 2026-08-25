@@ -1,15 +1,56 @@
 namespace Saga.Core.Domain;
 
 /// <summary>
-/// One message in the bid team's group chat. Unlike <see cref="ChatMessage"/> this is
-/// person-to-person: there is exactly one thread per proposal, everybody on the team reads and
-/// writes it, and no model ever sees it.
+/// One thread in the bid team's chat. Unlike <see cref="ChatSession"/> this is person-to-person:
+/// every thread belongs to the whole team, everybody on it reads and writes every thread, and no
+/// model ever sees any of them. There is no private/shared distinction because being on the bid
+/// team is the whole permission.
 /// </summary>
-public class TeamMessage
+public class TeamThread
 {
     public Guid Id { get; set; }
     public Guid ProposalId { get; set; }
     public Proposal? Proposal { get; set; }
+
+    /// <summary>Derived from the first message posted into it; renameable afterwards.</summary>
+    public required string Title { get; set; }
+
+    /// <summary>
+    /// Who started it. Nullable, unlike <see cref="ChatSession.OwnerId"/>, because the default
+    /// thread is created by the proposal existing rather than by anybody's click.
+    /// </summary>
+    public Guid? CreatedById { get; set; }
+    public User? CreatedBy { get; set; }
+
+    /// <summary>
+    /// The proposal's standing thread. Pinned to the top of the list and never deletable, so the
+    /// team always has somewhere to post without first deciding on a topic.
+    /// </summary>
+    public bool IsDefault { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// When the newest message arrived, or <see cref="CreatedAt"/> while the thread is empty.
+    /// Denormalized for the same two reasons as <see cref="ChatSession.LastMessageAt"/>: the list
+    /// orders on an index, and the unread check is a NOT EXISTS instead of an aggregate over every
+    /// message of every thread.
+    /// </summary>
+    public DateTimeOffset LastMessageAt { get; set; }
+
+    public ICollection<TeamMessage> Messages { get; set; } = [];
+    public ICollection<TeamChatSeen> Seen { get; set; } = [];
+}
+
+/// <summary>
+/// One message in a bid team thread. Unlike <see cref="ChatMessage"/> this is person-to-person:
+/// everybody on the team reads and writes it, and no model ever sees it.
+/// </summary>
+public class TeamMessage
+{
+    public Guid Id { get; set; }
+    public Guid TeamThreadId { get; set; }
+    public TeamThread? Thread { get; set; }
 
     /// <summary>
     /// Who wrote it. Non-nullable, unlike a chat message's author: users are never deleted in
@@ -52,14 +93,15 @@ public class TeamMessageMention
 }
 
 /// <summary>
-/// Per-user read watermark for one proposal's team thread. Per-proposal rather than per-thread
-/// (as <see cref="ChatSeen"/> is) because there is only ever one team thread.
+/// Per-user read watermark for one team thread; drives the unread dots on the thread list and the
+/// count on the nav item. Per thread rather than per proposal, so catching up on one conversation
+/// does not silently mark the others read.
 /// </summary>
 public class TeamChatSeen
 {
     public Guid Id { get; set; }
-    public Guid ProposalId { get; set; }
-    public Proposal? Proposal { get; set; }
+    public Guid TeamThreadId { get; set; }
+    public TeamThread? Thread { get; set; }
 
     public Guid UserId { get; set; }
     public User? User { get; set; }

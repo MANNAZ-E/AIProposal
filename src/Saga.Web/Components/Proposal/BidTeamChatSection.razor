@@ -3,64 +3,79 @@
 @inject TeamChatNotifier Notifier
 @implements IDisposable
 
-<div class="chat-pane">
-    <div class="chat-header team-chat-header">
-        <h2 class="section-heading">Bid Team Chat</h2>
-        <div class="chat-header-meta">
-            Everyone on the bid team reads and writes this thread. Type <strong>@@</strong> to mention someone.
-        </div>
-    </div>
+<div class="chat-layout">
+    <TeamThreadList Threads="_threads" SelectedId="_activeThreadId" IsDraftActive="_isDraft"
+                    OnSelect="SelectAsync" OnNew="NewThread"
+                    OnRename="RenameAsync" OnDelete="DeleteAsync" />
 
-    @* Reversed flex column: with a single child the container opens scrolled to the bottom and
-       stays pinned there as messages arrive, which is what a chat wants and what the project's
-       no-JavaScript rule leaves as the only way to get it. *@
-    <div class="team-scroll">
-        <div class="team-thread">
-            @if (_messages.Count == 0)
-            {
-                <p class="text-muted">No messages yet. Start the conversation.</p>
-            }
-            @foreach (var message in _messages)
-            {
-                <div class="team-msg @BubbleClass(message)">
-                    <div class="chat-meta">
-                        @(message.AuthorId == _me ? "You" : message.Author?.DisplayName ?? "Someone")
-                        <span class="text-muted">· @message.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
-                    </div>
-                    <div class="team-msg-body">@TeamMessageText.Render(message.Text, message.Mentions, _me)</div>
+    <div class="chat-pane">
+        @if (!_isDraft && _activeThreadId is null)
+        {
+            @* Unreachable while the standing thread exists, but a thread deleted from another
+               circuit while it is on screen lands here rather than on a blank pane. *@
+            <div></div>
+            <div class="chat-scroll">
+                <div class="empty-state">
+                    <p class="text-muted">Select a thread, or start a new one.</p>
+                    <button class="btn btn-primary" @onclick="NewThread">Start a thread</button>
                 </div>
-            }
-        </div>
-    </div>
+            </div>
+            <div></div>
+        }
+        else
+        {
+            <div class="chat-header">
+                <div class="chat-header-title">@(_isDraft ? "New thread" : ActiveThread?.Title)</div>
+            </div>
 
-    <div class="chat-composer">
-        <div class="team-composer">
-            @if (Suggestions is { Count: > 0 } suggestions)
-            {
-                @* Real buttons, rendered after the textarea, so Tab-then-Enter selects natively.
-                   Arrow keys would need a static preventDefault on keydown, which would swallow
-                   ordinary typing. *@
-                <div class="team-mention-picker">
-                    @foreach (var member in suggestions)
+            @* Reversed flex column: with a single child the container opens scrolled to the bottom
+               and stays pinned there as messages arrive, which is what a chat wants and what the
+               project's no-JavaScript rule leaves as the only way to get it. *@
+            <div class="team-scroll">
+                <div class="team-thread">
+                    @foreach (var message in _messages)
                     {
-                        <button type="button" @onclick="() => Select(member)">
-                            <span class="team-mention-name">@member.DisplayName</span>
-                            <span class="text-muted">@member.Email</span>
-                        </button>
+                        <div class="team-msg @BubbleClass(message)">
+                            <div class="chat-meta">
+                                @(message.AuthorId == _me ? "You" : message.Author?.DisplayName ?? "Someone")
+                                <span class="text-muted">· @message.CreatedAt.ToLocalTime().ToString("HH:mm")</span>
+                            </div>
+                            <div class="team-msg-body">@TeamMessageText.Render(message.Text, message.Mentions, _me)</div>
+                        </div>
                     }
                 </div>
-            }
-            <div class="chat-input">
-                <textarea rows="2" placeholder="Message the bid team…"
-                          @bind="_draft" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
-                <button class="btn btn-primary" @onclick="SendAsync"
-                        disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))">Send</button>
             </div>
-            @if (_error is not null)
-            {
-                <p class="error-text" style="margin: 0.4rem 0 0;">@_error</p>
-            }
-        </div>
+
+            <div class="chat-composer">
+                <div class="team-composer">
+                    @if (Suggestions is { Count: > 0 } suggestions)
+                    {
+                        @* Real buttons, rendered after the textarea, so Tab-then-Enter selects natively.
+                           Arrow keys would need a static preventDefault on keydown, which would swallow
+                           ordinary typing. *@
+                        <div class="team-mention-picker">
+                            @foreach (var member in suggestions)
+                            {
+                                <button type="button" @onclick="() => Select(member)">
+                                    <span class="team-mention-name">@member.DisplayName</span>
+                                    <span class="text-muted">@member.Email</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                    <div class="chat-input">
+                        <textarea rows="2" placeholder="Type a message - use @@ to tag and notify"
+                                  @bind="_draft" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
+                        <button class="btn btn-primary" @onclick="SendAsync"
+                                disabled="@(_sending || string.IsNullOrWhiteSpace(_draft))">Send</button>
+                    </div>
+                    @if (_error is not null)
+                    {
+                        <p class="error-text" style="margin: 0.4rem 0 0;">@_error</p>
+                    }
+                </div>
+            </div>
+        }
     </div>
 </div>
 
@@ -76,8 +91,11 @@
     /// <summary>A run longer than this is prose that happens to follow an '@', not a name.</summary>
     private const int MaxQueryLength = 40;
 
+    private List<TeamThreadListItem> _threads = [];
     private List<TeamMessage> _messages = [];
     private List<TeamChatMember> _members = [];
+    private Guid? _activeThreadId;
+    private bool _isDraft;
     private Guid _me;
     private string _draft = "";
     private string? _error;
@@ -90,6 +108,8 @@
     /// fresh mention opens the picker again without having to notice the keystroke that did it.
     /// </summary>
     private int _dismissedAt = -1;
+
+    private TeamThreadListItem? ActiveThread => _threads.FirstOrDefault(t => t.Id == _activeThreadId);
 
     protected override void OnInitialized() => Notifier.Posted += OnPosted;
 
@@ -105,31 +125,80 @@
         _loadedProposalId = ProposalId;
         _me = (await CurrentUser.GetAsync()).Id;
         _members = await TeamChat.MembersAsync(ProposalId, _me);
-        await ReloadAsync();
+        await LoadThreadsAsync();
+        // The standing thread always exists, so this lands on it rather than on an empty pane.
+        if (_threads.Count > 0) await SelectAsync(_threads[0].Id);
     }
 
     /// <summary>
-    /// Someone posted. The event fires on whichever circuit did the posting, so the work has to
-    /// hop back onto this component's own synchronization context before it touches state.
+    /// Somebody posted. The event fires on whichever circuit did the posting, so the work has to
+    /// hop back onto this component's own synchronization context before it touches state. The
+    /// list refreshes on any thread of this proposal — times and unread dots move — but the
+    /// transcript reloads only when the thread on screen is the one that changed.
     /// </summary>
-    private void OnPosted(Guid proposalId)
+    private void OnPosted(Guid proposalId, Guid threadId)
     {
         if (_disposed || proposalId != ProposalId) return;
         _ = InvokeAsync(async () =>
         {
             if (_disposed) return;
-            await ReloadAsync();
+            if (threadId == _activeThreadId) await ReloadAsync();
+            else await LoadThreadsAsync();
             StateHasChanged();
         });
     }
 
+    private async Task LoadThreadsAsync()
+    {
+        _threads = await TeamChat.ListThreadsAsync(ProposalId, _me);
+        await OnUnreadChanged.InvokeAsync();
+    }
+
+    /// <summary>Reloads the open thread, marks it read, and refreshes the list around it.</summary>
     private async Task ReloadAsync()
     {
-        _messages = await TeamChat.ListAsync(ProposalId, _me);
-        // Reading the thread is what clears the badge; the service skips the write when the
+        if (_activeThreadId is not { } threadId) return;
+        _messages = await TeamChat.ListAsync(threadId, _me);
+        // Reading the thread is what clears its dot; the service skips the write when the
         // watermark is already current, so this costs nothing on a reload that changed nothing.
-        await TeamChat.MarkSeenAsync(ProposalId, _me);
-        await OnUnreadChanged.InvokeAsync();
+        await TeamChat.MarkSeenAsync(threadId, _me);
+        await LoadThreadsAsync();
+    }
+
+    private async Task SelectAsync(Guid threadId)
+    {
+        if (!_isDraft && _activeThreadId == threadId) return;
+        _isDraft = false;
+        _error = null;
+        _draft = "";
+        _dismissedAt = -1;
+        _activeThreadId = threadId;
+        try
+        {
+            await ReloadAsync();
+        }
+        catch (Exception)
+        {
+            // Deleted from another circuit while it sat in the list. Fall back to nothing selected
+            // rather than leaving a thread on screen that no longer exists.
+            _activeThreadId = null;
+            _messages = [];
+            await LoadThreadsAsync();
+        }
+    }
+
+    /// <summary>
+    /// A draft writes nothing to the database, so abandoning it leaves nothing behind and pressing
+    /// New again reuses the slot instead of piling up empty threads.
+    /// </summary>
+    private void NewThread()
+    {
+        _isDraft = true;
+        _activeThreadId = null;
+        _messages = [];
+        _error = null;
+        _draft = "";
+        _dismissedAt = -1;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
@@ -152,7 +221,22 @@
         _error = null;
         try
         {
-            await TeamChat.PostAsync(ProposalId, _me, text);
+            if (_isDraft)
+            {
+                // The first message is what creates the thread, and what names it.
+                var newId = await TeamChat.StartThreadAsync(ProposalId, _me, text);
+                _isDraft = false;
+                _activeThreadId = newId;
+            }
+            else if (_activeThreadId is { } threadId)
+            {
+                await TeamChat.PostAsync(threadId, _me, text);
+            }
+            else
+            {
+                return;
+            }
+
             _draft = "";
             _dismissedAt = -1;
             // The notifier reaches this circuit too, but reloading here keeps the send
@@ -166,6 +250,38 @@
         finally
         {
             _sending = false;
+        }
+    }
+
+    private async Task RenameAsync((Guid Id, string Title) rename)
+    {
+        _error = null;
+        try
+        {
+            await TeamChat.RenameAsync(rename.Id, _me, rename.Title);
+            await LoadThreadsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(Guid threadId)
+    {
+        _error = null;
+        try
+        {
+            await TeamChat.DeleteAsync(threadId, _me);
+            await LoadThreadsAsync();
+            if (_activeThreadId != threadId) return;
+            _activeThreadId = null;
+            _messages = [];
+            if (_threads.Count > 0) await SelectAsync(_threads[0].Id);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
         }
     }
 

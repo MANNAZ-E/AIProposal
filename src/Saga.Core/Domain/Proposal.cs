@@ -1,4 +1,4 @@
-namespace Saga.Core.Domain;
+﻿namespace Saga.Core.Domain;
 
 public class Proposal
 {
@@ -43,7 +43,7 @@ public class Proposal
     public ICollection<Document> Documents { get; set; } = [];
     public ICollection<Artifact> Artifacts { get; set; } = [];
     public ICollection<ChatSession> ChatSessions { get; set; } = [];
-    public ICollection<TeamMessage> TeamMessages { get; set; } = [];
+    public ICollection<TeamThread> TeamThreads { get; set; } = [];
     public ICollection<AiUsageRecord> AiUsage { get; set; } = [];
     public ICollection<FinalProposalVersion> FinalProposalVersions { get; set; } = [];
 }
