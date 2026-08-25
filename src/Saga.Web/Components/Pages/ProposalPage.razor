@@ -29,28 +29,28 @@ else
         <nav class="workspace-nav">
             <button class="nav-item @(_section == Section.Material ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Material)">Materials</button>
-            <button class="nav-item @(_section == Section.Generate ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Chat ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Chat)">AI Chat @ChatBadge()</button>
             <button class="nav-item @(_section == Section.BidTeamChat ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Bid Team Chat @TeamBadge()</button>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.ClientProfile ? "active" : null)"
+            <button class="nav-item @(_section == Section.Generate ? "active" : null)"
+                    @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
+            <button class="nav-item @(_section == Section.ClientProfile ? "active" : null) @ArtifactPendingClass(ArtifactType.ClientProfile)"
                     @onclick="() => SelectSectionAsync(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</button>
-            <button class="nav-item @(_section == Section.Summary ? "active" : null)"
+            <button class="nav-item @(_section == Section.Summary ? "active" : null) @ArtifactPendingClass(ArtifactType.Summary)"
                     @onclick="() => SelectSectionAsync(Section.Summary)">Summary @ArtifactBadge(ArtifactType.Summary)</button>
-            <button class="nav-item @(_section == Section.Requirements ? "active" : null)"
+            <button class="nav-item @(_section == Section.Requirements ? "active" : null) @ArtifactPendingClass(ArtifactType.Requirements)"
                     @onclick="() => SelectSectionAsync(Section.Requirements)">Requirements @ArtifactBadge(ArtifactType.Requirements)</button>
-            <button class="nav-item @(_section == Section.Scoping ? "active" : null)"
+            <button class="nav-item @(_section == Section.Scoping ? "active" : null) @ArtifactPendingClass(ArtifactType.Scoping)"
                     @onclick="() => SelectSectionAsync(Section.Scoping)">Scoping @ArtifactBadge(ArtifactType.Scoping)</button>
-            <button class="nav-item @(_section == Section.SolutionProposal ? "active" : null)"
+            <button class="nav-item @(_section == Section.SolutionProposal ? "active" : null) @ArtifactPendingClass(ArtifactType.SolutionProposal)"
                     @onclick="() => SelectSectionAsync(Section.SolutionProposal)">Solution @ArtifactBadge(ArtifactType.SolutionProposal)</button>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Structure ? "active" : null)"
+            <button class="nav-item @(_section == Section.Structure ? "active" : null) @ArtifactPendingClass(ArtifactType.Structure)"
                     @onclick="() => SelectSectionAsync(Section.Structure)">Structure @ArtifactBadge(ArtifactType.Structure)</button>
-            <button class="nav-item @(_section == Section.Content ? "active" : null)"
+            <button class="nav-item @(_section == Section.Content ? "active" : null) @ArtifactPendingClass(ArtifactType.Content)"
                     @onclick="() => SelectSectionAsync(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Export ? "active" : null)"
@@ -211,7 +211,7 @@ else
                                 <input id="settings-title" type="text" @bind="_settingsTitle" />
                             </div>
                             <div class="form-field">
-                                <label for="settings-client">Client name</label>
+                                <label for="settings-client">Client name <span class="label-hint">(optional)</span></label>
                                 <input id="settings-client" type="text" @bind="_settingsClientName" />
                             </div>
                             @if (_settingsError is not null)
@@ -287,7 +287,7 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, ClientProfile, Summary, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, BidTeamChat, Export, Usage, People, Settings }
+    private enum Section { Material, Generate, Summary, ClientProfile, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, BidTeamChat, Export, Usage, People, Settings }
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
@@ -398,12 +398,15 @@ else
     private RenderFragment? ArtifactBadge(ArtifactType type)
     {
         var artifact = _artifacts.FirstOrDefault(a => a.Type == type);
-        if (artifact is null || artifact.Status == ArtifactStatus.Empty) return null;
-        if (artifact.IsLocked)
-        {
-            return @<span class="nav-flag nav-flag-lock" title="Locked"><LockIcon /></span>;
-        }
-        return @<span class="nav-flag nav-flag-ok" title="Created">●</span>;
+        if (artifact is not { IsLocked: true }) return null;
+        return @<span class="nav-flag nav-flag-lock" title="Locked"><LockIcon /></span>;
+    }
+
+    /// <summary>Dims the nav item's title until its artifact has actually been generated.</summary>
+    private string? ArtifactPendingClass(ArtifactType type)
+    {
+        var artifact = _artifacts.FirstOrDefault(a => a.Type == type);
+        return artifact is null || artifact.Status == ArtifactStatus.Empty ? "nav-item-pending" : null;
     }
 
     private async Task ShareAsync()

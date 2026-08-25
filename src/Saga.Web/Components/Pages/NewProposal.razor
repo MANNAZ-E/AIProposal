@@ -14,14 +14,13 @@
 
         <div class="form-field">
             <label for="title">Proposal title</label>
-            <InputText id="title" type="text" @bind-Value="_model.Title" />
+            <InputText id="title" type="text" autofocus @bind-Value="_model.Title" />
             <ValidationMessage For="() => _model.Title" />
         </div>
 
         <div class="form-field">
-            <label for="client">Client name</label>
+            <label for="client">Client name <span class="label-hint">(optional)</span></label>
             <InputText id="client" type="text" @bind-Value="_model.ClientName" />
-            <ValidationMessage For="() => _model.ClientName" />
         </div>
 
         <div class="form-field">
@@ -74,7 +73,6 @@
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A title is required.")]
         public string Title { get; set; } = "";
 
-        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "A client name is required.")]
         public string ClientName { get; set; } = "";
 
         public OutputFormat OutputFormat { get; set; } = OutputFormat.PowerPoint;

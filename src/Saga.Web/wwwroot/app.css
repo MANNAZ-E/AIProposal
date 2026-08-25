@@ -316,6 +316,10 @@ a {
     margin-bottom: 0.3rem;
 }
 
+.label-hint {
+    font-weight: 400;
+}
+
 .form-field input[type="text"],
 .form-field input[type="email"],
 .form-field textarea,
@@ -534,6 +538,11 @@ a {
 .nav-item:disabled {
     color: rgba(255, 255, 255, 0.5);
     cursor: default;
+}
+
+/* Not generated yet: dim the title so the nav draws the eye to what's actually there. */
+.nav-item.nav-item-pending {
+    color: rgba(255, 255, 255, 0.5);
 }
 
 .nav-divider {
@@ -989,11 +998,7 @@ button.type-list-name {
     line-height: 1.5;
 }
 
-/* Created but unlocked: a plain white dot. Locked: a green padlock. */
-.nav-flag-ok {
-    color: #fff;
-}
-
+/* Locked: a green padlock. */
 .nav-flag-lock {
     color: #6fd38a;
     line-height: 1;

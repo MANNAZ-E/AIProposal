@@ -41,6 +41,10 @@
                        @onchange="e => Toggle(option.Type, (bool)e.Value!)" />
                 <span>
                     <strong>@option.Label</strong>
+                    @if (option.Hint is not null)
+                    {
+                        <text> </text><span class="label-hint">@option.Hint</span>
+                    }
                     @if (artifact?.IsLocked == true)
                     {
                         <span class="badge badge-locked" style="margin-left: 0.5rem;"><LockIcon /> locked — skipped</span>
@@ -49,8 +53,6 @@
                     {
                         <span class="badge badge-role" style="margin-left: 0.5rem;">exists — will be replaced</span>
                     }
-                    <br />
-                    <span class="text-muted">@option.Description</span>
                 </span>
                 <span class="gen-status">@StatusFor(option.Type)</span>
             </label>
@@ -119,16 +121,16 @@
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
-    private sealed record Option(ArtifactType Type, string Label, string Description);
+    private sealed record Option(ArtifactType Type, string Label, string? Hint = null);
 
     private static readonly Option[] Options =
     [
-        new(ArtifactType.ClientProfile, "Client profile", "Research-based profile of the client (optional)."),
-        new(ArtifactType.Summary, "Summary", "Concise summary of the client material."),
-        new(ArtifactType.Requirements, "Requirements & criteria", "Extracted list of everything the proposal must satisfy."),
-        new(ArtifactType.Scoping, "Scoping", "Client situation, challenge, aspiration, boundaries."),
-        new(ArtifactType.SolutionProposal, "Solution", "Mannaz's proposed solution — the red thread."),
-        new(ArtifactType.Structure, "Structure", "Slide or section structure for the chosen format."),
+        new(ArtifactType.ClientProfile, "Client profile", "(optional)"),
+        new(ArtifactType.Summary, "Bid summary"),
+        new(ArtifactType.Requirements, "Requirements"),
+        new(ArtifactType.Scoping, "Scoping"),
+        new(ArtifactType.SolutionProposal, "Solution"),
+        new(ArtifactType.Structure, "Structure"),
     ];
 
     private readonly HashSet<ArtifactType> _selected = [];

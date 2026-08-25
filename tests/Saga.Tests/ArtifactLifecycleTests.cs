@@ -113,6 +113,20 @@ public class ArtifactLifecycleTests(LocalDbFixture db) : IClassFixture<LocalDbFi
     }
 
     [Fact]
+    public async Task Saving_an_empty_edit_marks_the_artifact_not_generated()
+    {
+        var (elv, _, proposalId) = await SetupWithMaterialAsync();
+        var result = await _generation.GenerateAsync(proposalId, ArtifactType.Summary, elv, null, null);
+        await _generation.ApplyAsync(proposalId, ArtifactType.Summary, elv, result.Text, null);
+
+        var artifact = await _artifacts.GetAsync(proposalId, ArtifactType.Summary, elv);
+        await _artifacts.SaveEditAsync(proposalId, ArtifactType.Summary, elv, "   ", null, artifact!.RowVersion);
+
+        var cleared = await _artifacts.GetAsync(proposalId, ArtifactType.Summary, elv);
+        Assert.Equal(ArtifactStatus.Empty, cleared!.Status);
+    }
+
+    [Fact]
     public async Task Edit_leaves_downstream_alone_and_restore_recovers_old_content()
     {
         var (elv, _, proposalId) = await SetupWithMaterialAsync();

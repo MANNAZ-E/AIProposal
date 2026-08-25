@@ -42,7 +42,9 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
         var now = DateTimeOffset.UtcNow;
         artifact.ContentMarkdown = contentMarkdown;
         artifact.ContentJson = contentJson;
-        artifact.Status = ArtifactStatus.Edited;
+        artifact.Status = string.IsNullOrWhiteSpace(contentMarkdown) && string.IsNullOrWhiteSpace(contentJson)
+            ? ArtifactStatus.Empty
+            : ArtifactStatus.Edited;
         artifact.UpdatedAt = now;
         db.Entry(artifact).Property(a => a.RowVersion).OriginalValue = expectedRowVersion;
 

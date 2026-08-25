@@ -138,8 +138,6 @@ public class ProposalService(IDbContextFactory<SagaDbContext> dbFactory)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new InvalidOperationException("The proposal needs a name.");
-        if (string.IsNullOrWhiteSpace(clientName))
-            throw new InvalidOperationException("The proposal needs a client name.");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         await EnsureRoleAsync(db, proposalId, actingUserId, ProposalRole.Owner, ct);

@@ -181,6 +181,20 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     }
 
     [Fact]
+    public async Task An_artifact_emptied_by_editing_drops_out_of_the_material_picker()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var artifacts = new ArtifactService(db);
+
+        var summary = (await artifacts.GetAllAsync(proposalId, elv)).Single(a => a.Type == ArtifactType.Summary);
+        await artifacts.SaveEditAsync(proposalId, ArtifactType.Summary, elv, "", null, summary.RowVersion);
+
+        var chat = NewChat(new FakeAiService());
+        var (_, materialArtifacts) = await chat.GetMaterialAsync(proposalId, elv);
+        Assert.DoesNotContain(materialArtifacts, a => a.Type == ArtifactType.Summary);
+    }
+
+    [Fact]
     public async Task Unchecked_artifacts_never_reach_the_model()
     {
         var (elv, _, proposalId) = await SetupAsync();
