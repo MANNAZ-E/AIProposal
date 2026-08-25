@@ -2,6 +2,7 @@
 @inject CurrentUserService CurrentUser
 @inject TeamChatNotifier Notifier
 @inject ChatDraftState Drafts
+@inject IJSRuntime JS
 @implements IDisposable
 
 <div class="chat-layout">
@@ -49,15 +50,27 @@
 
             <div class="chat-composer">
                 <div class="team-composer">
-                    @if (Suggestions is { Count: > 0 } suggestions)
+                    @* Read once: the textarea needs to know whether the picker is up, to gate the script. *@
+                    @{
+                        var suggestions = Suggestions;
+                        var picking = suggestions is { Count: > 0 };
+                    }
+                    @if (picking)
                     {
-                        @* Real buttons, rendered after the textarea, so Tab-then-Enter selects natively.
-                           Arrow keys would need a static preventDefault on keydown, which would swallow
-                           ordinary typing. *@
-                        <div class="team-mention-picker">
-                            @foreach (var member in suggestions)
+                        @* Focus stays in the textarea throughout: the highlight is state rather than DOM
+                           focus, so typing keeps narrowing the list. mention-composer.js is what stops the
+                           four navigation keys doing their textarea thing while this is open. *@
+                        <div class="team-mention-picker" role="listbox">
+                            @for (var i = 0; i < suggestions!.Count; i++)
                             {
-                                <button type="button" @onclick="() => Select(member)">
+                                var member = suggestions[i];
+                                var isActive = i == ActiveIndex(suggestions.Count);
+                                @* Spelled out: a bool would render aria-selected valueless, and ARIA wants the word. *@
+                                <button type="button" role="option" tabindex="-1"
+                                        aria-selected="@(isActive ? "true" : "false")"
+                                        class="@(isActive ? "is-active" : null)"
+                                        @onmousedown:preventDefault
+                                        @onclick="() => CommitAsync(member)">
                                     <span class="team-mention-name">@member.DisplayName</span>
                                     <span class="text-muted">@member.Email</span>
                                 </button>
@@ -66,6 +79,7 @@
                     }
                     <div class="chat-input">
                         <textarea rows="2" placeholder="Type a message - use @@ to tag and notify"
+                                  @ref="_composer" data-mention-picker="@(picking ? "open" : null)"
                                   @bind="Draft" @bind:event="oninput" @onkeydown="OnKeyDown"></textarea>
                         <button class="btn btn-primary" @onclick="SendAsync"
                                 disabled="@(_sending || string.IsNullOrWhiteSpace(Draft))">Send</button>
@@ -114,6 +128,20 @@
     /// </summary>
     private int _dismissedAt = -1;
 
+    /// <summary>
+    /// Which suggestion the keyboard is on. Starts at 0 so the top name is live the moment the
+    /// picker opens, and every keystroke puts it back there because the list has just re-filtered.
+    /// </summary>
+    private int _active;
+
+    /// <summary>The textarea, for handing the caret back once a name has been inserted.</summary>
+    private ElementReference? _composer;
+
+    /// <summary>
+    /// The highlight, held against a list that may have shrunk under it since the last keystroke.
+    /// </summary>
+    private int ActiveIndex(int count) => count == 0 ? 0 : Math.Clamp(_active, 0, count - 1);
+
     private TeamThreadListItem? ActiveThread => _threads.FirstOrDefault(t => t.Id == _activeThreadId);
 
     /// <summary>The thread a draft belongs to; the unstarted one uses Guid.Empty.</summary>
@@ -127,7 +155,12 @@
     private string Draft
     {
         get => Drafts.Get(ProposalId, ChatDraftKind.TeamThread, ActiveKey);
-        set => Drafts.Set(ProposalId, ChatDraftKind.TeamThread, ActiveKey, value);
+        set
+        {
+            // Typing re-filters the picker, so the highlight belongs back on its new top name.
+            _active = 0;
+            Drafts.Set(ProposalId, ChatDraftKind.TeamThread, ActiveKey, value);
+        }
     }
 
     protected override void OnInitialized() => Notifier.Posted += OnPosted;
@@ -191,6 +224,8 @@
         _isDraft = false;
         _error = null;
         _dismissedAt = -1;
+        // The other thread's draft may itself end in an '@' run, and its picker opens on the top name.
+        _active = 0;
         _activeThreadId = threadId;
         try
         {
@@ -213,17 +248,49 @@
         _messages = [];
         _error = null;
         _dismissedAt = -1;
+        _active = 0;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
+        // Escape closes the picker for this '@', and with it the attribute the script watches, so
+        // the four keys are handed straight back to the textarea.
         if (e.Key == "Escape")
         {
             _dismissedAt = MentionStart;
+            _active = 0;
             return;
         }
+
+        if (Suggestions is { Count: > 0 } picker)
+        {
+            _active = ActiveIndex(picker.Count);
+            switch (e.Key)
+            {
+                // Wraps, so Up out of the top name is a move rather than a dead key.
+                case "ArrowDown": _active = (_active + 1) % picker.Count; return;
+                case "ArrowUp": _active = (_active + picker.Count - 1) % picker.Count; return;
+                // Shift+Tab is left alone, so walking focus backwards still works.
+                case "Tab" when !e.ShiftKey:
+                case "Enter" when !e.ShiftKey:
+                    await CommitAsync(picker[_active]);
+                    return;
+            }
+        }
+
         // Enter sends, as it does in AI Chat. Shift+Enter is the newline.
         if (e.Key == "Enter" && !e.ShiftKey) await SendAsync();
+    }
+
+    /// <summary>
+    /// Inserts a name and leaves the caret behind it. Blazor rewrites the whole textarea value, so
+    /// the caret has to be placed again; the picker only opens on a run at the end of the draft,
+    /// which is why the end of the value is the position just after the name.
+    /// </summary>
+    private async Task CommitAsync(TeamChatMember member)
+    {
+        Select(member);
+        if (_composer is { } composer) await JS.InvokeVoidAsync("sagaMention.caretToEnd", composer);
     }
 
     private async Task SendAsync()
@@ -257,6 +324,7 @@
             // Only once it is safely posted; a send that throws leaves the text to try again.
             Drafts.Set(ProposalId, ChatDraftKind.TeamThread, draftKey, "");
             _dismissedAt = -1;
+            _active = 0;
             // The notifier reaches this circuit too, but reloading here keeps the send
             // synchronous with the click rather than with an event we also raised.
             await ReloadAsync();

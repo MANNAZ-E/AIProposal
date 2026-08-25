@@ -13,6 +13,14 @@
 @if (CanEdit)
 {
     <h3 class="material-heading">Upload files</h3>
+    <div class="type-picker">
+        <select id="upload-type" class="material-input" aria-label="Document type" @bind="_uploadTypeId" disabled="@_uploading">
+            @foreach (var type in _types)
+            {
+                <option value="@type.Id">@type.Name</option>
+            }
+        </select>
+    </div>
     <label class="upload-area">
         <InputFile OnChange="UploadAsync" multiple accept="@_acceptTypes" disabled="@_uploading" />
         @if (_uploading)
@@ -24,19 +32,8 @@
             <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, Excel, images, text</span>
         }
     </label>
-    <div class="type-picker">
-        <select id="upload-type" class="material-input" aria-label="Document type" @bind="_uploadTypeId" disabled="@_uploading">
-            @foreach (var type in _types)
-            {
-                <option value="@type.Id">@type.Name</option>
-            }
-        </select>
-    </div>
 
     <h3 class="material-heading">Add note</h3>
-    <button type="button" class="upload-area" @onclick="NewNote">
-        <span><strong>Add note</strong></span>
-    </button>
     <div class="type-picker">
         <select id="note-type" class="material-input" aria-label="Document type" @bind="_noteTypeId">
             @foreach (var type in _types)
@@ -45,6 +42,9 @@
             }
         </select>
     </div>
+    <button type="button" class="upload-area" @onclick="NewNote">
+        <span><strong>Add note</strong></span>
+    </button>
 }
 
 @{

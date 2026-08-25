@@ -1459,8 +1459,10 @@ button.type-list-name {
     cursor: pointer;
 }
 
+/* .is-active is the keyboard's highlight; focus never leaves the textarea, so it cannot be :focus. */
 .team-mention-picker button:hover,
-.team-mention-picker button:focus {
+.team-mention-picker button:focus,
+.team-mention-picker button.is-active {
     background: var(--saga-primary-light);
 }
 
