@@ -1,0 +1,348 @@
+@using Saga.Core.Abstractions
+@inject AdminService Admin
+@inject ImpersonationAuditService ImpersonationAudit
+@inject CurrentUserService CurrentUser
+@inject NavigationManager Nav
+
+<h2 class="section-heading">Users</h2>
+
+@if (!_ready)
+{
+    <p class="text-muted">Loading…</p>
+}
+else
+{
+    <div class="card">
+        <div class="team-add-row">
+            <div class="form-field" style="flex: 2; min-width: 220px; margin-bottom: 0;">
+                <label for="user-email">Email</label>
+                <input id="user-email" type="email" @bind="_newEmail" placeholder="name@mannaz.com" />
+            </div>
+            <div class="form-field" style="flex: 2; min-width: 220px; margin-bottom: 0;">
+                <label for="user-name">Name</label>
+                <input id="user-name" type="text" @bind="_newName" />
+            </div>
+            <button class="btn btn-primary" @onclick="AddUserAsync" disabled="@_userBusy">Add</button>
+        </div>
+        @if (_userError is not null)
+        {
+            <p class="error-text" style="margin-bottom: 0;">@_userError</p>
+        }
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Admin</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _users)
+            {
+                var isSelf = row.Id == _currentUserId;
+                <tr>
+                    <td>@row.Email</td>
+                    <td>
+                        @if (_editingUserId == row.Id)
+                        {
+                            <input type="text" @bind="_editName" />
+                        }
+                        else
+                        {
+                            @row.DisplayName
+                        }
+                    </td>
+                    <td>
+                        @if (row.IsAdmin)
+                        {
+                            <span class="badge badge-ok">Admin</span>
+                        }
+                    </td>
+                    <td>
+                        @if (row.IsDeleted)
+                        {
+                            <span class="badge badge-missing">Deleted</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-ok">Active</span>
+                        }
+                    </td>
+                    <td class="text-muted">@row.CreatedAt.LocalDateTime.ToString("dd MMM yyyy")</td>
+                    <td style="text-align: right;">
+                        @if (row.IsDeleted)
+                        {
+                            <button class="btn btn-outline btn-sm" @onclick="() => RestoreUserAsync(row.Id)" disabled="@_userBusy">Restore</button>
+                        }
+                        else if (_editingUserId == row.Id)
+                        {
+                            <button class="btn btn-outline btn-sm" @onclick="SaveEditAsync" disabled="@_userBusy">Save</button>
+                            <button class="btn btn-outline btn-sm" @onclick="CancelEdit">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-outline btn-sm" @onclick="() => StartEdit(row)">Edit</button>
+                            @if (!isSelf)
+                            {
+                                @if (row.IsAdmin)
+                                {
+                                    <button class="btn btn-outline btn-sm" @onclick="() => SetAdminAsync(row.Id, false)" disabled="@_userBusy">Revoke admin</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-outline btn-sm" @onclick="() => SetAdminAsync(row.Id, true)" disabled="@_userBusy">Make admin</button>
+                                }
+                                <button class="btn btn-outline btn-sm" @onclick="() => OpenRemove(row)" disabled="@_userBusy">Remove</button>
+                                <button class="btn btn-outline btn-sm" @onclick="() => ImpersonateAsync(row.Id)"
+                                        disabled="@(_userBusy || CurrentUser.IsImpersonating)">Impersonate</button>
+                            }
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (_impersonateError is not null)
+    {
+        <p class="error-text">@_impersonateError</p>
+    }
+
+    <div class="section-title">Impersonation sessions</div>
+    @if (_sessions.Count == 0)
+    {
+        <div class="empty-state"><p>No impersonation sessions recorded yet.</p></div>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Admin</th>
+                    <th>Viewing as</th>
+                    <th>Started</th>
+                    <th>Ended</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _sessions)
+                {
+                    <tr>
+                        <td>@row.AdminName</td>
+                        <td>@row.TargetName</td>
+                        <td class="text-muted">@row.StartedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                        <td class="text-muted">@(row.EndedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                        <td class="text-muted">@ReasonText(row.EndReason)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_removeTarget is not null)
+    {
+        <div class="modal-backdrop" @onclick="CloseRemove">
+            <div class="modal-panel" tabindex="-1" @ref="_dialogPanel"
+                 @onclick:stopPropagation @onkeydown="e => DialogKeyAsync(e, RemoveUserAsync, CloseRemove)">
+                <h2 class="modal-title">Remove user</h2>
+                <p>Remove <strong>@_removeTarget.DisplayName</strong>? They will no longer be able to sign in, but everything of theirs stays and can be restored here.</p>
+                <div class="modal-actions">
+                    <button class="btn btn-danger" @onclick="RemoveUserAsync" disabled="@_userBusy">Remove</button>
+                    <button class="btn btn-outline" @onclick="CloseRemove">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool _ready;
+    private Guid _currentUserId;
+
+    private List<AdminUserRow> _users = [];
+    private List<ImpersonationSessionRow> _sessions = [];
+    private string _newEmail = "";
+    private string _newName = "";
+    private string? _userError;
+    private bool _userBusy;
+    private Guid? _editingUserId;
+    private string _editName = "";
+    private AdminUserRow? _removeTarget;
+    private string? _impersonateError;
+
+    private ElementReference _dialogPanel;
+    private bool _focusDialogPanel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentUserId = (await CurrentUser.GetAsync()).Id;
+        _users = await Admin.ListUsersAsync();
+        _sessions = await ImpersonationAudit.GetAllAsync();
+        _ready = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The confirm dialog has no field of its own, so the panel itself takes focus — without
+        // that its keydown handler never fires and Escape does nothing.
+        if (_focusDialogPanel)
+        {
+            _focusDialogPanel = false;
+            await _dialogPanel.FocusAsync();
+        }
+    }
+
+    /// <summary>Windows dialog keys: Escape backs out, Ctrl+Enter commits. Handled on the panel so
+    /// they work from anywhere inside it.</summary>
+    private Task DialogKeyAsync(KeyboardEventArgs e, Func<Task>? save, Action close)
+    {
+        if (e.Key == "Escape")
+        {
+            close();
+            return Task.CompletedTask;
+        }
+
+        if (save is not null && e.Key == "Enter" && (e.CtrlKey || e.MetaKey) && !_userBusy)
+        {
+            return save();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string ReasonText(ImpersonationEndReason? reason) => reason switch
+    {
+        ImpersonationEndReason.StoppedByAdmin => "Stopped",
+        ImpersonationEndReason.CircuitDisconnected => "Disconnected",
+        _ => "—",
+    };
+
+    private async Task AddUserAsync()
+    {
+        _userBusy = true;
+        _userError = null;
+        try
+        {
+            await Admin.AddUserAsync(_currentUserId, _newEmail, _newName);
+            _newEmail = "";
+            _newName = "";
+            _users = await Admin.ListUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _userError = ex.Message;
+        }
+        finally
+        {
+            _userBusy = false;
+        }
+    }
+
+    private void StartEdit(AdminUserRow row)
+    {
+        _editingUserId = row.Id;
+        _editName = row.DisplayName;
+    }
+
+    private void CancelEdit() => _editingUserId = null;
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingUserId is not { } id) return;
+        _userBusy = true;
+        try
+        {
+            await Admin.UpdateUserAsync(_currentUserId, id, _editName);
+            _editingUserId = null;
+            _users = await Admin.ListUsersAsync();
+        }
+        finally
+        {
+            _userBusy = false;
+        }
+    }
+
+    private async Task SetAdminAsync(Guid userId, bool isAdmin)
+    {
+        _userBusy = true;
+        _userError = null;
+        try
+        {
+            await Admin.SetAdminAsync(_currentUserId, userId, isAdmin);
+            _users = await Admin.ListUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _userError = ex.Message;
+        }
+        finally
+        {
+            _userBusy = false;
+        }
+    }
+
+    private void OpenRemove(AdminUserRow row)
+    {
+        _removeTarget = row;
+        _focusDialogPanel = true;
+    }
+
+    private void CloseRemove() => _removeTarget = null;
+
+    private async Task RemoveUserAsync()
+    {
+        if (_removeTarget is null) return;
+        _userBusy = true;
+        _userError = null;
+        try
+        {
+            await Admin.DeleteUserAsync(_currentUserId, _removeTarget.Id);
+            _removeTarget = null;
+            _users = await Admin.ListUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _userError = ex.Message;
+        }
+        finally
+        {
+            _userBusy = false;
+        }
+    }
+
+    private async Task RestoreUserAsync(Guid userId)
+    {
+        _userBusy = true;
+        try
+        {
+            await Admin.RestoreUserAsync(_currentUserId, userId);
+            _users = await Admin.ListUsersAsync();
+        }
+        finally
+        {
+            _userBusy = false;
+        }
+    }
+
+    private async Task ImpersonateAsync(Guid userId)
+    {
+        _impersonateError = null;
+        try
+        {
+            await CurrentUser.StartImpersonationAsync(userId);
+            // A full reload, not Nav.Refresh: AppBar and the impersonation banner each run on
+            // their own circuit (their common ancestor, MainLayout, isn't itself interactive),
+            // so only a fresh page load has every one of them re-resolve the effective user.
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _impersonateError = ex.Message;
+        }
+    }
+}

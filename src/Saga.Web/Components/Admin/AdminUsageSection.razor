@@ -1,0 +1,140 @@
+@using Saga.Core.Abstractions
+@inject AdminService Admin
+@inject AiUsageService Usage
+
+<h2 class="section-heading">Usage</h2>
+
+@if (!_ready)
+{
+    <p class="text-muted">Loading…</p>
+}
+else
+{
+    <div class="section-title" style="margin-top: 0;">Usage by service</div>
+    @if (_breakdown.Count == 0)
+    {
+        <div class="empty-state"><p>No AI calls recorded yet.</p></div>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Service</th>
+                    <th>Model</th>
+                    <th style="text-align: right;">Calls</th>
+                    <th style="text-align: right;">Tokens in</th>
+                    <th style="text-align: right;">Cached in</th>
+                    <th style="text-align: right;">Tokens out</th>
+                    <th style="text-align: right;">Pages</th>
+                    <th style="text-align: right;">Est. cost (@Money.Currency(_rate))</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in _breakdown.GroupBy(b => b.Service))
+                {
+                    var groupTotal = AiUsageService.Sum(group.Select(g => g.Totals));
+                    <tr class="table-group">
+                        <td colspan="2"><strong>@ServiceName(group.Key)</strong></td>
+                        <td style="text-align: right;">@groupTotal.Calls.ToString("N0")</td>
+                        <td style="text-align: right;">@groupTotal.InputTokens.ToString("N0")</td>
+                        <td style="text-align: right;">@Tokens.Cached(groupTotal.CachedInputTokens, groupTotal.InputTokens)</td>
+                        <td style="text-align: right;">@groupTotal.OutputTokens.ToString("N0")</td>
+                        <td style="text-align: right;">@(groupTotal.Pages > 0 ? groupTotal.Pages.ToString("N0") : "—")</td>
+                        <td style="text-align: right;"><strong>@Cost(groupTotal.CostUsd)</strong></td>
+                    </tr>
+                    @foreach (var row in group)
+                    {
+                        <tr>
+                            <td></td>
+                            <td>@row.Model</td>
+                            <td style="text-align: right;">@row.Totals.Calls.ToString("N0")</td>
+                            <td style="text-align: right;">@row.Totals.InputTokens.ToString("N0")</td>
+                            <td style="text-align: right;">@Tokens.Cached(row.Totals.CachedInputTokens, row.Totals.InputTokens)</td>
+                            <td style="text-align: right;">@row.Totals.OutputTokens.ToString("N0")</td>
+                            <td style="text-align: right;">@(row.Totals.Pages > 0 ? row.Totals.Pages.ToString("N0") : "—")</td>
+                            <td style="text-align: right;">@Cost(row.Totals.CostUsd)</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="section-title">Usage by proposal</div>
+    @if (_usage.Count == 0)
+    {
+        <div class="empty-state"><p>No AI calls recorded yet.</p></div>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Proposal</th>
+                    <th>Client</th>
+                    <th style="text-align: right;">Calls</th>
+                    <th style="text-align: right;">Tokens in</th>
+                    <th style="text-align: right;">Cached in</th>
+                    <th style="text-align: right;">Tokens out</th>
+                    <th style="text-align: right;">Pages</th>
+                    <th style="text-align: right;">Est. cost (@Money.Currency(_rate))</th>
+                    <th>Last activity</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _usage)
+                {
+                    <tr>
+                        <td><a href="/proposals/@row.ProposalId">@row.Title</a></td>
+                        <td>@row.ClientName</td>
+                        <td style="text-align: right;">@row.Calls.ToString("N0")</td>
+                        <td style="text-align: right;">@row.InputTokens.ToString("N0")</td>
+                        <td style="text-align: right;">@Tokens.Cached(row.CachedInputTokens, row.InputTokens)</td>
+                        <td style="text-align: right;">@row.OutputTokens.ToString("N0")</td>
+                        <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "—")</td>
+                        <td style="text-align: right;">@Cost(row.CostUsd)</td>
+                        <td>@row.LastCallAt?.ToLocalTime().ToString("dd MMM HH:mm")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th>Total</th>
+                    <th></th>
+                    <th style="text-align: right;">@_usage.Sum(u => u.Calls).ToString("N0")</th>
+                    <th style="text-align: right;">@_usage.Sum(u => u.InputTokens).ToString("N0")</th>
+                    <th style="text-align: right;">@Tokens.Cached(_usage.Sum(u => u.CachedInputTokens), _usage.Sum(u => u.InputTokens))</th>
+                    <th style="text-align: right;">@_usage.Sum(u => u.OutputTokens).ToString("N0")</th>
+                    <th style="text-align: right;">@_usage.Sum(u => u.Pages).ToString("N0")</th>
+                    <th style="text-align: right;">@Cost(_usage.Sum(u => u.CostUsd))</th>
+                    <th></th>
+                </tr>
+            </tfoot>
+        </table>
+    }
+}
+
+@code {
+    private bool _ready;
+    private List<ProposalSpend> _usage = [];
+    private List<AiUsageBreakdownRow> _breakdown = [];
+    private decimal _rate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _rate = Usage.UsdToDkk;
+        _usage = await Admin.GetUsageAsync();
+        _breakdown = await Usage.GetGlobalBreakdownAsync();
+        _ready = true;
+    }
+
+    private string Cost(decimal usd) => Money.Display(usd, _rate);
+
+    private static string ServiceName(AiServiceKind service) => service switch
+    {
+        AiServiceKind.AzureOpenAI => "Azure OpenAI",
+        AiServiceKind.ContentUnderstanding => "Azure Content Understanding",
+        _ => service.ToString(),
+    };
+}

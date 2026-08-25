@@ -526,6 +526,8 @@ a {
     overflow-y: auto;
 }
 
+/* Works on a button or an anchor: the admin nav uses real links so its sections can be
+   bookmarked, and the underline is the only thing an anchor still brings with it. */
 .nav-item {
     display: block;
     width: 100%;
@@ -538,6 +540,7 @@ a {
     font-size: 0.92rem;
     cursor: pointer;
     color: #fff;
+    text-decoration: none;
 }
 
 .nav-item:hover:not(:disabled) {

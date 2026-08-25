@@ -1,0 +1,68 @@
+@inject AdminService Admin
+@inject ProposalService Proposals
+
+<h2 class="section-heading">Recycling bin</h2>
+
+@if (!_ready)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (_deleted.Count == 0)
+{
+    <div class="empty-state"><p>No deleted proposals.</p></div>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Proposal</th>
+                <th>Client</th>
+                <th>Owner</th>
+                <th>Deleted</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in _deleted)
+            {
+                <tr>
+                    <td><strong>@row.Title</strong></td>
+                    <td>@row.ClientName</td>
+                    <td>@row.OwnerName</td>
+                    <td class="text-muted">@(row.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                    <td style="text-align: right;">
+                        <button class="btn btn-outline btn-sm" @onclick="() => RestoreProposalAsync(row.ProposalId)"
+                                disabled="@_restoring">Restore</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _ready;
+    private List<DeletedProposal> _deleted = [];
+    private bool _restoring;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _deleted = await Admin.GetDeletedProposalsAsync();
+        _ready = true;
+    }
+
+    private async Task RestoreProposalAsync(Guid proposalId)
+    {
+        _restoring = true;
+        try
+        {
+            await Proposals.RestoreAsAdminAsync(proposalId);
+            _deleted = await Admin.GetDeletedProposalsAsync();
+        }
+        finally
+        {
+            _restoring = false;
+        }
+    }
+}

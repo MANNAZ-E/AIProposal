@@ -1,0 +1,67 @@
+@inject AdminService Admin
+
+<h2 class="section-heading">System prompts</h2>
+
+@if (!_ready)
+{
+    <p class="text-muted">Loading…</p>
+}
+else
+{
+    <div class="section-title" style="margin-top: 0;">Mannaz voice</div>
+    <div class="card" style="max-width: 760px;">
+        <div class="form-field">
+            <label for="voice-tone">Tone of voice</label>
+            <textarea id="voice-tone" rows="4" @bind="_tone"
+                      placeholder="e.g. Confident but not salesy. Concrete and specific. Short sentences. No filler, no hype."></textarea>
+        </div>
+        <div class="form-field">
+            <label for="voice-about">About Mannaz</label>
+            <textarea id="voice-about" rows="5" @bind="_about"
+                      placeholder="Who Mannaz is, history, size, signature strengths, typical clients…"></textarea>
+        </div>
+        <div class="form-field">
+            <label for="voice-terms">Terminology and methods</label>
+            <textarea id="voice-terms" rows="4" @bind="_terminology"
+                      placeholder="Preferred terms and method names — and words to avoid."></textarea>
+        </div>
+        <div class="modal-actions" style="justify-content: flex-start;">
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save voice settings</button>
+            @if (_saved)
+            {
+                <span class="badge badge-ok">Saved</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool _ready;
+    private string _tone = "";
+    private string _about = "";
+    private string _terminology = "";
+    private bool _saving;
+    private bool _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var voice = await Admin.GetVoiceAsync();
+        (_tone, _about, _terminology) = (voice.ToneOfVoice, voice.AboutMannaz, voice.Terminology);
+        _ready = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _saved = false;
+        try
+        {
+            await Admin.SaveVoiceAsync(_tone, _about, _terminology);
+            _saved = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
