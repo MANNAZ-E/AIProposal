@@ -192,10 +192,6 @@
                         <input type="checkbox" disabled="@ReadOnly" checked="@IsDocumentChecked(document)"
                                @onchange="() => ToggleDocument(document)" />
                         <span>@document.Name</span>
-                        @if (document.Kind == DocumentKind.Note)
-                        {
-                            <span class="badge badge-role">Note</span>
-                        }
                     </label>
                 }
             </div>

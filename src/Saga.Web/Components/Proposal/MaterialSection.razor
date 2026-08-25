@@ -124,76 +124,92 @@
 }
 else
 {
-    <h3 class="material-heading">Materials</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Length</th>
-                <th>Added</th>
-                <th>Last edited</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var type in _types)
-            {
-                var inType = DocumentsIn(type.Id);
-                <tr class="table-group"><td colspan="6">@type.Name</td></tr>
-                @if (inType.Count == 0)
+    <h3 class="material-heading">
+        <button type="button" class="heading-toggle" aria-expanded="@MaterialsOpen"
+                @onclick="() => _materialsOpen = !MaterialsOpen">
+            <span class="heading-caret">@(MaterialsOpen ? "▾" : "▸")</span>Materials
+        </button>
+    </h3>
+    @if (MaterialsOpen)
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Length</th>
+                    <th>Added</th>
+                    <th>Last edited</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var type in _types)
                 {
-                    <tr><td colspan="6" class="text-muted">Add materials above</td></tr>
-                }
-                else
-                {
-                    foreach (var doc in inType)
+                    var inType = DocumentsIn(type.Id);
+                    <tr class="table-group"><td colspan="6">@type.Name</td></tr>
+                    @if (inType.Count == 0)
                     {
-                        @documentRow(doc)
+                        <tr><td colspan="6" class="text-muted">Add materials above</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var doc in inType)
+                        {
+                            @documentRow(doc)
+                        }
                     }
                 }
-            }
-        </tbody>
-    </table>
+            </tbody>
+        </table>
+    }
 
-    <h3 class="material-heading">Document types</h3>
-    <ul class="type-list">
-        @foreach (var type in _types)
-        {
-            var count = DocumentsIn(type.Id).Count;
-            <li>
-                @if (_renameType?.Id == type.Id)
-                {
-                    <input @ref="_renameTypeInput" class="material-input type-rename-input" maxlength="200"
-                           @bind="_renameTypeValue" @bind:event="oninput"
-                           @onkeydown="RenameTypeKeyDownAsync" @onblur="SaveTypeRenameAsync" />
-                }
-                else if (CanEdit && !type.IsFixed)
-                {
-                    <button type="button" class="link-button type-list-name" title="Rename"
-                            @onclick="() => BeginTypeRename(type)">@type.Name</button>
-                }
-                else
-                {
-                    <span class="type-list-name">@type.Name</span>
-                }
-                <span class="text-muted">@(count == 1 ? "1 item" : $"{count} items")</span>
-                @if (CanEdit && !type.IsFixed)
-                {
-                    <button class="btn btn-outline btn-sm" disabled="@(_busy || !CanRemove(type))"
-                            title="@RemoveHint(type)" @onclick="() => RemoveTypeAsync(type)">Remove</button>
-                }
-            </li>
-        }
-    </ul>
-    @if (CanEdit)
+    <h3 class="material-heading">
+        <button type="button" class="heading-toggle" aria-expanded="@_typesOpen"
+                @onclick="() => _typesOpen = !_typesOpen">
+            <span class="heading-caret">@(_typesOpen ? "▾" : "▸")</span>Document types
+        </button>
+    </h3>
+    @if (_typesOpen)
     {
-        <div class="type-add">
-            <input type="text" class="material-input" placeholder="New document type" maxlength="200"
-                   @bind="_newTypeName" @bind:event="oninput" @onkeydown="NewTypeKeyDownAsync" />
-            <button class="btn btn-outline btn-sm" @onclick="AddTypeAsync"
-                    disabled="@(_busy || string.IsNullOrWhiteSpace(_newTypeName))">Add type</button>
-        </div>
+        <ul class="type-list">
+            @foreach (var type in _types)
+            {
+                var count = DocumentsIn(type.Id).Count;
+                <li>
+                    @if (_renameType?.Id == type.Id)
+                    {
+                        <input @ref="_renameTypeInput" class="material-input type-rename-input" maxlength="200"
+                               @bind="_renameTypeValue" @bind:event="oninput"
+                               @onkeydown="RenameTypeKeyDownAsync" @onblur="SaveTypeRenameAsync" />
+                    }
+                    else if (CanEdit && !type.IsFixed)
+                    {
+                        <button type="button" class="link-button type-list-name" title="Rename"
+                                @onclick="() => BeginTypeRename(type)">@type.Name</button>
+                    }
+                    else
+                    {
+                        <span class="type-list-name">@type.Name</span>
+                    }
+                    <span class="text-muted">@(count == 1 ? "1 item" : $"{count} items")</span>
+                    @if (CanEdit && !type.IsFixed)
+                    {
+                        <button class="btn btn-outline btn-sm" disabled="@(_busy || !CanRemove(type))"
+                                title="@RemoveHint(type)" @onclick="() => RemoveTypeAsync(type)">Remove</button>
+                    }
+                </li>
+            }
+        </ul>
+        @if (CanEdit)
+        {
+            <div class="type-add">
+                <input type="text" class="material-input" placeholder="New document type" maxlength="200"
+                       @bind="_newTypeName" @bind:event="oninput" @onkeydown="NewTypeKeyDownAsync" />
+                <button class="btn btn-outline btn-sm" @onclick="AddTypeAsync"
+                        disabled="@(_busy || string.IsNullOrWhiteSpace(_newTypeName))">Add type</button>
+            </div>
+        }
     }
 }
 
@@ -357,6 +373,13 @@ else
     private Document? _deleteDocument;
     private bool _uploading;
     private bool _busy;
+
+    /// <summary>The list opens itself once there is material to show; a click then wins over that.
+    /// Document types are settings, not daily work, so they stay closed until asked for.</summary>
+    private bool? _materialsOpen;
+    private bool _typesOpen;
+
+    private bool MaterialsOpen => _materialsOpen ?? _documents is { Count: > 0 };
     private string? _error;
 
     /// <summary>Type new material is filed under; sticky, so a run of uploads stays in one category.</summary>

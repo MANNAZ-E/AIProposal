@@ -18,8 +18,8 @@
             <div></div>
             <div class="chat-scroll">
                 <div class="empty-state">
-                    <p class="text-muted">Select a thread, or start a new one.</p>
-                    <button class="btn btn-primary" @onclick="NewThread">Start a thread</button>
+                    <p class="text-muted">Select a chat, or start a new one.</p>
+                    <button class="btn btn-primary" @onclick="NewThread">Start a chat</button>
                 </div>
             </div>
             <div></div>
@@ -27,7 +27,7 @@
         else
         {
             <div class="chat-header">
-                <div class="chat-header-title">@(_isDraft ? "New thread" : ActiveThread?.Title)</div>
+                <div class="chat-header-title">@(_isDraft ? "New chat" : ActiveThread?.Title)</div>
             </div>
 
             @* Reversed flex column: with a single child the container opens scrolled to the bottom

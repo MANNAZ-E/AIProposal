@@ -110,7 +110,7 @@ public class TeamChatService(
         {
             Id = Guid.NewGuid(),
             ProposalId = proposalId,
-            Title = ChatTitle.FromQuestion(text, "New thread"),
+            Title = ChatTitle.FromQuestion(text, "New chat"),
             CreatedById = userId,
             CreatedAt = now,
             LastMessageAt = now,
@@ -150,7 +150,7 @@ public class TeamChatService(
     public async Task RenameAsync(Guid threadId, Guid userId, string title, CancellationToken ct = default)
     {
         title = (title ?? "").Trim();
-        if (title.Length == 0) throw new InvalidOperationException("A thread needs a title.");
+        if (title.Length == 0) throw new InvalidOperationException("A chat needs a title.");
         if (title.Length > MaxTitleLength) title = title[..MaxTitleLength];
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -265,7 +265,7 @@ public class TeamChatService(
     {
         var thread = await db.TeamThreads.FirstOrDefaultAsync(t => t.Id == threadId, ct)
             // A business condition, not an auth failure: the UI shows this sentence verbatim.
-            ?? throw new InvalidOperationException("That thread no longer exists.");
+            ?? throw new InvalidOperationException("That chat no longer exists.");
         var role = await ProposalService.RequireRoleAsync(db, thread.ProposalId, userId, ProposalRole.Reader, ct);
         return (thread, role);
     }
@@ -282,7 +282,7 @@ public class TeamChatService(
     {
         if (CanManage(thread.CreatedById, userId, role)) return;
         throw new InvalidOperationException(
-            $"Only the person who started a thread, or the proposal owner, can {(deleting ? "delete" : "rename")} it.");
+            $"Only the person who started a chat, or the proposal owner, can {(deleting ? "delete" : "rename")} it.");
     }
 
     private static async Task<bool> MarkSeenAsync(SagaDbContext db, Guid threadId, Guid userId,

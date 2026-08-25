@@ -3,20 +3,19 @@
 
 <div class="chat-list">
     <div class="chat-list-header">
-        <span class="chat-list-title">Threads</span>
-        <button class="btn btn-outline btn-sm" @onclick="OnNew">＋ New</button>
+        <span class="chat-list-title">Bid Team Chat</span>
     </div>
 
-    @if (IsDraftActive)
-    {
-        <div class="chat-row-wrap">
-            <button class="chat-row active" type="button">
-                <span class="chat-row-line">
-                    <span class="chat-row-title">New thread</span>
-                </span>
-            </button>
-        </div>
-    }
+    @* The first row is the unstarted chat: it is both the button you press and the row you
+       stand on while writing, so the two stop being separate things in separate places. *@
+    <div class="chat-row-wrap chat-new-wrap">
+        <button class="chat-row chat-new-row @(IsDraftActive ? "active" : null)" type="button"
+                @onclick="StartNewAsync">
+            <span class="chat-row-line">
+                <span class="chat-row-title">＋ New chat</span>
+            </span>
+        </button>
+    </div>
 
     @foreach (var thread in Threads)
     {
@@ -38,6 +37,12 @@
     private Guid? _deleteFor;
     private string _renameText = "";
 
+    /// <summary>
+    /// Pressing the row you are already standing on would reset the draft's material picker,
+    /// so an active draft swallows the click rather than starting over.
+    /// </summary>
+    private Task StartNewAsync() => IsDraftActive ? Task.CompletedTask : OnNew.InvokeAsync();
+
     private RenderFragment Row(TeamThreadListItem thread) =>
         @<div class="chat-row-wrap">
             @if (_renameFor == thread.Id)
@@ -53,11 +58,11 @@
             }
             else if (_deleteFor == thread.Id)
             {
-                @* Confirming in the row itself: a thread is cheap, and a modal for each one would
+                @* Confirming in the row itself: a chat is cheap, and a modal for each one would
                    be heavier than the thing it is protecting. It still says who else loses it,
-                   because every thread here belongs to the whole team. *@
+                   because every chat here belongs to the whole team. *@
                 <div class="chat-row chat-row-editing">
-                    <div class="chat-row-meta">Delete this thread? The team loses it too.</div>
+                    <div class="chat-row-meta">Delete this chat? The team loses it too.</div>
                     <div class="chat-row-actions">
                         <button class="btn btn-danger btn-sm" @onclick="() => ConfirmDeleteAsync(thread)">Delete</button>
                         <button class="btn btn-outline btn-sm" @onclick="() => _deleteFor = null">Cancel</button>

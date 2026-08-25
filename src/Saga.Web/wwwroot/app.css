@@ -623,6 +623,24 @@ button.upload-area {
     margin: 2rem 0 0.75rem;
 }
 
+/* A section heading doubles as its own expander. */
+.heading-toggle {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.heading-caret {
+    font-size: 0.8rem;
+    color: var(--saga-muted);
+}
+
 /* Text boxes and selects on this page: the settings form's look, one size down. */
 .material-input {
     padding: 0.35rem 0.55rem;
@@ -1173,6 +1191,19 @@ button.type-list-name {
 .chat-row.active {
     background: var(--saga-primary-light);
     border-left-color: var(--saga-primary);
+}
+
+/* The list's first row is the unstarted chat: muted until you are standing on it. */
+.chat-new-wrap {
+    border-bottom: 1px solid var(--saga-border);
+}
+
+.chat-new-row {
+    color: var(--saga-muted);
+}
+
+.chat-new-row.active {
+    color: inherit;
 }
 
 .chat-row-line {
