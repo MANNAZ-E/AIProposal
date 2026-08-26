@@ -2,12 +2,14 @@
 @inject CurrentUserService CurrentUser
 @inject WorkingContextService WorkingContext
 @inject ChatDraftState Drafts
+@inject ChatStreamState Streams
+@inject NavigationManager Nav
 @implements IDisposable
 
 <div class="chat-layout">
     <ChatList Chats="_chats" SelectedId="_activeChatId" IsDraftActive="_isDraft"
-              IsProposalOwner="MyRole == ProposalRole.Owner" Streaming="_streamingIds"
-              OnSelect="SelectAsync" OnNew="NewChat" OnRename="RenameAsync" OnDelete="DeleteAsync" />
+              IsProposalOwner="MyRole == ProposalRole.Owner" Streaming="Streams.AnsweringIds(ProposalId)"
+              OnSelect="Open" OnNew="OpenNew" OnRename="RenameAsync" OnDelete="DeleteAsync" />
 
     <div class="chat-pane">
         @if (!_isDraft && _activeChatId is null)
@@ -23,7 +25,7 @@
                     {
                         <p class="text-muted">Select a chat, or start a new one.</p>
                     }
-                    <button class="btn btn-primary" @onclick="NewChat">Start a chat</button>
+                    <button class="btn btn-primary" @onclick="OpenNew">Start a chat</button>
                 </div>
             </div>
             <div></div>
@@ -220,9 +222,15 @@
     /// <summary>Lets the page refresh the unread badge on the Chat nav item.</summary>
     [Parameter] public EventCallback OnUnreadChanged { get; set; }
 
-    /// <summary>Opens the Materials tab, for the empty-picker link — the tabs are page state
-    /// rather than routes, so the page has to do the switching.</summary>
+    /// <summary>Opens the Materials tab, for the empty-picker link — the page owns the
+    /// navigation, because it is the one that knows the proposal's URL.</summary>
     [Parameter] public EventCallback OnAddMaterials { get; set; }
+
+    /// <summary>
+    /// Which chat the URL names: an id, the "new" literal for the unsaved draft, or null on the
+    /// bare tab URL, which resolves to one of the two.
+    /// </summary>
+    [Parameter] public string? SubId { get; set; }
 
     private List<ChatListItem> _chats = [];
     private List<ChatMessage> _messages = [];
@@ -256,14 +264,10 @@
     private bool _confirmUnshare;
     private ChatSession? _activeSession;
 
-    /// <summary>Answers still streaming, keyed by chat id (the draft uses Guid.Empty), so
-    /// switching chats mid-answer keeps filling the right buffer and the right row spins.</summary>
-    private readonly Dictionary<Guid, string> _streaming = [];
-    private HashSet<Guid> _streamingIds = [];
-
     /// <summary>
-    /// The composer's text, kept in the circuit rather than in a field: leaving the AI Chat tab
-    /// destroys this component, and an unsent question should survive the trip to Materials.
+    /// The composer's text, kept in the circuit rather than in a field: every navigation destroys
+    /// this component — switching chats included, now that the open one is in the URL
+    /// — and an unsent question should survive the trip.
     /// </summary>
     private string Question
     {
@@ -304,21 +308,86 @@
            && (_documents.Any(d => _selectedDocuments.Contains(d.Id) && d.UpdatedAt > _activeSession.CreatedAt)
                || _artifacts.Any(a => _selectedArtifacts.Contains(a.Type) && a.UpdatedAt > _activeSession.CreatedAt));
     private Guid ActiveKey => _isDraft ? Guid.Empty : _activeChatId ?? Guid.Empty;
-    private string? ActiveStreaming => _streaming.TryGetValue(ActiveKey, out var text) ? text : null;
-    private bool ActiveIsBusy => _streaming.ContainsKey(ActiveKey);
+    private string? ActiveStreaming => Streams.Get(ProposalId, ActiveKey);
+    private bool ActiveIsBusy => Streams.IsAnswering(ProposalId, ActiveKey);
 
-    public void Dispose() => _disposed = true;
+    protected override void OnInitialized() => Streams.Changed += OnStreamChanged;
+
+    public void Dispose()
+    {
+        _disposed = true;
+        Streams.Changed -= OnStreamChanged;
+    }
+
+    /// <summary>
+    /// An answer moved. A delta only needs a re-render; one that has finished also needs its
+    /// messages read back, because the component that asked the question is usually gone by the
+    /// time it lands — opening another chat destroys it while the answer keeps arriving.
+    /// </summary>
+    private void OnStreamChanged(Guid? finished)
+    {
+        if (_disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            if (finished is not null)
+            {
+                if (finished == _activeChatId && _activeChatId is { } chatId)
+                {
+                    var user = await CurrentUser.GetAsync();
+                    _messages = await Chat.GetMessagesAsync(chatId, user.Id);
+                    _activeSession = await Chat.GetChatAsync(chatId, user.Id);
+                }
+                await LoadChatsAsync();
+            }
+            StateHasChanged();
+        });
+    }
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedProposalId == ProposalId) return;
-        _loadedProposalId = ProposalId;
-        var user = await CurrentUser.GetAsync();
-        (_documents, _artifacts) = await Chat.GetMaterialAsync(ProposalId, user.Id);
-        await LoadChatsAsync();
-        if (_chats.Count > 0) await SelectAsync(_chats[0].Id);
-        else NewChat();
+        if (_loadedProposalId != ProposalId)
+        {
+            _loadedProposalId = ProposalId;
+            var user = await CurrentUser.GetAsync();
+            (_documents, _artifacts) = await Chat.GetMaterialAsync(ProposalId, user.Id);
+            await LoadChatsAsync();
+        }
+
+        // The bare tab URL names no conversation: land on the newest, or on a fresh draft on a
+        // proposal nobody has asked anything about yet. Replacing rather than pushing, so Back
+        // leaves the tab instead of bouncing straight back here.
+        if (SubId is null)
+        {
+            var target = _chats.Count > 0 ? _chats[0].Id.ToString() : ProposalSectionUrl.New;
+            Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, ProposalSection.Chat, target), replace: true);
+            return;
+        }
+
+        if (string.Equals(SubId, ProposalSectionUrl.New, StringComparison.OrdinalIgnoreCase))
+        {
+            // Only when nothing is open yet. The page re-renders this component on every load, and
+            // an unguarded reset would wipe the material and privacy choices out from under whoever
+            // was making them — or the first answer out of a chat being born, whose id is
+            // already set here while the URL still says "new".
+            if (!_isDraft && _activeChatId is null) NewChat();
+        }
+        else if (Guid.TryParse(SubId, out var id))
+        {
+            await SelectAsync(id);
+        }
+        else
+        {
+            Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, ProposalSection.Chat), replace: true);
+        }
     }
+
+    /// <summary>Opening a chat is somewhere you can come back from, so it pushes.</summary>
+    private void Open(Guid chatId)
+        => Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, ProposalSection.Chat, chatId.ToString()));
+
+    private void OpenNew()
+        => Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, ProposalSection.Chat, ProposalSectionUrl.New));
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -334,7 +403,6 @@
     {
         var user = await CurrentUser.GetAsync();
         _chats = await Chat.ListAsync(ProposalId, user.Id);
-        _streamingIds = _streaming.Keys.ToHashSet();
     }
 
     private async Task SelectAsync(Guid chatId)
@@ -494,27 +562,24 @@
         }
 
         await LoadChatsAsync();
-        if (_activeChatId == chatId)
-        {
-            // Land on the neighbour rather than on nothing.
-            _activeChatId = null;
-            _activeSession = null;
-            _messages = [];
-            if (_chats.Count > 0) await SelectAsync(_chats[0].Id);
-        }
+        // Land on the neighbour rather than on nothing, replacing rather than pushing: the deleted
+        // chat is in the URL, and Back would otherwise walk straight back into it. A delete that
+        // failed leaves the chat in the list, and leaves the screen where it was.
+        if (_activeChatId != chatId || _chats.Any(c => c.Id == chatId)) return;
+        var target = _chats.Count > 0 ? _chats[0].Id.ToString() : ProposalSectionUrl.New;
+        Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, ProposalSection.Chat, target), replace: true);
     }
 
-    /// <summary>The escape hatch from the lock: same material, fresh chat.</summary>
+    /// <summary>
+    /// The escape hatch from the lock: same material, fresh chat. Remembered before navigating
+    /// rather than copied across afterwards, because the draft reads the picker back out of the
+    /// circuit on its way in and this component does not survive the trip.
+    /// </summary>
     private void NewChatWithSameMaterial()
     {
-        var documents = _selectedDocuments.ToHashSet();
-        var artifacts = _selectedArtifacts.ToHashSet();
-        var kind = ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject;
-        NewChat();
-        _selectedDocuments = documents;
-        _selectedArtifacts = artifacts;
-        _draftKind = kind;
+        _draftKind = ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject;
         RememberDraftMaterial();
+        OpenNew();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
@@ -533,10 +598,10 @@
         var user = await CurrentUser.GetAsync();
         var askingDraft = _isDraft;
         // This ask owns one buffer. The key follows the answer, not the screen, so switching
-        // chats mid-answer keeps the text landing in the right place.
+        // chats mid-answer keeps the text landing in the right place; the buffer lives in
+        // ChatStreamState, which outlives the navigation that switching now is.
         var streamKey = ActiveKey;
-        _streaming[streamKey] = "";
-        _streamingIds = _streaming.Keys.ToHashSet();
+        Streams.Start(ProposalId, streamKey);
 
         _messages.Add(new ChatMessage
         {
@@ -561,38 +626,38 @@
                 {
                     // Re-key the buffer onto the real chat before the answer starts arriving, and
                     // free the draft slot, so pressing New again cannot duplicate this chat.
-                    if (_streaming.Remove(streamKey, out var buffered)) _streaming[id] = buffered;
+                    Streams.Rekey(ProposalId, streamKey, id);
                     streamKey = id;
                     if (_isDraft)
                     {
                         _isDraft = false;
                         _activeChatId = id;
+                        // The draft has become a real chat, so put its id in the URL. Replacing,
+                        // not pushing: it is one conversation, and Back should leave the tab
+                        // rather than return to the empty draft it started as.
+                        Nav.NavigateTo(
+                            ProposalSectionUrl.For(ProposalId, ProposalSection.Chat, id.ToString()),
+                            replace: true);
                     }
                     await LoadChatsAsync();
                     if (!_disposed) await InvokeAsync(StateHasChanged);
                 },
-                onDelta: async delta =>
+                onDelta: delta =>
                 {
-                    _streaming[streamKey] += delta;
-                    if (!_disposed) await InvokeAsync(StateHasChanged);
+                    // The re-render comes from ChatStreamState's event, which reaches whichever
+                    // component is on screen rather than only the one that asked.
+                    Streams.Append(ProposalId, streamKey, delta);
+                    return Task.CompletedTask;
                 });
 
-            _streaming.Remove(streamKey);
-            if (_activeChatId == chatId)
-            {
-                _messages = await Chat.GetMessagesAsync(chatId, user.Id);
-                _activeSession = await Chat.GetChatAsync(chatId, user.Id);
-            }
-            await LoadChatsAsync();
+            // Finishing is what reloads the saved messages, here or in the component that replaced
+            // this one, so nothing is left leaning on an instance the navigation threw away.
+            Streams.Finish(ProposalId, chatId);
         }
         catch (Exception ex)
         {
             _error = ex.Message;
-            _streaming.Remove(streamKey);
-        }
-        finally
-        {
-            _streamingIds = _streaming.Keys.ToHashSet();
+            Streams.Finish(ProposalId, streamKey);
         }
     }
 

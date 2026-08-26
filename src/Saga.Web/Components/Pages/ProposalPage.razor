@@ -1,4 +1,7 @@
 ﻿@page "/proposals/{ProposalId:guid}"
+@page "/proposals/{ProposalId:guid}/{SectionSlug}"
+@page "/proposals/{ProposalId:guid}/{SectionSlug}/{SubId}"
+@using Section = Saga.Web.Components.Proposal.ProposalSection
 @implements IDisposable
 @inject ProposalService Proposals
 @inject ArtifactService Artifacts
@@ -27,54 +30,44 @@ else
 {
     <div class="workspace">
         <nav class="workspace-nav">
-            <button class="nav-item @(_section == Section.Material ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Material)">Materials</button>
+            <a class="nav-item @(_section == Section.Material ? "active" : null)"
+               href="@Href(Section.Material)">Materials</a>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Chat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Chat)">AI Chat @ChatBadge()</button>
-            <button class="nav-item @(_section == Section.BidTeamChat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Team Chat @TeamBadge()</button>
+            <a class="nav-item @(_section == Section.Chat ? "active" : null)"
+               href="@Href(Section.Chat)">AI Chat @ChatBadge()</a>
+            <a class="nav-item @(_section == Section.BidTeamChat ? "active" : null)"
+               href="@Href(Section.BidTeamChat)">Team Chat @TeamBadge()</a>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Generate ? "active" : null)"
-                    disabled="@IsDraft(Section.Generate)"
-                    @onclick="() => SelectSectionAsync(Section.Generate)">Generate</button>
-            <button class="nav-item @(_section == Section.ClientProfile ? "active" : null) @ArtifactPendingClass(ArtifactType.ClientProfile)"
-                    disabled="@IsDraft(Section.ClientProfile)"
-                    @onclick="() => SelectSectionAsync(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</button>
-            <button class="nav-item @(_section == Section.Summary ? "active" : null) @ArtifactPendingClass(ArtifactType.Summary)"
-                    disabled="@IsDraft(Section.Summary)"
-                    @onclick="() => SelectSectionAsync(Section.Summary)">Summary @ArtifactBadge(ArtifactType.Summary)</button>
-            <button class="nav-item @(_section == Section.Requirements ? "active" : null) @ArtifactPendingClass(ArtifactType.Requirements)"
-                    disabled="@IsDraft(Section.Requirements)"
-                    @onclick="() => SelectSectionAsync(Section.Requirements)">Requirements @ArtifactBadge(ArtifactType.Requirements)</button>
-            <button class="nav-item @(_section == Section.Scoping ? "active" : null) @ArtifactPendingClass(ArtifactType.Scoping)"
-                    disabled="@IsDraft(Section.Scoping)"
-                    @onclick="() => SelectSectionAsync(Section.Scoping)">Scoping @ArtifactBadge(ArtifactType.Scoping)</button>
-            <button class="nav-item @(_section == Section.SolutionProposal ? "active" : null) @ArtifactPendingClass(ArtifactType.SolutionProposal)"
-                    disabled="@IsDraft(Section.SolutionProposal)"
-                    @onclick="() => SelectSectionAsync(Section.SolutionProposal)">Solution @ArtifactBadge(ArtifactType.SolutionProposal)</button>
+            <a class="nav-item @(_section == Section.Generate ? "active" : null)"
+               href="@Href(Section.Generate)">Generate</a>
+            <a class="nav-item @(_section == Section.ClientProfile ? "active" : null) @ArtifactPendingClass(ArtifactType.ClientProfile)"
+               href="@Href(Section.ClientProfile)">Client profile @ArtifactBadge(ArtifactType.ClientProfile)</a>
+            <a class="nav-item @(_section == Section.Summary ? "active" : null) @ArtifactPendingClass(ArtifactType.Summary)"
+               href="@Href(Section.Summary)">Summary @ArtifactBadge(ArtifactType.Summary)</a>
+            <a class="nav-item @(_section == Section.Requirements ? "active" : null) @ArtifactPendingClass(ArtifactType.Requirements)"
+               href="@Href(Section.Requirements)">Requirements @ArtifactBadge(ArtifactType.Requirements)</a>
+            <a class="nav-item @(_section == Section.Scoping ? "active" : null) @ArtifactPendingClass(ArtifactType.Scoping)"
+               href="@Href(Section.Scoping)">Scoping @ArtifactBadge(ArtifactType.Scoping)</a>
+            <a class="nav-item @(_section == Section.SolutionProposal ? "active" : null) @ArtifactPendingClass(ArtifactType.SolutionProposal)"
+               href="@Href(Section.SolutionProposal)">Solution @ArtifactBadge(ArtifactType.SolutionProposal)</a>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Structure ? "active" : null) @ArtifactPendingClass(ArtifactType.Structure)"
-                    disabled="@IsDraft(Section.Structure)"
-                    @onclick="() => SelectSectionAsync(Section.Structure)">Structure @ArtifactBadge(ArtifactType.Structure)</button>
-            <button class="nav-item @(_section == Section.Content ? "active" : null) @ArtifactPendingClass(ArtifactType.Content)"
-                    disabled="@IsDraft(Section.Content)"
-                    @onclick="() => SelectSectionAsync(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</button>
+            <a class="nav-item @(_section == Section.Structure ? "active" : null) @ArtifactPendingClass(ArtifactType.Structure)"
+               href="@Href(Section.Structure)">Structure @ArtifactBadge(ArtifactType.Structure)</a>
+            <a class="nav-item @(_section == Section.Content ? "active" : null) @ArtifactPendingClass(ArtifactType.Content)"
+               href="@Href(Section.Content)">Content @ArtifactBadge(ArtifactType.Content)</a>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Export ? "active" : null)"
-                    disabled="@IsDraft(Section.Export)"
-                    @onclick="() => SelectSectionAsync(Section.Export)">Export</button>
+            <a class="nav-item @(_section == Section.Export ? "active" : null)"
+               href="@Href(Section.Export)">Export</a>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Review ? "active" : null)"
-                    disabled="@IsDraft(Section.Review)"
-                    @onclick="() => SelectSectionAsync(Section.Review)">Review</button>
+            <a class="nav-item @(_section == Section.Review ? "active" : null)"
+               href="@Href(Section.Review)">Review</a>
             <div class="nav-divider"></div>
-            <button class="nav-item @(_section == Section.Usage ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Usage)">Usage</button>
-            <button class="nav-item @(_section == Section.People ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.People)">Team</button>
-            <button class="nav-item @(_section == Section.Settings ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.Settings)">Settings</button>
+            <a class="nav-item @(_section == Section.Usage ? "active" : null)"
+               href="@Href(Section.Usage)">Usage</a>
+            <a class="nav-item @(_section == Section.People ? "active" : null)"
+               href="@Href(Section.People)">Team</a>
+            <a class="nav-item @(_section == Section.Settings ? "active" : null)"
+               href="@Href(Section.Settings)">Settings</a>
         </nav>
 
         <div class="workspace-main @(_section is Section.Chat or Section.BidTeamChat ? "flush" : null)">
@@ -129,14 +122,15 @@ else
                 }
                 else if (_section == Section.Chat)
                 {
-                    <ChatSection ProposalId="ProposalId" MyRole="_myRole"
+                    <ChatSection ProposalId="ProposalId" MyRole="_myRole" SubId="@SubId"
                                  TeammateCount="_proposal.Members.Count - 1"
                                  OnUnreadChanged="RefreshUnreadAsync"
-                                 OnAddMaterials="() => SelectSectionAsync(Section.Material)" />
+                                 OnAddMaterials="GoToMaterials" />
                 }
                 else if (_section == Section.BidTeamChat)
                 {
-                    <BidTeamChatSection ProposalId="ProposalId" OnUnreadChanged="RefreshTeamUnreadAsync" />
+                    <BidTeamChatSection ProposalId="ProposalId" SubId="@SubId"
+                                        OnUnreadChanged="RefreshTeamUnreadAsync" />
                 }
                 else if (_section == Section.Export)
                 {
@@ -242,7 +236,14 @@ else
 @code {
     [Parameter] public Guid ProposalId { get; set; }
 
-    private enum Section { Material, Generate, Summary, ClientProfile, Requirements, Scoping, SolutionProposal, Structure, Content, Review, Chat, BidTeamChat, Export, Usage, People, Settings }
+    /// <summary>Which tab the URL names. Null on the bare route, which becomes Materials.</summary>
+    [Parameter] public string? SectionSlug { get; set; }
+
+    /// <summary>
+    /// The conversation open inside the tab, passed through untouched to whichever section
+    /// understands it — a chat id, the "new" literal, or null for neither.
+    /// </summary>
+    [Parameter] public string? SubId { get; set; }
 
     /// <summary>
     /// Sections still being built. Their nav items are greyed out and inert until
@@ -258,6 +259,14 @@ else
     ];
 
     private static bool IsDraft(Section section) => !DraftSectionsEnabled && DraftSections.Contains(section);
+
+    /// <summary>
+    /// Where a nav item points, or null for a section that is not open yet: an anchor with no href
+    /// is inert and skipped by Tab on its own, which is what the greyed-out items need now that
+    /// they are links rather than disabled buttons.
+    /// </summary>
+    private string? Href(Section section)
+        => IsDraft(section) ? null : ProposalSectionUrl.For(ProposalId, section);
 
     private Proposal? _proposal;
     private List<Artifact> _artifacts = [];
@@ -285,7 +294,26 @@ else
 
     private bool DeleteConfirmed => string.Equals(_deleteConfirm.Trim(), "Yes", StringComparison.OrdinalIgnoreCase);
 
-    protected override async Task OnParametersSetAsync() => await LoadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        // Bare /proposals/{id}, a slug nobody recognises, or a section that is not open yet becomes
+        // Materials: the menu should never render with nothing highlighted, and the URL should say
+        // which tab you are on, so Back returns you to it. Replacing rather than pushing keeps the
+        // bounce out of the history stack. The return matters — BlazorDisableThrowNavigationException
+        // is on, so NavigateTo does not unwind during static rendering and the rest would still run.
+        if (ProposalSectionUrl.Parse(SectionSlug) is not { } section || IsDraft(section))
+        {
+            Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, Section.Material), replace: true);
+            return;
+        }
+        _section = section;
+        await LoadAsync();
+        if (_section == Section.Settings && _proposal is not null) SeedSettings();
+    }
+
+    /// <summary>The materials tab, for the link out of an empty picker in AI Chat.</summary>
+    private void GoToMaterials()
+        => Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, Section.Material));
 
     protected override void OnInitialized() => TeamChatNotifier.Posted += OnTeamPosted;
 
@@ -331,18 +359,17 @@ else
         Header.Set(_proposal.Title, _proposal.ClientName, _proposal.IsArchived ? "Archived" : null);
     }
 
-    private async Task SelectSectionAsync(Section section)
+    /// <summary>
+    /// Fills the settings form from the proposal. Called when the tab is arrived at rather than from
+    /// <see cref="LoadAsync"/>, which SaveSettingsAsync and every child's OnChanged also call — doing
+    /// it there would overwrite a name while it was being typed.
+    /// </summary>
+    private void SeedSettings()
     {
-        _section = section;
-        if (section == Section.Settings)
-        {
-            _settingsTitle = _proposal!.Title;
-            _settingsClientName = _proposal.ClientName;
-            _settingsError = null;
-            _settingsSaved = false;
-        }
-        // Refresh nav badges: edits inside the previous section may have changed the artifacts.
-        await LoadAsync();
+        _settingsTitle = _proposal!.Title;
+        _settingsClientName = _proposal.ClientName;
+        _settingsError = null;
+        _settingsSaved = false;
     }
 
     /// <summary>

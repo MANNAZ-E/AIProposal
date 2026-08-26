@@ -104,5 +104,6 @@
             _all = await Proposals.GetAllAsync(user.Id);
     }
 
-    private void Open(Guid id) => Nav.NavigateTo($"/proposals/{id}");
+    private void Open(Guid id)
+        => Nav.NavigateTo(ProposalSectionUrl.For(id, ProposalSection.Material));
 }

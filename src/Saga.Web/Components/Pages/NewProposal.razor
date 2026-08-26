@@ -51,7 +51,7 @@
             var user = await CurrentUser.GetAsync();
             // The format can still be switched later, in the Generate and Structure steps.
             var id = await Proposals.CreateAsync(user.Id, _model.Title, _model.ClientName, null, _model.OutputFormat);
-            Nav.NavigateTo($"/proposals/{id}");
+            Nav.NavigateTo(ProposalSectionUrl.For(id, ProposalSection.Material));
         }
         catch (Exception ex)
         {

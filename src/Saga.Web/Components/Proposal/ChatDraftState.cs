@@ -14,8 +14,8 @@ public enum ChatDraftKind
 /// Messages typed into a chat composer but not sent yet, held for the life of the circuit.
 /// </summary>
 /// <remarks>
-/// The workspace sections are page state, not routes, so <c>ChatSection</c> is destroyed and
-/// rebuilt every time someone leaves the AI Chat tab — including when they follow the
+/// The open chat is part of the URL, so <c>ChatSection</c> is destroyed and rebuilt by every
+/// navigation — switching chats included, not just leaving the AI Chat tab — including when they follow the
 /// "Go to materials" link out of an empty material picker, which is precisely when there is
 /// half a question on screen. Keeping the text here rather than in the component means it
 /// survives that round trip, and being scoped it dies with the browser session, which is all

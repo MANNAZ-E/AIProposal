@@ -3,11 +3,12 @@
 @inject TeamChatNotifier Notifier
 @inject ChatDraftState Drafts
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @implements IDisposable
 
 <div class="chat-layout">
     <TeamThreadList Threads="_threads" SelectedId="_activeThreadId" IsDraftActive="_isDraft"
-                    OnSelect="SelectAsync" OnNew="NewThread"
+                    OnSelect="Open" OnNew="OpenNew"
                     OnRename="RenameAsync" OnDelete="DeleteAsync" />
 
     <div class="chat-pane">
@@ -19,7 +20,7 @@
             <div class="chat-scroll">
                 <div class="empty-state">
                     <p class="text-muted">Select a chat, or start a new one.</p>
-                    <button class="btn btn-primary" @onclick="NewThread">Start a chat</button>
+                    <button class="btn btn-primary" @onclick="OpenNew">Start a chat</button>
                 </div>
             </div>
             <div></div>
@@ -100,6 +101,12 @@
     /// <summary>Lets the page refresh the unread badge on the Team Chat nav item.</summary>
     [Parameter] public EventCallback OnUnreadChanged { get; set; }
 
+    /// <summary>
+    /// Which thread the URL names: an id, the "new" literal for the unstarted one, or null on the
+    /// bare tab URL, which resolves to one of the two.
+    /// </summary>
+    [Parameter] public string? SubId { get; set; }
+
     /// <summary>At most this many names in the picker; past that it stops being a shortcut.</summary>
     private const int MaxSuggestions = 6;
 
@@ -154,9 +161,10 @@
     private Guid ActiveKey => _isDraft ? Guid.Empty : _activeThreadId ?? Guid.Empty;
 
     /// <summary>
-    /// The composer's text, kept in the circuit rather than in a field: leaving the Team Chat
-    /// tab destroys this component, and a message half typed should survive that, exactly as an
-    /// unsent question does in AI Chat.
+    /// The composer's text, kept in the circuit rather than in a field: every navigation destroys
+    /// this component — switching threads included, now that the open one is in the URL
+    /// — and a message half typed should survive that, exactly as an unsent question
+    /// does in AI Chat.
     /// </summary>
     private string Draft
     {
@@ -179,15 +187,51 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedProposalId == ProposalId) return;
-        _loadedProposalId = ProposalId;
-        _me = (await CurrentUser.GetAsync()).Id;
-        _members = await TeamChat.MembersAsync(ProposalId, _me);
-        await LoadThreadsAsync();
-        // The newest conversation, or a fresh draft on a proposal nobody has posted to yet.
-        if (_threads.Count > 0) await SelectAsync(_threads[0].Id);
-        else NewThread();
+        if (_loadedProposalId != ProposalId)
+        {
+            _loadedProposalId = ProposalId;
+            _me = (await CurrentUser.GetAsync()).Id;
+            _members = await TeamChat.MembersAsync(ProposalId, _me);
+            await LoadThreadsAsync();
+        }
+
+        // The bare tab URL names no conversation: the newest one, or a fresh draft on a proposal
+        // nobody has posted to yet. Replacing rather than pushing, so Back leaves the tab instead
+        // of bouncing straight back here.
+        if (SubId is null)
+        {
+            var target = _threads.Count > 0 ? _threads[0].Id.ToString() : ProposalSectionUrl.New;
+            Nav.NavigateTo(
+                ProposalSectionUrl.For(ProposalId, ProposalSection.BidTeamChat, target), replace: true);
+            return;
+        }
+
+        if (string.Equals(SubId, ProposalSectionUrl.New, StringComparison.OrdinalIgnoreCase))
+        {
+            // Only when nothing is open yet: the page re-renders this component on every load, and
+            // an unguarded reset would clear a message being typed — or a thread just started,
+            // whose id is already set here while the URL still says "new".
+            if (!_isDraft && _activeThreadId is null) NewThread();
+        }
+        else if (Guid.TryParse(SubId, out var id))
+        {
+            await SelectAsync(id);
+        }
+        else
+        {
+            Nav.NavigateTo(
+                ProposalSectionUrl.For(ProposalId, ProposalSection.BidTeamChat), replace: true);
+        }
     }
+
+    /// <summary>Opening a thread is somewhere you can come back from, so it pushes.</summary>
+    private void Open(Guid threadId)
+        => Nav.NavigateTo(
+            ProposalSectionUrl.For(ProposalId, ProposalSection.BidTeamChat, threadId.ToString()));
+
+    private void OpenNew()
+        => Nav.NavigateTo(
+            ProposalSectionUrl.For(ProposalId, ProposalSection.BidTeamChat, ProposalSectionUrl.New));
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -318,6 +362,7 @@
         // Where this text lives now: starting a thread re-keys the composer onto the new thread,
         // and the slot to empty afterwards is the one it was typed into.
         var draftKey = ActiveKey;
+        var started = (Guid?)null;
         _sending = true;
         _error = null;
         try
@@ -328,6 +373,7 @@
                 var newId = await TeamChat.StartThreadAsync(ProposalId, _me, text);
                 _isDraft = false;
                 _activeThreadId = newId;
+                started = newId;
             }
             else if (_activeThreadId is { } threadId)
             {
@@ -345,6 +391,15 @@
             // The notifier reaches this circuit too, but reloading here keeps the send
             // synchronous with the click rather than with an event we also raised.
             await ReloadAsync();
+            // A draft that has become a thread takes its id into the URL. Replacing, not pushing:
+            // it is one conversation, and Back should leave the tab rather than return to the
+            // empty draft it started as.
+            if (started is { } newThreadId)
+            {
+                Nav.NavigateTo(
+                    ProposalSectionUrl.For(ProposalId, ProposalSection.BidTeamChat, newThreadId.ToString()),
+                    replace: true);
+            }
         }
         catch (Exception ex)
         {
@@ -378,11 +433,12 @@
             await TeamChat.DeleteAsync(threadId, _me);
             await LoadThreadsAsync();
             if (_activeThreadId != threadId) return;
-            _activeThreadId = null;
-            _messages = [];
-            // Land on the neighbour, or on a fresh draft once the last thread is gone.
-            if (_threads.Count > 0) await SelectAsync(_threads[0].Id);
-            else NewThread();
+            // Land on the neighbour, or on a fresh draft once the last thread is gone. Replacing
+            // rather than pushing: the deleted thread is in the URL, and Back would otherwise walk
+            // straight back into it.
+            var target = _threads.Count > 0 ? _threads[0].Id.ToString() : ProposalSectionUrl.New;
+            Nav.NavigateTo(
+                ProposalSectionUrl.For(ProposalId, ProposalSection.BidTeamChat, target), replace: true);
         }
         catch (Exception ex)
         {

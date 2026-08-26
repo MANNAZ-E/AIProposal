@@ -639,8 +639,10 @@ a {
     background: var(--saga-bg);
 }
 
-/* Works on a button or an anchor: the admin nav uses real links so its sections can be
-   bookmarked, and the underline is the only thing an anchor still brings with it. */
+/* Always an anchor now: every menu in the app uses real links so its sections can be bookmarked
+   and reached with Back, and the underline is the only thing an anchor still brings with it. A
+   section that is not open yet is the anchor with no href, which is why the states below key off
+   the attribute rather than off :disabled. */
 .nav-item {
     display: block;
     width: 100%;
@@ -656,7 +658,7 @@ a {
     text-decoration: none;
 }
 
-.nav-item:hover:not(:disabled) {
+.nav-item[href]:hover {
     background: rgba(255, 255, 255, 0.12);
 }
 
@@ -666,7 +668,7 @@ a {
     font-weight: 600;
 }
 
-.nav-item:disabled {
+.nav-item:not([href]) {
     color: rgba(255, 255, 255, 0.5);
     cursor: default;
 }

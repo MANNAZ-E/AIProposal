@@ -20,9 +20,18 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Saga.Web is an Sdk.Web project, so its ASP.NET assemblies come from the shared framework.
+       Without this, referencing it from a plain Sdk project resolves them as NuGet packages
+       instead, dragging in a vulnerable System.Security.Cryptography.Xml the app never uses. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Saga.Core\Saga.Core.csproj" />
     <ProjectReference Include="..\..\src\Saga.Infrastructure\Saga.Infrastructure.csproj" />
+    <!-- For ProposalSectionUrl: the workspace's URL slugs are a contract worth a test. -->
+    <ProjectReference Include="..\..\src\Saga.Web\Saga.Web.csproj" />
   </ItemGroup>
 
 </Project>

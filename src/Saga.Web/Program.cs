@@ -63,6 +63,7 @@ builder.Services.AddScoped<AiUsageService>();
 builder.Services.AddScoped<ImpersonationAuditService>();
 builder.Services.AddScoped<Saga.Web.Components.Layout.AppHeaderState>();
 builder.Services.AddScoped<Saga.Web.Components.Proposal.ChatDraftState>();
+builder.Services.AddScoped<Saga.Web.Components.Proposal.ChatStreamState>();
 
 // Bing-grounded research is wired up with the Foundry project in the deployment milestone.
 builder.Services.AddSingleton<IWebResearchService, NullWebResearchService>();
@@ -151,8 +152,10 @@ if (!app.Configuration.GetValue<bool>("Auth:DevAutoSignIn"))
     app.MapControllers(); // MicrosoftIdentity/Account sign-in and sign-out endpoints.
 
 // File download endpoint: Blazor Server cannot stream files itself, so exports go over HTTP
-// using the same auth cookie/scheme and the same per-proposal role checks.
-app.MapGet("/proposals/{proposalId:guid}/export", async (
+// using the same auth cookie/scheme and the same per-proposal role checks. It sits outside
+// /proposals on purpose: every segment under a proposal belongs to the workspace's own routes, and
+// a literal one here would outbid {SectionSlug} and download a file where a tab should have opened.
+app.MapGet("/exports/{proposalId:guid}", async (
     Guid proposalId, string? format, HttpContext http,
     UserService users, ExportService export, CancellationToken ct) =>
 {
