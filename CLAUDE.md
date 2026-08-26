@@ -15,6 +15,18 @@ proposal documents. Solution: `Saga.slnx` (`src/Saga.Core`, `src/Saga.Infrastruc
   Cancel/Close/Back last, so the group reads action-then-dismiss inside the
   right-aligned `.modal-actions` row. Saga runs on Windows desktops; matching the
   platform matters more than the web's habit of putting Cancel first.
+- **The router is interactive; individual components must not declare a render mode.**
+  `App.razor` sets `@rendermode="InteractiveServer"` on `<Routes />` and `<HeadOutlet />`, so the
+  whole app is one interactive subtree and a `@rendermode` on a page or component inside it is a
+  runtime error. This is what keeps navigation from flickering: the workspace tabs are real links,
+  and a statically-rendered router would turn each click into an HTTP request that reloads the
+  document and flashes the page white on its way through "Loading…". With the router in the circuit
+  a tab click only changes the URL, and because every section resolves to the same `ProposalPage`
+  component the instance survives — only the content pane re-renders. `HeadOutlet` needs the mode
+  too, or `<PageTitle>` freezes at whatever the first render set. Links that must leave Blazor
+  need `target="_blank"` (the export downloads) or `forceLoad: true` (sign-out), or the client-side
+  router intercepts them and looks for a route that isn't there.
+
 - **Dialogs answer the keyboard.** Opening one puts the caret in its first field
   (an `_focusX` flag set on open, honoured in `OnAfterRenderAsync` — the `autofocus`
   attribute does nothing for markup patched into an already-parsed page). Escape backs

@@ -119,6 +119,13 @@
     private Guid? _activeThreadId;
 
     /// <summary>
+    /// The SubId this component last acted on, and the only reliable sign that the URL has moved:
+    /// the router keeps this component alive across a navigation now, so OnParametersSetAsync sees
+    /// a plain re-render and a jump to another conversation exactly alike.
+    /// </summary>
+    private string? _shownSubId;
+
+    /// <summary>
     /// The one reusable unstarted thread. Nothing is written until the first message lands, so
     /// abandoning it leaves nothing behind and pressing New again reuses this slot.
     /// </summary>
@@ -190,6 +197,7 @@
         if (_loadedProposalId != ProposalId)
         {
             _loadedProposalId = ProposalId;
+            _shownSubId = null;
             _me = (await CurrentUser.GetAsync()).Id;
             _members = await TeamChat.MembersAsync(ProposalId, _me);
             await LoadThreadsAsync();
@@ -206,12 +214,17 @@
             return;
         }
 
+        var moved = !string.Equals(_shownSubId, SubId, StringComparison.OrdinalIgnoreCase);
+        _shownSubId = SubId;
+
         if (string.Equals(SubId, ProposalSectionUrl.New, StringComparison.OrdinalIgnoreCase))
         {
-            // Only when nothing is open yet: the page re-renders this component on every load, and
-            // an unguarded reset would clear a message being typed — or a thread just started,
-            // whose id is already set here while the URL still says "new".
-            if (!_isDraft && _activeThreadId is null) NewThread();
+            // Only when the URL actually moved here. A reset on a plain re-render would clear a
+            // message being typed — or a thread just started, whose id is already set here while
+            // the URL still says "new". Reading _isDraft and _activeThreadId to tell those apart
+            // is what stopped New chat working: with the component surviving the navigation, the
+            // state this looked at is exactly the state New chat was asking to replace.
+            if (moved) NewThread();
         }
         else if (Guid.TryParse(SubId, out var id))
         {

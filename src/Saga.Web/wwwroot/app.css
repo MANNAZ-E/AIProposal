@@ -10,7 +10,7 @@
     --saga-bg: #f6f7f8;
     /* The field either side of the app once the window is wider than it. Darker than the
        bar and the menu on purpose, so the menu keeps a visible edge against it. */
-    --saga-field: #333333;
+    --saga-field: #acb0b6;
     /* Workspace nav width, also used to line the app bar's proposal name up with the content. */
     --saga-nav-width: 250px;
     --saga-chat-list-width: 240px;

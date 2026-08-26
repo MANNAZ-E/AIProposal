@@ -386,11 +386,14 @@ else
     private bool _busy;
 
     /// <summary>The list opens itself once there is material to show; a click then wins over that.
-    /// Document types are settings, not daily work, so they stay closed until asked for.</summary>
+    /// A reader or oversight-only super admin has no upload control to tell them the list is just
+    /// empty, so for them it opens regardless - collapsed and empty would look like a bug, not a
+    /// fact about the proposal. Document types are settings, not daily work, so they stay closed
+    /// until asked for.</summary>
     private bool? _materialsOpen;
     private bool _typesOpen;
 
-    private bool MaterialsOpen => _materialsOpen ?? _documents is { Count: > 0 };
+    private bool MaterialsOpen => _materialsOpen ?? (!CanEdit || _documents is { Count: > 0 });
     private string? _error;
 
     /// <summary>Documents uploaded since this page was entered, so they can be flagged "New".</summary>

@@ -9,11 +9,16 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Saga.Web.styles.css"]" />
     <ImportMap />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
-    <Routes />
+    @* The router is interactive so a tab click stays inside the circuit: the URL changes,
+       the same page component is handed new parameters, and only the content swaps. A
+       statically-rendered router turns every link into a real request, which reloads the page
+       and flashes it white. Everything routable was interactive already; declaring it here
+       instead of per page also covers the layout and the head. *@
+    <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["js/mention-composer.js"]"></script>

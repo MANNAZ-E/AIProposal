@@ -239,6 +239,13 @@
     private Guid? _activeChatId;
 
     /// <summary>
+    /// The SubId this component last acted on, and the only reliable sign that the URL has moved:
+    /// the router keeps this component alive across a navigation now, so OnParametersSetAsync sees
+    /// a plain re-render and a jump to another conversation exactly alike.
+    /// </summary>
+    private string? _shownSubId;
+
+    /// <summary>
     /// The one reusable unsaved chat. It has no database row until the first question lands, so
     /// abandoning it leaves nothing behind and pressing New again just reuses this slot.
     /// </summary>
@@ -349,6 +356,7 @@
         if (_loadedProposalId != ProposalId)
         {
             _loadedProposalId = ProposalId;
+            _shownSubId = null;
             var user = await CurrentUser.GetAsync();
             (_documents, _artifacts) = await Chat.GetMaterialAsync(ProposalId, user.Id);
             await LoadChatsAsync();
@@ -364,13 +372,18 @@
             return;
         }
 
+        var moved = !string.Equals(_shownSubId, SubId, StringComparison.OrdinalIgnoreCase);
+        _shownSubId = SubId;
+
         if (string.Equals(SubId, ProposalSectionUrl.New, StringComparison.OrdinalIgnoreCase))
         {
-            // Only when nothing is open yet. The page re-renders this component on every load, and
-            // an unguarded reset would wipe the material and privacy choices out from under whoever
-            // was making them — or the first answer out of a chat being born, whose id is
-            // already set here while the URL still says "new".
-            if (!_isDraft && _activeChatId is null) NewChat();
+            // Only when the URL actually moved here. A reset on a plain re-render would wipe the
+            // material and privacy choices out from under whoever was making them — or the first
+            // answer out of a chat being born, whose id is already set here while the URL still
+            // says "new". Reading _isDraft and _activeChatId to tell those apart is what stopped
+            // New chat working: with the component surviving the navigation, the state this looked
+            // at is exactly the state New chat was asking to replace.
+            if (moved) NewChat();
         }
         else if (Guid.TryParse(SubId, out var id))
         {
@@ -594,6 +607,13 @@
         if (question.Length == 0 || ActiveIsBusy) return;
 
         _error = null;
+        // Which composer this text was typed into, before the ask moves the screen onto the chat it
+        // creates. Clearing Question here only empties it for the moment: Enter sends *and* inserts
+        // its newline, so the browser's input event lands during the awaits below and writes the
+        // whole question back — into the draft's slot, which is the next New chat's composer. The
+        // emptying that sticks is the one in the finally, on the key it was actually typed into.
+        // Team Chat has always cleared it that way round, which is why it never showed this.
+        var draftKey = ActiveKey;
         Question = "";
         var user = await CurrentUser.GetAsync();
         var askingDraft = _isDraft;
@@ -658,6 +678,10 @@
         {
             _error = ex.Message;
             Streams.Finish(ProposalId, streamKey);
+        }
+        finally
+        {
+            Drafts.Set(ProposalId, ChatDraftKind.AiChat, draftKey, "");
         }
     }
 
