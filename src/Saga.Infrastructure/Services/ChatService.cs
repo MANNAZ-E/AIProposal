@@ -102,11 +102,14 @@ public class ChatService(
     /// question are inserted together, so a chat that exists always has a question in it.
     /// <paramref name="onChatCreated"/> hands the new id back before the answer starts arriving,
     /// which is what lets the list pane show the row (and its spinner) while it streams.
+    /// <paramref name="visibility"/> only applies to a new chat; an existing one keeps whatever
+    /// its owner set through <see cref="SetVisibilityAsync"/>.
     /// </summary>
     public async Task<(Guid ChatId, ChatMessage? Answer)> AskAsync(
         Guid proposalId, Guid? chatId, Guid userId, string question,
         WorkingContextKind kind = WorkingContextKind.FullProject,
         MaterialSelection? selection = null,
+        ChatVisibility visibility = ChatVisibility.Private,
         Func<Guid, Task>? onChatCreated = null,
         Func<string, Task>? onDelta = null,
         CancellationToken ct = default)
@@ -136,10 +139,14 @@ public class ChatService(
                 // Starting a chat spends tokens against the bid, so it takes a seat on the team
                 // rather than a super admin's read-only oversight.
                 await ProposalService.EnsureMemberAsync(db, proposalId, userId, ct);
+                // Starting one already shared draws the same line SetVisibilityAsync does: a
+                // Reader keeps their own chats, but does not put one in front of the team.
+                if (visibility == ChatVisibility.Shared)
+                    await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Editor, ct);
                 resolvedChatId = Guid.NewGuid();
                 title = ChatTitle.FromQuestion(question);
                 chatKind = kind;
-                isShared = false;
+                isShared = visibility == ChatVisibility.Shared;
                 snapshot = "";
             }
             else
@@ -192,7 +199,7 @@ public class ChatService(
                     ProposalId = proposalId,
                     OwnerId = userId,
                     Title = title,
-                    Visibility = ChatVisibility.Private,
+                    Visibility = visibility,
                     WorkingContext = chatKind,
                     MaterialSelectionJson = selection!.ToJson(),
                     ContextSnapshot = snapshot,

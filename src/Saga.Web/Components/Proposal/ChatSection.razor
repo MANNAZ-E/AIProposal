@@ -31,53 +31,60 @@
         else
         {
             <div class="chat-header">
-                <div class="chat-header-title">@(_isDraft ? "New chat" : ActiveChat?.Title)</div>
-                <div class="chat-header-meta">
+                @* Title left, the chat's two facts — who can see it, what it may read — right on
+                   the same line. Both are controls, and both belong to the thread rather than to
+                   any one message, so the header row is where they read as its properties. *@
+                <div class="chat-header-row">
+                    <div class="chat-header-title">@(_isDraft ? "New chat" : ActiveChat?.Title)</div>
                     @if (!_isDraft)
                     {
-                        <span class="chat-visibility">
-                            @if (ActiveChat?.IsMine == true)
-                            {
-                                <button class="link-button" @onclick="() => _showVisibility = !_showVisibility">
-                                    @if (ActiveChat.Visibility == ChatVisibility.Shared)
-                                    {
-                                        <PeopleIcon /> <text>Shared with team</text>
-                                    }
-                                    else
-                                    {
-                                        <LockIcon Class="lock-icon-muted" /> <text>Private</text>
-                                    }
-                                    <text> ▾</text>
-                                </button>
-                                @if (_showVisibility)
+                        <div class="chat-header-meta">
+                            <span class="chat-visibility">
+                                @if (ActiveChat?.IsMine == true)
                                 {
-                                    <div class="menu-backdrop" @onclick="() => _showVisibility = false"></div>
-                                    <div class="menu-panel">
-                                        <button @onclick="() => SetVisibilityAsync(ChatVisibility.Private)">
-                                            <LockIcon Class="lock-icon-muted" /> Private
-                                        </button>
-                                        <button @onclick="() => SetVisibilityAsync(ChatVisibility.Shared)">
-                                            <PeopleIcon /> Shared with team
-                                        </button>
-                                    </div>
+                                    <button class="link-button" @onclick="() => _showVisibility = !_showVisibility">
+                                        @if (ActiveChat.Visibility == ChatVisibility.Shared)
+                                        {
+                                            <PeopleIcon /> <text>Shared with team</text>
+                                        }
+                                        else
+                                        {
+                                            <LockIcon Class="lock-icon-muted" /> <text>Private</text>
+                                        }
+                                        <text> ▾</text>
+                                    </button>
+                                    @if (_showVisibility)
+                                    {
+                                        <div class="menu-backdrop" @onclick="() => _showVisibility = false"></div>
+                                        <div class="menu-panel">
+                                            <button @onclick="() => SetVisibilityAsync(ChatVisibility.Private)">
+                                                <LockIcon Class="lock-icon-muted" /> Private
+                                            </button>
+                                            <button @onclick="() => SetVisibilityAsync(ChatVisibility.Shared)">
+                                                <PeopleIcon /> Shared with team
+                                            </button>
+                                        </div>
+                                    }
                                 }
-                            }
-                            else
-                            {
-                                <PeopleIcon /> <text>Shared by @ActiveChat?.OwnerName</text>
-                            }
-                        </span>
-                        <text> · </text>
-                        <button class="link-button" @onclick="() => _showMaterial = !_showMaterial">
-                            @ChatMaterial.ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)
-                            · @SelectedDocumentCount of @_documents.Count files @(_showMaterial ? "▴" : "▾")
-                        </button>
-                        @if (MaterialHasChanged)
-                        {
-                            <span class="text-muted"> · Material has changed since this chat started.</span>
-                        }
+                                else
+                                {
+                                    <PeopleIcon /> <text>Shared by @ActiveChat?.OwnerName</text>
+                                }
+                            </span>
+                            <text>·</text>
+                            <button class="link-button" @onclick="() => _showMaterial = !_showMaterial">
+                                @ChatMaterial.ContextLabel(ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject)
+                                · @SelectedDocumentCount of @_documents.Count files @(_showMaterial ? "▴" : "▾")
+                            </button>
+                        </div>
                     }
                 </div>
+                @* Stays under the row rather than joining it: a notice is not a control, and it is
+                   long enough to squeeze the title off a line it shared. *@
+                @if (!_isDraft && MaterialHasChanged)
+                {
+                    <div class="chat-header-note">Material has changed since this chat started.</div>
+                }
             </div>
 
             <div class="chat-scroll">
@@ -88,6 +95,23 @@
                                       SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
                                       Budget="WorkingContext.Budget" OnAddMaterials="OnAddMaterials"
                                       Preset="_draftKind" PresetChanged="OnDraftMaterialChanged" />
+                        @* Set before the first question rather than after it: a chat meant for the
+                           team otherwise spends its first exchange private and is shared only once
+                           the answer is already on screen. The owner can still change it later. *@
+                        <div class="chat-privacy">
+                            <div class="section-title">Privacy</div>
+                            <div class="chat-material-presets">
+                                <button type="button" class="chat-preset @(_draftVisibility == ChatVisibility.Private ? "active" : "")"
+                                        @onclick="() => _draftVisibility = ChatVisibility.Private">
+                                    <LockIcon Class="lock-icon-muted" /> Private
+                                </button>
+                                <button type="button" class="chat-preset @(_draftVisibility == ChatVisibility.Shared ? "active" : "")"
+                                        disabled="@(MyRole < ProposalRole.Editor)"
+                                        @onclick="() => _draftVisibility = ChatVisibility.Shared">
+                                    <PeopleIcon /> Shared with team
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 }
                 else if (_showMaterial)
@@ -213,6 +237,13 @@
     private bool _isDraft;
     private WorkingContextKind _draftKind = WorkingContextKind.FullProject;
 
+    /// <summary>
+    /// Who the draft will be visible to once its first question starts it. Private unless said
+    /// otherwise, and reset with every new draft: sharing is a decision about one chat, not a
+    /// setting that trails the next question into the open.
+    /// </summary>
+    private ChatVisibility _draftVisibility = ChatVisibility.Private;
+
     /// <summary>Everything the proposal has, for the picker and for naming what a chat froze.</summary>
     private List<Document> _documents = [];
     private List<Artifact> _artifacts = [];
@@ -332,6 +363,7 @@
         _error = null;
         _isDraft = true;
         _showMaterial = false;
+        _draftVisibility = ChatVisibility.Private;
         _activeChatId = null;
         _activeSession = null;
         _messages = [];
@@ -491,7 +523,7 @@
                 : null;
 
             var (chatId, _) = await Chat.AskAsync(ProposalId, askingDraft ? null : streamKey, user.Id,
-                question, _draftKind, selection,
+                question, _draftKind, selection, _draftVisibility,
                 onChatCreated: async id =>
                 {
                     // Re-key the buffer onto the real chat before the answer starts arriving, and

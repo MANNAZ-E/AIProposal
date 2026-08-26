@@ -1,5 +1,8 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+rem Give this controller a distinct Windows Terminal background (#5A616D).
+powershell -NoLogo -NoProfile -Command "$e=[char]27; $b=[char]7; [Console]::Write($e + ']11;rgb:5A/61/6D' + $b)"
+cls
 
 rem ============================================================
 rem Saga Web Controller - isolated test copy

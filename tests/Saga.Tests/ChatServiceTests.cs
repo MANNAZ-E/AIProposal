@@ -369,6 +369,41 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     }
 
     [Fact]
+    public async Task A_chat_can_be_shared_from_its_first_question()
+    {
+        var (elv, sda, proposalId) = await SetupAsync();
+        await _proposals.ShareAsync(proposalId, elv, "sda@mannaz.com", ProposalRole.Editor);
+        var chat = NewChat(new FakeAiService());
+
+        // The picker on a new chat says who it is for before there is a chat to change.
+        var (chatId, _) = await chat.AskAsync(proposalId, null, elv, "For the team",
+            visibility: ChatVisibility.Shared);
+
+        var shared = Assert.Single(await chat.ListAsync(proposalId, sda));
+        Assert.Equal(chatId, shared.Id);
+        Assert.Equal(ChatVisibility.Shared, shared.Visibility);
+        // Nobody had to open it first: the question itself is what sda can see.
+        Assert.Equal("For the team", (await chat.GetMessagesAsync(chatId, sda))[0].Text);
+    }
+
+    [Fact]
+    public async Task A_reader_cannot_start_a_chat_already_shared()
+    {
+        var (elv, sda, proposalId) = await SetupAsync();
+        await _proposals.ShareAsync(proposalId, elv, "sda@mannaz.com", ProposalRole.Reader);
+        var chat = NewChat(new FakeAiService());
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => chat.AskAsync(proposalId, null, sda, "May I broadcast?",
+                visibility: ChatVisibility.Shared));
+
+        // Their own private chat is still theirs to start, and nothing was left behind.
+        var (chatId, _) = await chat.AskAsync(proposalId, null, sda, "May I ask?");
+        Assert.Equal(ChatVisibility.Private, Assert.Single(await chat.ListAsync(proposalId, sda)).Visibility);
+        Assert.NotEqual(Guid.Empty, chatId);
+    }
+
+    [Fact]
     public async Task Sharing_makes_a_chat_visible_and_unsharing_hides_it_again()
     {
         var (elv, sda, proposalId) = await SetupAsync();

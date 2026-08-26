@@ -1414,12 +1414,36 @@ button.type-list-name {
     border-bottom: 1px solid var(--saga-border);
 }
 
+/* Title and the thread's two facts share one line, so the header stays one line tall. Only
+   the title may shrink: the meta is a pair of controls whose labels have to stay readable,
+   while a long chat title has an ellipsis to fall back on. */
+.chat-header-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
 .chat-header-title {
     font-size: 1.05rem;
     font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .chat-header-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    flex: none;
+    font-size: 0.8rem;
+    color: var(--saga-muted);
+    white-space: nowrap;
+}
+
+.chat-header-note {
     margin-top: 0.15rem;
     font-size: 0.8rem;
     color: var(--saga-muted);
@@ -1785,6 +1809,30 @@ button.type-list-name {
 
 .chat-material-locked .form-hint {
     margin: 0.15rem 0 0;
+}
+
+/* Under the material chooser in the same card, on the rhythm of its own heading rather than
+   the 2rem the section title carries between page sections. */
+.chat-privacy .section-title {
+    margin-top: 1rem;
+}
+
+.chat-privacy .chat-material-presets {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.chat-privacy .chat-preset {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* The padlock's grey and the people icon's blue are both invisible on the filled button. */
+.chat-privacy .chat-preset.active .lock-icon,
+.chat-privacy .chat-preset.active .people-icon {
+    color: inherit;
 }
 
 .chat-token-meter {

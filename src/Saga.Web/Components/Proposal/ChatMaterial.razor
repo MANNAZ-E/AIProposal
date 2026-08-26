@@ -33,19 +33,20 @@
         {
             @* Buttons rather than a radio group: a preset is a shortcut that fills the
                checkboxes below, and the consultant is expected to edit it afterwards — which
-               a radio, standing for a choice that holds, would misdescribe. Narrowest first,
-               so the row widens left to right from "None". Editing a checkbox afterwards only
-               unlights the button it moved away from; naming the result adds nothing the boxes
-               do not already show. *@
+               a radio, standing for a choice that holds, would misdescribe. Narrowest preset
+               first, and "None" last: it is the way out of the row rather than the narrowest
+               step in it, so it sits past the end instead of in front of the useful ones.
+               Editing a checkbox afterwards only unlights the button it moved away from;
+               naming the result adds nothing the boxes do not already show. *@
             <div class="chat-material-presets">
-                <button type="button" class="chat-preset @(NothingSelected ? "active" : "")"
-                        @onclick="ClearSelection">None</button>
                 @foreach (var preset in Presets)
                 {
                     <button type="button" class="chat-preset @(IsPresetActive(preset) ? "active" : "")"
                             disabled="@IsPresetDisabled(preset)"
                             @onclick="() => ApplyPreset(preset)">@ContextLabel(preset)</button>
                 }
+                <button type="button" class="chat-preset @(NothingSelected ? "active" : "")"
+                        @onclick="ClearSelection">None</button>
             </div>
         }
     }
