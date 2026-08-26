@@ -1,0 +1,55 @@
+@using Saga.Core.Abstractions
+
+@* Token spend by service and model. No Pages column: an LLM row's meter counters are null by
+   design, so the cell could only ever be a dash. Shared by the proposal tab and the admin page. *@
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Service</th>
+            <th>Model</th>
+            <th style="text-align: right;">Calls</th>
+            <th style="text-align: right;">Tokens in</th>
+            <th style="text-align: right;">Cached in</th>
+            <th style="text-align: right;">Tokens out</th>
+            <th style="text-align: right;">Est. cost (@Money.Currency(Rate))</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var group in Rows.GroupBy(b => b.Service))
+        {
+            var groupTotal = AiUsageService.Sum(group.Select(g => g.Totals));
+            <tr class="table-group">
+                <td colspan="2"><strong>@UsageLabels.ServiceName(group.Key)</strong></td>
+                <td style="text-align: right;">@groupTotal.Calls.ToString("N0")</td>
+                <td style="text-align: right;">@groupTotal.InputTokens.ToString("N0")</td>
+                <td style="text-align: right;">@Tokens.Cached(groupTotal.CachedInputTokens, groupTotal.InputTokens)</td>
+                <td style="text-align: right;">@groupTotal.OutputTokens.ToString("N0")</td>
+                <td style="text-align: right;"><strong>@Cost(groupTotal.CostUsd)</strong></td>
+            </tr>
+            @foreach (var row in group)
+            {
+                <tr>
+                    <td></td>
+                    @* A call that failed before the stream named its deployment stored a blank
+                       model; the row still cost time and belongs in the table. *@
+                    <td>@(string.IsNullOrEmpty(row.Model) ? "—" : row.Model)</td>
+                    <td style="text-align: right;">@row.Totals.Calls.ToString("N0")</td>
+                    <td style="text-align: right;">@row.Totals.InputTokens.ToString("N0")</td>
+                    <td style="text-align: right;">@Tokens.Cached(row.Totals.CachedInputTokens, row.Totals.InputTokens)</td>
+                    <td style="text-align: right;">@row.Totals.OutputTokens.ToString("N0")</td>
+                    <td style="text-align: right;">@Cost(row.Totals.CostUsd)</td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public List<AiUsageBreakdownRow> Rows { get; set; } = [];
+
+    /// <summary>DKK per USD, or 0 to show USD unconverted.</summary>
+    [Parameter] public decimal Rate { get; set; }
+
+    private string Cost(decimal usd) => Money.Display(usd, Rate);
+}

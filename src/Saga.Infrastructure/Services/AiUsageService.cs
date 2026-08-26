@@ -20,6 +20,14 @@ public record AiUsageTotals(int Calls, long InputTokens, long OutputTokens, long
 /// <summary>One line of the service → model breakdown.</summary>
 public record AiUsageBreakdownRow(AiServiceKind Service, string Model, AiUsageTotals Totals);
 
+/// <summary>
+/// One meter's slice of the extraction bill. The cost is the frozen per-row figures summed, never
+/// re-derived from <paramref name="Pages"/> at today's rates — that is what keeps the two
+/// per-service sections adding up to the same total the summary card shows.
+/// </summary>
+public record AiMeterRow(string Meter, int Calls, long Pages, long ContextualizationTokens,
+    decimal CostUsd);
+
 /// <summary>One call in the log. Payloads are deliberately absent — they are fetched per call.</summary>
 public record AiUsageCall(Guid Id, Guid OperationId, DateTimeOffset StartedAt, AiServiceKind Service,
     string Model, AiOperation Operation, string? Label, string? UserName, int InputTokens,
@@ -29,30 +37,16 @@ public record AiUsageCall(Guid Id, Guid OperationId, DateTimeOffset StartedAt, A
     /// <summary>Null on an LLM call, and where the analyzer reported no quantities at all.</summary>
     public int? Pages => MinimalPages + BasicPages + StandardPages;
 
-    /// <summary>
-    /// Which meter the call was charged on — the thing that decides the rate, and the only reason
-    /// the same analyzer can cost 500× more for one upload than another. Null when nothing was
-    /// billed or nothing was reported; "Mixed" if one call somehow spanned two meters.
-    /// </summary>
-    public string? Meter
-    {
-        get
-        {
-            if (Pages is null or 0) return null;
-            var charged = new List<string>(3);
-            if (MinimalPages > 0) charged.Add("Minimal");
-            if (BasicPages > 0) charged.Add("Basic");
-            if (StandardPages > 0) charged.Add("Standard");
-            return charged.Count == 1 ? charged[0] : "Mixed";
-        }
-    }
+    /// <summary>The meter this call was charged on. See <see cref="AiUsageService.MeterLabel"/>.</summary>
+    public string? Meter => AiUsageService.MeterLabel(MinimalPages, BasicPages, StandardPages);
 }
 
 /// <summary>A call plus the stored request and response, for backtracking what happened.</summary>
 public record AiUsageCallDetail(AiUsageCall Call, string? InstructionText, string? RequestText,
     string? ResponseText);
 
-public record ProposalUsage(AiUsageTotals Totals, List<AiUsageBreakdownRow> Breakdown);
+public record ProposalUsage(AiUsageTotals Totals, List<AiUsageBreakdownRow> Breakdown,
+    List<AiMeterRow> Meters);
 
 /// <summary>
 /// Reads the AI spend log: per-proposal roll-ups for the workspace Usage tab, the individual
@@ -60,10 +54,41 @@ public record ProposalUsage(AiUsageTotals Totals, List<AiUsageBreakdownRow> Brea
 /// </summary>
 public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingService pricing)
 {
+    /// <summary>The call was charged, but the analyzer never told us on which meter.</summary>
+    private const string NotReported = "Not reported";
+
+    /// <summary>Cheapest meter first, then the two rows that stand in for an absent number.</summary>
+    private static readonly string[] MeterRowOrder =
+        ["Minimal", "Basic", "Standard", "Mixed", "None", NotReported];
+
     /// <summary>DKK per USD for display; 0 means show USD unconverted.</summary>
     public decimal UsdToDkk => pricing.UsdToDkk;
 
-    /// <summary>Totals plus the service → model breakdown for one proposal.</summary>
+    /// <summary>
+    /// Which meter a Content Understanding call was charged on — the thing that decides the rate,
+    /// and the only reason the same analyzer can cost 500× more for one upload than another. Null
+    /// when the analyzer reported nothing at all; "None" when it reported zero of every meter,
+    /// which is a different fact; "Mixed" if one call somehow spanned two. Shared with the
+    /// per-meter roll-up, because deriving this rule twice is how a table and the log beneath it
+    /// drift apart.
+    /// </summary>
+    public static string? MeterLabel(int? minimal, int? basic, int? standard)
+    {
+        if (minimal is null && basic is null && standard is null) return null;
+
+        var charged = new List<string>(3);
+        if (minimal > 0) charged.Add("Minimal");
+        if (basic > 0) charged.Add("Basic");
+        if (standard > 0) charged.Add("Standard");
+        return charged.Count switch
+        {
+            0 => "None",
+            1 => charged[0],
+            _ => "Mixed",
+        };
+    }
+
+    /// <summary>Totals, the service → model breakdown, and the extraction meters for one proposal.</summary>
     public async Task<ProposalUsage> GetProposalUsageAsync(Guid proposalId, Guid userId,
         CancellationToken ct = default)
     {
@@ -71,7 +96,8 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
         await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         var breakdown = await BreakdownAsync(db, r => r.ProposalId == proposalId, ct);
-        return new ProposalUsage(Sum(breakdown.Select(b => b.Totals)), breakdown);
+        var meters = await MetersAsync(db, r => r.ProposalId == proposalId, ct);
+        return new ProposalUsage(Sum(breakdown.Select(b => b.Totals)), breakdown, meters);
     }
 
     /// <summary>The proposal's calls, newest first. Never projects the payload columns.</summary>
@@ -131,6 +157,13 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
         return await BreakdownAsync(db, _ => true, ct);
     }
 
+    /// <summary>Extraction spend by meter across every proposal, for the admin page.</summary>
+    public async Task<List<AiMeterRow>> GetGlobalMetersAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await MetersAsync(db, _ => true, ct);
+    }
+
     private static async Task<List<AiUsageBreakdownRow>> BreakdownAsync(SagaDbContext db,
         System.Linq.Expressions.Expression<Func<AiUsageRecord, bool>> filter, CancellationToken ct)
     {
@@ -160,6 +193,44 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
             .Select(r => new AiUsageBreakdownRow(r.Service, r.Model,
                 new AiUsageTotals(r.Calls, r.InputTokens, r.OutputTokens, r.CachedInputTokens,
                     r.Pages, r.CostUsd)))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Extraction spend split by the meter it was charged on — the breakdown that explains the
+    /// bill, since the meter and not the analyzer sets the rate. Grouped in memory rather than in
+    /// SQL because the meter is a derived label, and the alternative is to restate
+    /// <see cref="MeterLabel"/> as a group key. The projection is five columns wide and Content
+    /// Understanding writes one row per upload plus one per embedded figure, so there is little
+    /// to carry.
+    /// </summary>
+    private static async Task<List<AiMeterRow>> MetersAsync(SagaDbContext db,
+        System.Linq.Expressions.Expression<Func<AiUsageRecord, bool>> filter, CancellationToken ct)
+    {
+        var rows = await db.AiUsage
+            .Where(filter)
+            .Where(r => r.Service == AiServiceKind.ContentUnderstanding)
+            .Select(r => new
+            {
+                r.MinimalPages,
+                r.BasicPages,
+                r.StandardPages,
+                r.ContextualizationTokens,
+                r.EstimatedCostUsd,
+            })
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(r => MeterLabel(r.MinimalPages, r.BasicPages, r.StandardPages) ?? NotReported)
+            .Select(g => new AiMeterRow(
+                g.Key,
+                g.Count(),
+                g.Sum(r => (long)((r.MinimalPages ?? 0) + (r.BasicPages ?? 0)
+                    + (r.StandardPages ?? 0))),
+                g.Sum(r => (long)(r.ContextualizationTokens ?? 0)),
+                g.Sum(r => r.EstimatedCostUsd)))
+            .OrderBy(r => Array.IndexOf(MeterRowOrder, r.Meter))
+            .ThenBy(r => r.Meter)
             .ToList();
     }
 

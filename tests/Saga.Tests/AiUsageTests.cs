@@ -274,6 +274,85 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
             () => TestServices.Usage(db).GetProposalUsageAsync(proposalId, sda));
     }
 
+    /// <summary>
+    /// The Usage tab bills extraction by meter, because the meter and not the analyzer sets the
+    /// rate. The roll-up must therefore keep the meters apart, and its costs must be the frozen
+    /// per-row figures summed — re-pricing pages at today's rates would stop the two per-service
+    /// sections adding up to the total the summary card shows.
+    /// </summary>
+    [Fact]
+    public async Task Extraction_rolls_up_by_meter()
+    {
+        var (elv, proposalId) = await SetupAsync(material: null);
+        var storage = new TempDirStorage(_storageDir);
+
+        var office = new DocumentService(db, storage,
+            TestServices.Extractor(db, new MinimalExtractorStub()));
+        using var docx = new MemoryStream(Encoding.UTF8.GetBytes("tender content"));
+        await office.UploadAsync(proposalId, elv, "tender.docx", docx);
+
+        var scanned = new DocumentService(db, storage,
+            TestServices.Extractor(db, new FakeDocumentExtractorStub()));
+        using var pdf = new MemoryStream(Encoding.UTF8.GetBytes("tender content"));
+        await scanned.UploadAsync(proposalId, elv, "tender.pdf", pdf);
+
+        var usage = await TestServices.Usage(db).GetProposalUsageAsync(proposalId, elv);
+
+        // Cheapest meter first, so the row that explains the bill is not buried.
+        Assert.Equal(["Minimal", "Standard"], usage.Meters.Select(m => m.Meter).ToArray());
+
+        var minimal = usage.Meters.Single(m => m.Meter == "Minimal");
+        Assert.Equal(1, minimal.Calls);
+        Assert.Equal(1, minimal.Pages);
+        // 1 minimal page at 0.01 USD / 1000 pages — the same analyzer, 500x cheaper.
+        Assert.Equal(0.00001m, minimal.CostUsd);
+
+        var standard = usage.Meters.Single(m => m.Meter == "Standard");
+        Assert.Equal(1, standard.Calls);
+        Assert.Equal(4, standard.Pages);
+        Assert.Equal(0.02m, standard.CostUsd);
+
+        var extraction = usage.Breakdown
+            .Where(b => b.Service == AiServiceKind.ContentUnderstanding)
+            .Sum(b => b.Totals.CostUsd);
+        Assert.Equal(extraction, usage.Meters.Sum(m => m.CostUsd));
+        Assert.Equal(5, usage.Totals.Pages);
+    }
+
+    /// <summary>
+    /// A call whose quantities never came back is a row of its own, not a quietly cheap Minimal
+    /// one. It happened, it was charged, and the table has to say so.
+    /// </summary>
+    [Fact]
+    public async Task An_extraction_that_reported_nothing_becomes_its_own_meter_row()
+    {
+        var (elv, proposalId) = await SetupAsync(material: null);
+        var extractor = TestServices.Extractor(db, new SilentExtractorStub());
+        var documents = new DocumentService(db, new TempDirStorage(_storageDir), extractor);
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("tender content"));
+        await documents.UploadAsync(proposalId, elv, "tender.docx", stream);
+
+        var usage = await TestServices.Usage(db).GetProposalUsageAsync(proposalId, elv);
+
+        var row = Assert.Single(usage.Meters);
+        Assert.Equal("Not reported", row.Meter);
+        Assert.Equal(1, row.Calls);
+        Assert.Equal(0, row.Pages);
+        Assert.Equal(0m, row.CostUsd);
+    }
+
+    /// <summary>A digital Office file: read on the native path, billed on the Minimal meter.</summary>
+    private sealed class MinimalExtractorStub : IDocumentTextExtractor
+    {
+        public IReadOnlySet<string> SupportedExtensions { get; } = new HashSet<string> { ".docx" };
+
+        public Task<ExtractionResult> ExtractAsync(Stream content, string fileName,
+            AiCallContext? context = null, CancellationToken ct = default)
+            => Task.FromResult(new ExtractionResult("extracted markdown", [new PageSpan(1, 0, 10)],
+                new ExtractionUsage(MinimalPages: 1, BasicPages: 0, StandardPages: 0)));
+    }
+
     /// <summary>Reports billed quantities the way the real extractor reads them off Azure.</summary>
     private sealed class FakeDocumentExtractorStub : IDocumentTextExtractor
     {

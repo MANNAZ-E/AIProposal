@@ -12,58 +12,7 @@
 }
 else
 {
-    <div class="section-title" style="margin-top: 0;">Usage by service</div>
-    @if (_breakdown.Count == 0)
-    {
-        <div class="empty-state"><p>No AI calls recorded yet.</p></div>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Service</th>
-                    <th>Model</th>
-                    <th style="text-align: right;">Calls</th>
-                    <th style="text-align: right;">Tokens in</th>
-                    <th style="text-align: right;">Cached in</th>
-                    <th style="text-align: right;">Tokens out</th>
-                    <th style="text-align: right;">Pages</th>
-                    <th style="text-align: right;">Est. cost (@Money.Currency(_rate))</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var group in _breakdown.GroupBy(b => b.Service))
-                {
-                    var groupTotal = AiUsageService.Sum(group.Select(g => g.Totals));
-                    <tr class="table-group">
-                        <td colspan="2"><strong>@ServiceName(group.Key)</strong></td>
-                        <td style="text-align: right;">@groupTotal.Calls.ToString("N0")</td>
-                        <td style="text-align: right;">@groupTotal.InputTokens.ToString("N0")</td>
-                        <td style="text-align: right;">@Tokens.Cached(groupTotal.CachedInputTokens, groupTotal.InputTokens)</td>
-                        <td style="text-align: right;">@groupTotal.OutputTokens.ToString("N0")</td>
-                        <td style="text-align: right;">@(groupTotal.Pages > 0 ? groupTotal.Pages.ToString("N0") : "—")</td>
-                        <td style="text-align: right;"><strong>@Cost(groupTotal.CostUsd)</strong></td>
-                    </tr>
-                    @foreach (var row in group)
-                    {
-                        <tr>
-                            <td></td>
-                            <td>@row.Model</td>
-                            <td style="text-align: right;">@row.Totals.Calls.ToString("N0")</td>
-                            <td style="text-align: right;">@row.Totals.InputTokens.ToString("N0")</td>
-                            <td style="text-align: right;">@Tokens.Cached(row.Totals.CachedInputTokens, row.Totals.InputTokens)</td>
-                            <td style="text-align: right;">@row.Totals.OutputTokens.ToString("N0")</td>
-                            <td style="text-align: right;">@(row.Totals.Pages > 0 ? row.Totals.Pages.ToString("N0") : "—")</td>
-                            <td style="text-align: right;">@Cost(row.Totals.CostUsd)</td>
-                        </tr>
-                    }
-                }
-            </tbody>
-        </table>
-    }
-
-    <div class="section-title">Usage by proposal</div>
+    <div class="section-title" style="margin-top: 0;">Usage by proposal</div>
     @if (_usage.Count == 0)
     {
         <div class="empty-state"><p>No AI calls recorded yet.</p></div>
@@ -88,7 +37,7 @@ else
                 @foreach (var row in _usage)
                 {
                     <tr>
-                        <td><a href="/proposals/@row.ProposalId">@row.Title</a></td>
+                        <td><a href="@ProposalSectionUrl.For(row.ProposalId, ProposalSection.Material)">@row.Title</a></td>
                         <td>@row.ClientName</td>
                         <td style="text-align: right;">@row.Calls.ToString("N0")</td>
                         <td style="text-align: right;">@row.InputTokens.ToString("N0")</td>
@@ -115,28 +64,40 @@ else
             </tfoot>
         </table>
     }
+
+    @* Per-service detail below the cross-service summary. The call log lives on the proposal's
+       own Usage tab — an admin who wants a single call opens the proposal. *@
+    @if (_llm.Count > 0)
+    {
+        <h3 class="list-heading">LLM calls</h3>
+        <div class="section-title" style="margin-top: 1rem;">By service</div>
+        <UsageByServiceTable Rows="_llm" Rate="_rate" />
+    }
+
+    @if (_meters.Count > 0)
+    {
+        <h3 class="list-heading">Content understanding</h3>
+        <div class="section-title" style="margin-top: 1rem;">By service</div>
+        <UsageByMeterTable Rows="_meters" Rate="_rate" />
+    }
 }
 
 @code {
     private bool _ready;
     private List<ProposalSpend> _usage = [];
-    private List<AiUsageBreakdownRow> _breakdown = [];
+    private List<AiUsageBreakdownRow> _llm = [];
+    private List<AiMeterRow> _meters = [];
     private decimal _rate;
 
     protected override async Task OnInitializedAsync()
     {
         _rate = Usage.UsdToDkk;
         _usage = await Admin.GetUsageAsync((await CurrentUser.GetAsync()).Id);
-        _breakdown = await Usage.GetGlobalBreakdownAsync();
+        var breakdown = await Usage.GetGlobalBreakdownAsync();
+        _llm = breakdown.Where(b => b.Service != AiServiceKind.ContentUnderstanding).ToList();
+        _meters = await Usage.GetGlobalMetersAsync();
         _ready = true;
     }
 
     private string Cost(decimal usd) => Money.Display(usd, _rate);
-
-    private static string ServiceName(AiServiceKind service) => service switch
-    {
-        AiServiceKind.AzureOpenAI => "Azure OpenAI",
-        AiServiceKind.ContentUnderstanding => "Azure Content Understanding",
-        _ => service.ToString(),
-    };
 }

@@ -136,6 +136,14 @@ unmetered), everything else to Content Understanding behind the usage decorator.
   (PPTX per slide, XLSX per sheet including hidden ones, TXT/HTML per 3,000 characters), none of
   which is reproducible from OpenXML. A call that reports no usage records **null**, not zero, and
   logs a warning — "we were not told" is a different fact from "nothing was charged".
+- The billed quantities are `documentPages{Minimal,Basic,Standard}` plus `contextualizationTokens`
+  — the only fields of the SDK's `UsageDetails` a `prebuilt-layout` document call can populate
+  (`audioHours`/`videoHours` and the per-model `tokens` dictionary belong to media and to
+  generative analyzers, so nothing reads them). **The async path is what earns the cheap meters:**
+  `AnalyzeBinaryAsync(WaitUntil.Completed, …)` bills `Doc Content Extraction *`, while the sync
+  API bills separate `Doc Co Extr Sync *` meters at 1.5× ($1.50 and $7.50 per 1,000 against $1.00
+  and $5.00). The `usage` object reads identically either way, so switching to the sync call would
+  under-bill every row with no test failing.
 - Tuning knobs live in the `Extraction` config section (`EmbeddedImageOptions`): `MinBytes` skips
   icons and logo chips, `MaxImages` caps paid calls per document, `MinTextChars` is the
   OCR-or-describe threshold. Identical images are read once however often they repeat.

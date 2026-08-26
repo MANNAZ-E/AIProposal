@@ -1,0 +1,62 @@
+@* Extraction spend by the meter it was charged on, which is what sets the rate — Minimal and
+   Standard are a 500x apart on the same analyzer. No token columns: prebuilt-layout reports none. *@
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Meter</th>
+            <th style="text-align: right;">Calls</th>
+            <th style="text-align: right;">Pages</th>
+            @if (_hasContextualization)
+            {
+                <th style="text-align: right;">Context. tokens</th>
+            }
+            <th style="text-align: right;">Est. cost (@Money.Currency(Rate))</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Rows)
+        {
+            <tr>
+                <td>@row.Meter</td>
+                <td style="text-align: right;">@row.Calls.ToString("N0")</td>
+                <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "—")</td>
+                @if (_hasContextualization)
+                {
+                    <td style="text-align: right;">@(row.ContextualizationTokens > 0 ? row.ContextualizationTokens.ToString("N0") : "—")</td>
+                }
+                <td style="text-align: right;">@Cost(row.CostUsd)</td>
+            </tr>
+        }
+    </tbody>
+    <tfoot>
+        <tr>
+            <th>Total</th>
+            <th style="text-align: right;">@Rows.Sum(r => r.Calls).ToString("N0")</th>
+            <th style="text-align: right;">@Rows.Sum(r => r.Pages).ToString("N0")</th>
+            @if (_hasContextualization)
+            {
+                <th style="text-align: right;">@Rows.Sum(r => r.ContextualizationTokens).ToString("N0")</th>
+            }
+            <th style="text-align: right;">@Cost(Rows.Sum(r => r.CostUsd))</th>
+        </tr>
+    </tfoot>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public List<AiMeterRow> Rows { get; set; } = [];
+
+    /// <summary>DKK per USD, or 0 to show USD unconverted.</summary>
+    [Parameter] public decimal Rate { get; set; }
+
+    /// <summary>
+    /// Zero for pure content extraction, so the column would be dead weight — but a generative
+    /// analyzer would otherwise show a cost with no quantity behind it.
+    /// </summary>
+    private bool _hasContextualization;
+
+    protected override void OnParametersSet() =>
+        _hasContextualization = Rows.Any(r => r.ContextualizationTokens > 0);
+
+    private string Cost(decimal usd) => Money.Display(usd, Rate);
+}
