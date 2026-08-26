@@ -148,64 +148,8 @@ else
                 }
                 else if (_section == Section.People)
                 {
-                    <h2 class="section-heading">Bid Team</h2>
-                    @if (_myRole == ProposalRole.Owner)
-                    {
-                        <div class="card">
-                            <div class="section-title" style="margin-top: 0;">Add team member</div>
-                            <div class="team-add-row">
-                                <div class="form-field" style="flex: 2; min-width: 220px; margin-bottom: 0;">
-                                    <label for="share-email">Mannaz user email</label>
-                                    <input id="share-email" type="email" @bind="_shareEmail" placeholder="name@mannaz.com" />
-                                </div>
-                                <div class="form-field" style="flex: 1; min-width: 200px; margin-bottom: 0;">
-                                    <label for="share-role">Role</label>
-                                    <select id="share-role" @bind="_shareRole">
-                                        <option value="@ProposalRole.Editor">Editor</option>
-                                        <option value="@ProposalRole.Reader">Reader</option>
-                                    </select>
-                                </div>
-                                <button class="btn btn-primary" @onclick="ShareAsync" disabled="@_busy">Add</button>
-                            </div>
-                            @if (_shareError is not null)
-                            {
-                                <p class="error-text" style="margin-bottom: 0;">@_shareError</p>
-                            }
-                        </div>
-                    }
-
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Role</th>
-                                @if (_myRole == ProposalRole.Owner)
-                                {
-                                    <th></th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var member in _proposal.Members.OrderByDescending(m => m.Role))
-                            {
-                                <tr>
-                                    <td>@member.User?.DisplayName</td>
-                                    <td>@member.User?.Email</td>
-                                    <td><span class="badge badge-role">@member.Role</span></td>
-                                    @if (_myRole == ProposalRole.Owner)
-                                    {
-                                        <td style="text-align: right;">
-                                            @if (member.Role != ProposalRole.Owner)
-                                            {
-                                                <button class="btn btn-outline btn-sm" @onclick="() => RemoveMemberAsync(member.UserId)">Remove</button>
-                                            }
-                                        </td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    <BidTeamSection ProposalId="ProposalId" Members="_proposal.Members"
+                                    CanManage="_canManageTeam" OnChanged="LoadAsync" />
                 }
                 else if (_section == Section.Settings)
                 {
@@ -325,9 +269,13 @@ else
     private bool _showDelete;
     private bool _busy;
     private bool _disposed;
-    private string _shareEmail = "";
-    private ProposalRole _shareRole = ProposalRole.Editor;
-    private string? _shareError;
+
+    /// <summary>
+    /// Who may add or remove team members — wider than the Owner check the rest of this page uses,
+    /// and mirroring ProposalService: the owner, an admin already on the bid, or a super admin.
+    /// It is how a super admin with read-only oversight joins a bid they need to work on.
+    /// </summary>
+    private bool _canManageTeam;
 
     private string _settingsTitle = "";
     private string _settingsClientName = "";
@@ -374,6 +322,9 @@ else
             return;
         }
         (_proposal, _myRole) = result.Value;
+        _canManageTeam = _myRole == ProposalRole.Owner
+            || user.IsSuperAdmin
+            || user.IsAdmin && _proposal.Members.Any(m => m.UserId == user.Id);
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
         _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
         _unreadTeam = await TeamChat.UnreadCountAsync(ProposalId, user.Id);
@@ -433,34 +384,6 @@ else
     {
         var artifact = _artifacts.FirstOrDefault(a => a.Type == type);
         return artifact is null || artifact.Status == ArtifactStatus.Empty ? "nav-item-pending" : null;
-    }
-
-    private async Task ShareAsync()
-    {
-        _busy = true;
-        _shareError = null;
-        try
-        {
-            var user = await CurrentUser.GetAsync();
-            await Proposals.ShareAsync(ProposalId, user.Id, _shareEmail, _shareRole);
-            _shareEmail = "";
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            _shareError = ex.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private async Task RemoveMemberAsync(Guid memberUserId)
-    {
-        var user = await CurrentUser.GetAsync();
-        await Proposals.RemoveMemberAsync(ProposalId, user.Id, memberUserId);
-        await LoadAsync();
     }
 
     private async Task SaveSettingsAsync()

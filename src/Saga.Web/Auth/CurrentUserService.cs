@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 using Saga.Core.Domain;
 using Saga.Infrastructure.Services;
@@ -32,7 +32,7 @@ public class CurrentUserService(AuthenticationStateProvider authStateProvider, U
         if (impersonationState.TryGet(real.Id, out var targetId, out _))
         {
             var target = await userService.FindByIdAsync(targetId, ct);
-            if (target is not null && !target.IsDeleted && !target.IsAdmin)
+            if (target is not null && !target.IsDeleted && !target.IsSuperAdmin)
                 _effectiveUser = target;
         }
         return _effectiveUser;
@@ -66,8 +66,8 @@ public class CurrentUserService(AuthenticationStateProvider authStateProvider, U
     public async Task StartImpersonationAsync(Guid targetUserId, CancellationToken ct = default)
     {
         var admin = await GetRealUserAsync(ct);
-        if (!admin.IsAdmin)
-            throw new UnauthorizedAccessException("This action requires admin access.");
+        if (!admin.IsSuperAdmin)
+            throw new UnauthorizedAccessException("This action requires super admin access.");
         if (impersonationState.TryGet(admin.Id, out _, out _))
             throw new InvalidOperationException("Already impersonating a user.");
         if (targetUserId == admin.Id)
@@ -77,8 +77,8 @@ public class CurrentUserService(AuthenticationStateProvider authStateProvider, U
             ?? throw new InvalidOperationException("User not found.");
         if (target.IsDeleted)
             throw new InvalidOperationException("Cannot impersonate a removed user.");
-        if (target.IsAdmin)
-            throw new InvalidOperationException("Cannot impersonate another admin.");
+        if (target.IsSuperAdmin)
+            throw new InvalidOperationException("Cannot impersonate another super admin.");
 
         var sessionId = await impersonationAudit.StartAsync(admin.Id, target.Id, ct);
         impersonationState.Set(admin.Id, target.Id, sessionId);

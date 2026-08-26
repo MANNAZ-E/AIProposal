@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Domain;
 using Saga.Core.Models;
 using Saga.Infrastructure.Data;
@@ -23,7 +23,7 @@ public class ExportService(IDbContextFactory<SagaDbContext> dbFactory)
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         var artifacts = await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
 
         var structure = StructurePayload.FromJson(
@@ -42,7 +42,7 @@ public class ExportService(IDbContextFactory<SagaDbContext> dbFactory)
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         var proposal = await db.Proposals.FirstAsync(p => p.Id == proposalId, ct);
         var artifacts = await db.Artifacts

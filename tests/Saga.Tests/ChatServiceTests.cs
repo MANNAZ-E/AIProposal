@@ -274,14 +274,39 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     }
 
     [Fact]
-    public async Task Asking_with_nothing_selected_is_refused()
+    public async Task Asking_with_nothing_selected_sends_no_context()
     {
         var (elv, _, proposalId) = await SetupAsync();
-        var chat = NewChat(new FakeAiService());
+        var capturing = new CapturingAiService();
+        var chat = NewChat(capturing);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => chat.AskAsync(proposalId, null, elv, "Q", WorkingContextKind.Custom, MaterialSelection.Empty));
-        Assert.Contains("at least one", ex.Message);
+        var (_, answer) = await chat.AskAsync(proposalId, null, elv, "Q",
+            WorkingContextKind.Custom, MaterialSelection.Empty);
+
+        Assert.NotEmpty(answer!.Text);
+        // The question is the whole conversation: no context block, so nothing tells the model
+        // to answer strictly from material it was never given.
+        var request = Assert.Single(capturing.Requests);
+        Assert.Equal("Q", Assert.Single(request.Messages).Content);
+        Assert.DoesNotContain("TENDER-TEXT", request.SystemPrompt);
+        Assert.DoesNotContain("Answer strictly from the provided context", request.SystemPrompt);
+    }
+
+    [Fact]
+    public async Task A_chat_started_with_nothing_selected_stays_empty_on_follow_ups()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var capturing = new CapturingAiService();
+        var chat = NewChat(capturing);
+
+        var (chatId, _) = await chat.AskAsync(proposalId, null, elv, "First",
+            WorkingContextKind.Custom, MaterialSelection.Empty);
+        await chat.AskAsync(proposalId, chatId, elv, "Second");
+
+        // An empty selection is frozen like any other: the follow-up must not quietly pick the
+        // proposal's material up instead.
+        Assert.DoesNotContain("TENDER-TEXT", capturing.Requests[1].Messages[0].Content);
+        Assert.Equal(3, capturing.Requests[1].Messages.Count);
     }
 
     [Fact]

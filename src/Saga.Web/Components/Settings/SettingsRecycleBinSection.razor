@@ -1,0 +1,36 @@
+@inject ProposalService Proposals
+@inject CurrentUserService CurrentUser
+
+<h2 class="section-heading">Recycling bin</h2>
+
+@if (_deleted is null)
+{
+    <p class="text-muted">Loading…</p>
+}
+else if (_deleted.Count == 0)
+{
+    <div class="empty-state"><p>No deleted proposals.</p></div>
+}
+else
+{
+    <ProposalTable Items="_deleted" OnRestore="RestoreAsync" />
+}
+
+@code {
+    private List<ProposalListItem>? _deleted;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var user = await CurrentUser.GetAsync();
+        _deleted = await Proposals.GetRecycleBinAsync(user.Id);
+    }
+
+    private async Task RestoreAsync(Guid id)
+    {
+        var user = await CurrentUser.GetAsync();
+        await Proposals.RestoreAsync(id, user.Id);
+        await LoadAsync();
+    }
+}

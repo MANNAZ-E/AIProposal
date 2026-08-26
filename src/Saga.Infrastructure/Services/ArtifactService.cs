@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Domain;
 using Saga.Core.Models;
 using Saga.Infrastructure.Data;
@@ -10,7 +10,7 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
     public async Task<List<Artifact>> GetAllAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await db.Artifacts.Where(a => a.ProposalId == proposalId).ToListAsync(ct);
     }
 
@@ -18,7 +18,7 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await db.Artifacts.FirstOrDefaultAsync(a => a.ProposalId == proposalId && a.Type == type, ct);
     }
 
@@ -78,7 +78,7 @@ public class ArtifactService(IDbContextFactory<SagaDbContext> dbFactory)
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await db.ArtifactVersions
             .Include(v => v.CreatedBy)
             .Where(v => v.Artifact!.ProposalId == proposalId && v.Artifact.Type == type)

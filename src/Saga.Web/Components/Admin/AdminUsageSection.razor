@@ -1,6 +1,8 @@
-@using Saga.Core.Abstractions
+﻿@using Saga.Core.Abstractions
+@using Saga.Web.Auth
 @inject AdminService Admin
 @inject AiUsageService Usage
+@inject CurrentUserService CurrentUser
 
 <h2 class="section-heading">Usage</h2>
 
@@ -124,7 +126,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         _rate = Usage.UsdToDkk;
-        _usage = await Admin.GetUsageAsync();
+        _usage = await Admin.GetUsageAsync((await CurrentUser.GetAsync()).Id);
         _breakdown = await Usage.GetGlobalBreakdownAsync();
         _ready = true;
     }

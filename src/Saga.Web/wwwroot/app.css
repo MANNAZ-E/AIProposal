@@ -147,6 +147,44 @@ a {
     text-decoration: underline;
 }
 
+.app-user-menu {
+    position: relative;
+}
+
+.app-user-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: none;
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.app-user-trigger:hover,
+.app-user-trigger[aria-expanded="true"] {
+    opacity: 1;
+}
+
+.app-user-caret {
+    font-size: 0.7rem;
+}
+
+/*
+   Re-anchors the shared menu under the app bar's trigger — .menu-panel's own offsets are tuned
+   for the chat rows it was written for. The colour is not decoration: the panel sits inside
+   .app-bar, whose `color: #fff` its buttons would otherwise inherit onto a white background.
+   Descendant selector so this wins on specificity wherever .menu-panel ends up in the file.
+*/
+.app-user-menu .menu-panel {
+    top: 1.9rem;
+    right: 0;
+    color: var(--saga-text);
+}
+
 .app-main {
     flex: 1;
     padding: 1.5rem;
@@ -1541,6 +1579,19 @@ button.type-list-name {
 
 .team-mention-name {
     font-weight: 600;
+}
+
+/* Same picker, reused by the Bid Team add-row. It drops downwards: its input sits at the top of a
+   card rather than above a composer pinned to the bottom of the screen. */
+.team-user-picker {
+    position: relative;
+}
+
+.team-user-picker .team-mention-picker {
+    top: 100%;
+    bottom: auto;
+    margin-top: 0.35rem;
+    margin-bottom: 0;
 }
 
 /* ---------- Chat material picker ---------- */

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Models;
@@ -41,7 +41,7 @@ public class ProposalReviewService(
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await db.FinalProposalVersions
             .Include(v => v.Files)
             .Include(v => v.CreatedBy)

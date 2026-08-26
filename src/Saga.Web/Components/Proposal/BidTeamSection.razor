@@ -1,0 +1,224 @@
+@implements IDisposable
+@inject ProposalService Proposals
+@inject UserService Users
+@inject CurrentUserService CurrentUser
+
+<h2 class="section-heading">Bid Team</h2>
+
+@if (CanManage)
+{
+    <div class="card">
+        <div class="section-title" style="margin-top: 0;">Add team member</div>
+        <div class="team-add-row">
+            <div class="form-field team-user-picker" style="flex: 2; min-width: 220px; margin-bottom: 0;">
+                <label for="share-user">Mannaz user</label>
+                <input id="share-user" type="text" autocomplete="off" role="combobox"
+                       aria-expanded="@(IsOpen ? "true" : "false")"
+                       data-mention-picker="@(IsOpen ? "open" : null)"
+                       placeholder="Name or email"
+                       value="@_query" @oninput="QueryChangedAsync" @onkeydown="KeyDownAsync"
+                       @onfocusin="OpenAsync" @onfocusout="Close" />
+                @if (IsOpen)
+                {
+                    <div class="team-mention-picker" role="listbox">
+                        @for (var i = 0; i < _matches.Count; i++)
+                        {
+                            var match = _matches[i];
+                            var isActive = i == ActiveIndex;
+                            <button type="button" role="option" tabindex="-1"
+                                    aria-selected="@(isActive ? "true" : "false")"
+                                    class="@(isActive ? "is-active" : null)"
+                                    @onmousedown:preventDefault @onclick="() => Select(match)">
+                                <span class="team-mention-name">@match.DisplayName</span>
+                                <span class="text-muted">@match.Email</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="form-field" style="flex: 1; min-width: 200px; margin-bottom: 0;">
+                <label for="share-role">Role</label>
+                <select id="share-role" @bind="_role">
+                    <option value="@ProposalRole.Editor">Editor</option>
+                    <option value="@ProposalRole.Reader">Reader</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" @onclick="AddAsync" disabled="@(_busy || _selected is null)">Add</button>
+        </div>
+        @if (_error is not null)
+        {
+            <p class="error-text" style="margin-bottom: 0;">@_error</p>
+        }
+    </div>
+}
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            @if (CanManage)
+            {
+                <th></th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var member in Members.OrderByDescending(m => m.Role))
+        {
+            <tr>
+                <td>@member.User?.DisplayName</td>
+                <td>@member.User?.Email</td>
+                <td><span class="badge badge-role">@member.Role</span></td>
+                @if (CanManage)
+                {
+                    <td style="text-align: right;">
+                        @if (member.Role != ProposalRole.Owner)
+                        {
+                            <button class="btn btn-outline btn-sm" @onclick="() => RemoveAsync(member.UserId)">Remove</button>
+                        }
+                    </td>
+                }
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProposalId { get; set; }
+    [Parameter, EditorRequired] public required ICollection<ProposalMember> Members { get; set; }
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Raised after a member is added or removed, so the page reloads the proposal.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private const int MaxSuggestions = 8;
+
+    /// <summary>How long a keystroke waits before it becomes a query.</summary>
+    private const int DebounceMs = 200;
+
+    private string _query = "";
+    private List<UserSearchResult> _matches = [];
+    private UserSearchResult? _selected;
+    private ProposalRole _role = ProposalRole.Editor;
+    private string? _error;
+    private bool _busy;
+    private int _active;
+
+    /// <summary>Set while a picked name sits in the box, so it does not immediately reopen.</summary>
+    private bool _dismissed;
+
+    // Unlike the chat composer's mention picker, the candidates here come from the database, so
+    // every keystroke would otherwise be a query. This is cancelled and replaced by the next one.
+    private CancellationTokenSource? _search;
+
+    private bool IsOpen => !_dismissed && _matches.Count > 0;
+
+    /// <summary>The highlight is state rather than DOM focus, and the list shrinks under it.</summary>
+    private int ActiveIndex => _matches.Count == 0 ? 0 : Math.Clamp(_active, 0, _matches.Count - 1);
+
+    private async Task QueryChangedAsync(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _selected = null;
+        _dismissed = false;
+        _active = 0;
+        await SearchAsync();
+    }
+
+    private Task OpenAsync() => _selected is null ? SearchAsync() : Task.CompletedTask;
+
+    private void Close() => _dismissed = true;
+
+    private async Task SearchAsync()
+    {
+        _search?.Cancel();
+        _search?.Dispose();
+        _search = new CancellationTokenSource();
+        var token = _search.Token;
+        try
+        {
+            await Task.Delay(DebounceMs, token);
+            var results = await Users.SearchActiveAsync(_query, MaxSuggestions, token);
+            // Someone already on the bid is not a candidate; nor is the person adding them.
+            _matches = results.Where(r => Members.All(m => m.UserId != r.Id)).ToList();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer keystroke owns the list now.
+        }
+    }
+
+    private void Select(UserSearchResult user)
+    {
+        _selected = user;
+        _query = user.DisplayName;
+        _matches = [];
+        _dismissed = true;
+    }
+
+    private async Task KeyDownAsync(KeyboardEventArgs e)
+    {
+        if (!IsOpen)
+        {
+            if (e.Key == "Enter" && _selected is not null && !_busy) await AddAsync();
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                _active = (ActiveIndex + 1) % _matches.Count;
+                break;
+            case "ArrowUp":
+                _active = (ActiveIndex - 1 + _matches.Count) % _matches.Count;
+                break;
+            case "Enter":
+            case "Tab":
+                Select(_matches[ActiveIndex]);
+                break;
+            case "Escape":
+                Close();
+                break;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (_selected is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var me = await CurrentUser.GetAsync();
+            await Proposals.AddMemberAsync(ProposalId, me.Id, _selected.Id, _role);
+            _query = "";
+            _selected = null;
+            _matches = [];
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync(Guid memberUserId)
+    {
+        var me = await CurrentUser.GetAsync();
+        await Proposals.RemoveMemberAsync(ProposalId, me.Id, memberUserId);
+        await OnChanged.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        _search?.Cancel();
+        _search?.Dispose();
+    }
+}

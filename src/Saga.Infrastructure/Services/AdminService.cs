@@ -1,4 +1,4 @@
-using System.Net.Mail;
+﻿using System.Net.Mail;
 using Microsoft.EntityFrameworkCore;
 using Saga.Core.Domain;
 using Saga.Infrastructure.Data;
@@ -16,7 +16,7 @@ public record DeletedProposal(Guid ProposalId, string Title, string ClientName, 
 
 /// <summary>One row in the admin Users table.</summary>
 public record AdminUserRow(Guid Id, string Email, string DisplayName, bool IsAdmin,
-    bool IsDeleted, DateTimeOffset? DeletedAt, DateTimeOffset CreatedAt);
+    bool IsSuperAdmin, bool IsDeleted, DateTimeOffset? DeletedAt, DateTimeOffset CreatedAt);
 
 /// <summary>Mannaz voice settings + the usage/cost view (spec: usage logging with simple view).</summary>
 public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
@@ -27,10 +27,16 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
         return await db.MannazVoiceSettings.FirstAsync(ct);
     }
 
-    public async Task SaveVoiceAsync(string toneOfVoice, string aboutMannaz, string terminology,
-        CancellationToken ct = default)
+    /// <summary>
+    /// Super admin only: the voice is prepended to every generated word, so editing it is a
+    /// system-owner action rather than day-to-day administration. Reading it stays open because
+    /// the generation pipeline loads it on every run.
+    /// </summary>
+    public async Task SaveVoiceAsync(Guid actingUserId, string toneOfVoice, string aboutMannaz,
+        string terminology, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureSuperAdminAsync(db, actingUserId, ct);
         var voice = await db.MannazVoiceSettings.FirstAsync(ct);
         voice.ToneOfVoice = toneOfVoice.Trim();
         voice.AboutMannaz = aboutMannaz.Trim();
@@ -40,9 +46,11 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
     }
 
     /// <summary>Every soft-deleted proposal, across all users, newest deletion first.</summary>
-    public async Task<List<DeletedProposal>> GetDeletedProposalsAsync(CancellationToken ct = default)
+    public async Task<List<DeletedProposal>> GetDeletedProposalsAsync(Guid actingAdminId,
+        CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureAdminAsync(db, actingAdminId, ct);
         return await db.Proposals
             .Where(p => p.IsDeleted)
             .OrderByDescending(p => p.DeletedAt)
@@ -51,9 +59,11 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
     }
 
     /// <summary>Spend per proposal, newest activity first. Includes archived proposals and chat.</summary>
-    public async Task<List<ProposalSpend>> GetUsageAsync(CancellationToken ct = default)
+    public async Task<List<ProposalSpend>> GetUsageAsync(Guid actingAdminId,
+        CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureAdminAsync(db, actingAdminId, ct);
         var rows = await db.AiUsage
             .Where(r => r.ProposalId != null)
             .GroupBy(r => new { r.ProposalId, r.Proposal!.Title, r.Proposal.ClientName })
@@ -81,12 +91,14 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
     }
 
     /// <summary>Every user, active and deleted, for the admin Users table.</summary>
-    public async Task<List<AdminUserRow>> ListUsersAsync(CancellationToken ct = default)
+    public async Task<List<AdminUserRow>> ListUsersAsync(Guid actingAdminId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureAdminAsync(db, actingAdminId, ct);
         return await db.Users
             .OrderBy(u => u.IsDeleted).ThenBy(u => u.DisplayName)
-            .Select(u => new AdminUserRow(u.Id, u.Email, u.DisplayName, u.IsAdmin, u.IsDeleted, u.DeletedAt, u.CreatedAt))
+            .Select(u => new AdminUserRow(u.Id, u.Email, u.DisplayName, u.IsAdmin, u.IsSuperAdmin,
+                u.IsDeleted, u.DeletedAt, u.CreatedAt))
             .ToListAsync(ct);
     }
 
@@ -157,9 +169,40 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
 
         var user = await db.Users.FirstAsync(u => u.Id == userId, ct);
         if (user.IsAdmin && !isAdmin)
+        {
             await EnsureNotLastAdminAsync(db, userId, ct);
+            if (user.IsSuperAdmin)
+                await EnsureNotLastSuperAdminAsync(db, userId, ct);
+        }
 
         user.IsAdmin = isAdmin;
+        // Super admin is a tier on top of admin, never beside it: taking admin away takes the
+        // tier with it, so there is never a super admin who cannot reach /admin.
+        if (!isAdmin) user.IsSuperAdmin = false;
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Grants or revokes the super-admin tier. Only a super admin can hand it out; granting also
+    /// grants plain admin, keeping the tier a strict superset rather than a parallel flag.
+    /// </summary>
+    public async Task SetSuperAdminAsync(Guid actingAdminId, Guid userId, bool isSuperAdmin,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await EnsureSuperAdminAsync(db, actingAdminId, ct);
+
+        if (userId == actingAdminId && !isSuperAdmin)
+            throw new InvalidOperationException("You cannot remove your own super admin access.");
+
+        var user = await db.Users.FirstAsync(u => u.Id == userId, ct);
+        if (user.IsDeleted)
+            throw new InvalidOperationException("A removed user cannot be promoted.");
+        if (user.IsSuperAdmin && !isSuperAdmin)
+            await EnsureNotLastSuperAdminAsync(db, userId, ct);
+
+        user.IsSuperAdmin = isSuperAdmin;
+        if (isSuperAdmin) user.IsAdmin = true;
         await db.SaveChangesAsync(ct);
     }
 
@@ -180,10 +223,13 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
         if (user.IsDeleted) return;
         if (user.IsAdmin)
             await EnsureNotLastAdminAsync(db, userId, ct);
+        if (user.IsSuperAdmin)
+            await EnsureNotLastSuperAdminAsync(db, userId, ct);
 
         user.IsDeleted = true;
         user.DeletedAt = DateTimeOffset.UtcNow;
         user.IsAdmin = false;
+        user.IsSuperAdmin = false;
         await db.SaveChangesAsync(ct);
     }
 
@@ -208,11 +254,31 @@ public class AdminService(IDbContextFactory<SagaDbContext> dbFactory)
         return admin;
     }
 
+    private static async Task<User> EnsureSuperAdminAsync(SagaDbContext db, Guid actingAdminId,
+        CancellationToken ct)
+    {
+        var admin = await db.Users.FirstOrDefaultAsync(u => u.Id == actingAdminId, ct);
+        if (admin is null || admin.IsDeleted || !admin.IsSuperAdmin)
+            throw new UnauthorizedAccessException("This action requires super admin access.");
+        return admin;
+    }
+
     /// <summary>Guards against zeroing out every admin account. Caller has already confirmed the target is an admin.</summary>
     private static async Task EnsureNotLastAdminAsync(SagaDbContext db, Guid userId, CancellationToken ct)
     {
         var otherAdmins = await db.Users.CountAsync(u => u.IsAdmin && !u.IsDeleted && u.Id != userId, ct);
         if (otherAdmins == 0)
             throw new InvalidOperationException("At least one admin must remain.");
+    }
+
+    /// <summary>
+    /// The same guard one tier up. Losing the last super admin would leave the system prompts
+    /// uneditable by anyone, with no way back short of a database edit.
+    /// </summary>
+    private static async Task EnsureNotLastSuperAdminAsync(SagaDbContext db, Guid userId, CancellationToken ct)
+    {
+        var others = await db.Users.CountAsync(u => u.IsSuperAdmin && !u.IsDeleted && u.Id != userId, ct);
+        if (others == 0)
+            throw new InvalidOperationException("At least one super admin must remain.");
     }
 }

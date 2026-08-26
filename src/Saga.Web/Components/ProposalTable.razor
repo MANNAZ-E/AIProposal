@@ -1,4 +1,4 @@
-@*
+﻿@*
     Shared proposal list. With OnRestore set it renders the recycle-bin variant: rows are not
     clickable (a deleted proposal cannot be opened) and each row offers Restore instead.
 *@
@@ -23,7 +23,16 @@
                 <td><strong>@item.Title</strong></td>
                 <td>@item.ClientName</td>
                 <td>@item.OwnerName</td>
-                <td><span class="badge badge-role">@item.MyRole</span></td>
+                <td>
+                    @if (item.MyRole is { } role)
+                    {
+                        <span class="badge badge-role">@role</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">—</span>
+                    }
+                </td>
                 <td class="text-muted">
                     @(IsRecycleBin
                         ? item.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy") ?? "—"

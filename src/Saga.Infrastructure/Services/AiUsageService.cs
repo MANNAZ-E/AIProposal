@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Infrastructure.Ai;
@@ -68,7 +68,7 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         var breakdown = await BreakdownAsync(db, r => r.ProposalId == proposalId, ct);
         return new ProposalUsage(Sum(breakdown.Select(b => b.Totals)), breakdown);
@@ -79,7 +79,7 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         return await db.AiUsage
             .Where(r => r.ProposalId == proposalId)
@@ -102,7 +102,7 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
         if (record is null) return null;
 
         if (record.ProposalId is { } proposalId)
-            await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+            await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         var call = new AiUsageCall(record.Id, record.OperationId, record.StartedAt, record.Service,
             record.Model, record.Operation, record.Label, record.StartedBy?.DisplayName,

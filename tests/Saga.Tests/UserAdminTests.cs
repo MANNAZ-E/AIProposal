@@ -1,4 +1,4 @@
-using Saga.Infrastructure.Services;
+﻿using Saga.Infrastructure.Services;
 
 namespace Saga.Tests;
 
@@ -8,6 +8,9 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     private readonly UserService _users = new(db);
 
     private async Task<Guid> ElvIdAsync() => (await _users.FindByEmailAsync("elv@mannaz.com"))!.Id;
+
+    /// <summary>Listing users is admin-gated, so the assertions read it as the seeded admin.</summary>
+    private async Task<List<AdminUserRow>> ListUsersAsync() => await _admin.ListUsersAsync(await ElvIdAsync());
     private async Task<Guid> SdaIdAsync() => (await _users.FindByEmailAsync("sda@mannaz.com"))!.Id;
 
     [Fact]
@@ -18,7 +21,7 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
 
         var id = await _admin.AddUserAsync(elv, email, "New Person");
 
-        var row = Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id);
+        var row = Assert.Single(await ListUsersAsync(), u => u.Id == id);
         Assert.Equal(email, row.Email);
         Assert.Equal("New Person", row.DisplayName);
         Assert.False(row.IsAdmin);
@@ -73,7 +76,7 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var id = await _admin.AddUserAsync(elv, email, "Leaver");
 
         await _admin.DeleteUserAsync(elv, id);
-        var deletedRow = Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id);
+        var deletedRow = Assert.Single(await ListUsersAsync(), u => u.Id == id);
         Assert.True(deletedRow.IsDeleted);
         Assert.NotNull(deletedRow.DeletedAt);
 
@@ -81,7 +84,7 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var recreatedId = await _admin.AddUserAsync(elv, email, "Leaver Returned");
 
         Assert.Equal(id, recreatedId);
-        var restoredRow = Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id);
+        var restoredRow = Assert.Single(await ListUsersAsync(), u => u.Id == id);
         Assert.False(restoredRow.IsDeleted);
         Assert.Equal("Leaver Returned", restoredRow.DisplayName);
     }
@@ -95,7 +98,7 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         await _admin.DeleteUserAsync(elv, id);
         await _admin.DeleteUserAsync(elv, id); // must not throw
 
-        Assert.True(Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id).IsDeleted);
+        Assert.True(Assert.Single(await ListUsersAsync(), u => u.Id == id).IsDeleted);
     }
 
     [Fact]
@@ -108,7 +111,7 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
 
         await _admin.RestoreUserAsync(elv, id);
 
-        var row = Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id);
+        var row = Assert.Single(await ListUsersAsync(), u => u.Id == id);
         Assert.False(row.IsDeleted);
         Assert.False(row.IsAdmin); // cleared on delete, must be re-granted explicitly
     }
@@ -121,7 +124,7 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
 
         await _admin.UpdateUserAsync(elv, id, "New Name");
 
-        Assert.Equal("New Name", Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id).DisplayName);
+        Assert.Equal("New Name", Assert.Single(await ListUsersAsync(), u => u.Id == id).DisplayName);
     }
 
     [Fact]
@@ -131,10 +134,10 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var id = await _admin.AddUserAsync(elv, $"promo-{Guid.NewGuid():N}@mannaz.com", "Promotable");
 
         await _admin.SetAdminAsync(elv, id, true);
-        Assert.True(Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id).IsAdmin);
+        Assert.True(Assert.Single(await ListUsersAsync(), u => u.Id == id).IsAdmin);
 
         await _admin.SetAdminAsync(elv, id, false);
-        Assert.False(Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id).IsAdmin);
+        Assert.False(Assert.Single(await ListUsersAsync(), u => u.Id == id).IsAdmin);
     }
 
     [Fact]
@@ -164,10 +167,10 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
 
         // elv remains admin throughout, so demoting/removing the second admin must be allowed.
         await _admin.SetAdminAsync(elv, id, false);
-        Assert.False(Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id).IsAdmin);
+        Assert.False(Assert.Single(await ListUsersAsync(), u => u.Id == id).IsAdmin);
 
         await _admin.SetAdminAsync(elv, id, true);
         await _admin.DeleteUserAsync(elv, id);
-        Assert.True(Assert.Single(await _admin.ListUsersAsync(), u => u.Id == id).IsDeleted);
+        Assert.True(Assert.Single(await ListUsersAsync(), u => u.Id == id).IsDeleted);
     }
 }

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Core.Models;
@@ -32,7 +32,7 @@ public class ChatService(
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         return await Visible(db, proposalId, userId)
             .OrderByDescending(s => s.LastMessageAt)
@@ -53,7 +53,7 @@ public class ChatService(
     public async Task<int> UnreadCountAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         return await Visible(db, proposalId, userId)
             .CountAsync(s => !s.Seen.Any(x => x.UserId == userId && x.LastSeenAt >= s.LastMessageAt), ct);
@@ -84,7 +84,7 @@ public class ChatService(
         Guid proposalId, Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         // The type comes along: the picker groups by it, and the "Client materials" preset is
         // defined by it.
         var documents = await db.Documents.Include(d => d.DocumentType)
@@ -133,7 +133,9 @@ public class ChatService(
         {
             if (chatId is null)
             {
-                await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+                // Starting a chat spends tokens against the bid, so it takes a seat on the team
+                // rather than a super admin's read-only oversight.
+                await ProposalService.EnsureMemberAsync(db, proposalId, userId, ct);
                 resolvedChatId = Guid.NewGuid();
                 title = ChatTitle.FromQuestion(question);
                 chatKind = kind;
@@ -156,19 +158,22 @@ public class ChatService(
         }
 
         // A chat migrated from the single-thread era has no frozen material yet, so the first
-        // question after the migration freezes it against the material as it is now.
-        if (snapshot.Length == 0)
+        // question after the migration freezes it against the material as it is now. A chat that
+        // froze an empty selection is frozen all the same and must not come back through here.
+        var frozen = !created && (selection is not null || snapshot.Length > 0);
+        if (!frozen)
         {
             var (documents, artifacts) = await GetMaterialAsync(proposalId, userId, ct);
             selection ??= MaterialSelection.ForPreset(kind, documents, artifacts);
-            if (selection.IsEmpty)
-                throw new InvalidOperationException(
-                    "Pick at least one document, note or artifact for the chat to read.");
-
-            var loaded = await contextService.LoadForSelectionAsync(proposalId, selection, userId, ct);
-            // The selection is the only gate, so the builder is told not to filter again.
-            snapshot = WorkingContextBuilder.Build(WorkingContextKind.FullProject,
-                loaded.Documents, loaded.Artifacts, useCondensedDocuments: loaded.UseCondensed);
+            // Picking nothing is a choice, not an error: the chat then reads no material and
+            // answers from the conversation alone, so there is no context to freeze.
+            if (!selection.IsEmpty)
+            {
+                var loaded = await contextService.LoadForSelectionAsync(proposalId, selection, userId, ct);
+                // The selection is the only gate, so the builder is told not to filter again.
+                snapshot = WorkingContextBuilder.Build(WorkingContextKind.FullProject,
+                    loaded.Documents, loaded.Artifacts, useCondensedDocuments: loaded.UseCondensed);
+            }
             if (created && handPicked)
                 chatKind = selection.PresetOrCustom(documents, artifacts);
         }
@@ -229,11 +234,15 @@ public class ChatService(
         if (created && onChatCreated is not null) await onChatCreated(resolvedChatId);
 
         // ---- Phase B: the model call. Nothing of ours is open while this runs.
-        var messages = new List<AiMessage>
+        var messages = new List<AiMessage>();
+        // With no material picked there is nothing to put in front of the question, and an empty
+        // context block would only tell the model to answer strictly from nothing.
+        if (snapshot.Length > 0)
         {
-            AiMessage.User($"<working_context>\n{snapshot}\n</working_context>"),
-            AiMessage.Assistant("Understood. I will answer questions strictly from this context."),
-        };
+            messages.Add(AiMessage.User($"<working_context>\n{snapshot}\n</working_context>"));
+            messages.Add(AiMessage.Assistant(
+                "Understood. I will answer questions strictly from this context."));
+        }
         foreach (var m in history)
         {
             // In a shared chat several people ask, so history says who did; it sits after the
@@ -247,7 +256,9 @@ public class ChatService(
         }
         messages.Add(AiMessage.User(question));
 
-        var request = new AiRequest(ChatPrompts.BuildSystemPrompt(proposal, chatKind), messages,
+        var request = new AiRequest(
+            ChatPrompts.BuildSystemPrompt(proposal, chatKind, hasMaterial: snapshot.Length > 0),
+            messages,
             Context: new AiCallContext(Guid.NewGuid(), AiOperation.Chat, proposalId, userId, Label: title));
 
         var text = new System.Text.StringBuilder();
@@ -384,7 +395,7 @@ public class ChatService(
         var chat = await db.ChatSessions.FirstOrDefaultAsync(s => s.Id == chatId, ct)
             // A business condition, not an auth failure: the UI shows this sentence verbatim.
             ?? throw new InvalidOperationException("That chat no longer exists.");
-        var role = await ProposalService.RequireRoleAsync(db, chat.ProposalId, userId, ProposalRole.Reader, ct);
+        var role = await ProposalService.RequireRoleForReadAsync(db, chat.ProposalId, userId, ct);
         if (chat.Visibility != ChatVisibility.Shared && chat.OwnerId != userId)
             throw new UnauthorizedAccessException("This chat is private.");
         return (chat, role);

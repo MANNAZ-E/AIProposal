@@ -1,8 +1,10 @@
-@rendermode InteractiveServer
+﻿@rendermode InteractiveServer
 @implements IDisposable
 @using Saga.Web.Auth
 @inject AppHeaderState Header
 @inject CurrentUserService CurrentUser
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
 
 <header class="app-bar">
     <a class="app-brand" href="/">
@@ -23,28 +25,73 @@
         }
     </div>
     <div class="app-user">
+        <a class="app-nav-link" href="/settings">Settings</a>
         @if (_isAdmin)
         {
             <a class="app-nav-link" href="/admin">Admin</a>
         }
-        <AuthorizeView>
-            <Authorized>@context.User.Identity?.Name</Authorized>
-        </AuthorizeView>
+        @if (_displayName is not null)
+        {
+            @* Under DevAutoSignIn there is no sign-out endpoint to reach (Program.cs skips
+               MapControllers), so the name stays plain text rather than opening an empty menu. *@
+            @if (_canSignOut)
+            {
+                <div class="app-user-menu" @onkeydown="MenuKeyAsync">
+                    <button class="app-user-trigger" @onclick="() => _menuOpen = !_menuOpen"
+                            aria-haspopup="menu" aria-expanded="@(_menuOpen ? "true" : "false")">
+                        @_displayName<span class="app-user-caret" aria-hidden="true">▾</span>
+                    </button>
+                    @if (_menuOpen)
+                    {
+                        <div class="menu-backdrop" @onclick="() => _menuOpen = false"></div>
+                        <div class="menu-panel" role="menu">
+                            <button role="menuitem" @onclick="SignOut">Sign out</button>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <span>@_displayName</span>
+            }
+        }
     </div>
 </header>
 
 @code {
     private bool _isAdmin;
+    private bool _canSignOut;
+    private bool _menuOpen;
+    private string? _displayName;
 
     protected override async Task OnInitializedAsync()
     {
         Header.Changed += OnHeaderChanged;
-        try { _isAdmin = (await CurrentUser.GetAsync()).IsAdmin; }
-        catch (UnauthorizedAccessException) { _isAdmin = false; }
-        catch (AccessRevokedException) { _isAdmin = false; }
+        _canSignOut = !Configuration.GetValue<bool>("Auth:DevAutoSignIn");
+        try
+        {
+            // The effective user, so the bar names whoever the app is acting as — while
+            // impersonating that is the target, which ImpersonationBanner spells out.
+            var user = await CurrentUser.GetAsync();
+            _isAdmin = user.IsAdmin;
+            _displayName = PersonName.Display(user.DisplayName);
+        }
+        catch (UnauthorizedAccessException) { }
+        catch (AccessRevokedException) { }
     }
 
     public void Dispose() => Header.Changed -= OnHeaderChanged;
 
     private void OnHeaderChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private Task MenuKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _menuOpen = false;
+        return Task.CompletedTask;
+    }
+
+    // Microsoft.Identity.Web's controller endpoint, not a Blazor route, so the router has to be
+    // bypassed with a real document navigation — same reason as ImpersonationBanner's return.
+    private void SignOut() =>
+        Navigation.NavigateTo("/MicrosoftIdentity/Account/SignOut", forceLoad: true);
 }

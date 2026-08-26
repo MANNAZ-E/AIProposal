@@ -1,4 +1,4 @@
-@using Saga.Core.Abstractions
+﻿@using Saga.Core.Abstractions
 @inject AdminService Admin
 @inject ImpersonationAuditService ImpersonationAudit
 @inject CurrentUserService CurrentUser
@@ -58,7 +58,11 @@ else
                         }
                     </td>
                     <td>
-                        @if (row.IsAdmin)
+                        @if (row.IsSuperAdmin)
+                        {
+                            <span class="badge badge-ok">Super admin</span>
+                        }
+                        else if (row.IsAdmin)
                         {
                             <span class="badge badge-ok">Admin</span>
                         }
@@ -97,9 +101,23 @@ else
                                 {
                                     <button class="btn btn-outline btn-sm" @onclick="() => SetAdminAsync(row.Id, true)" disabled="@_userBusy">Make admin</button>
                                 }
+                                @if (_isSuperAdmin)
+                                {
+                                    @if (row.IsSuperAdmin)
+                                    {
+                                        <button class="btn btn-outline btn-sm" @onclick="() => SetSuperAdminAsync(row.Id, false)" disabled="@_userBusy">Revoke super admin</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-outline btn-sm" @onclick="() => SetSuperAdminAsync(row.Id, true)" disabled="@_userBusy">Make super admin</button>
+                                    }
+                                }
                                 <button class="btn btn-outline btn-sm" @onclick="() => OpenRemove(row)" disabled="@_userBusy">Remove</button>
-                                <button class="btn btn-outline btn-sm" @onclick="() => ImpersonateAsync(row.Id)"
-                                        disabled="@(_userBusy || CurrentUser.IsImpersonating)">Impersonate</button>
+                                @if (_isSuperAdmin && !row.IsSuperAdmin)
+                                {
+                                    <button class="btn btn-outline btn-sm" @onclick="() => ImpersonateAsync(row.Id)"
+                                            disabled="@(_userBusy || CurrentUser.IsImpersonating)">Impersonate</button>
+                                }
                             }
                         }
                     </td>
@@ -112,36 +130,39 @@ else
         <p class="error-text">@_impersonateError</p>
     }
 
-    <div class="section-title">Impersonation sessions</div>
-    @if (_sessions.Count == 0)
+    @if (_isSuperAdmin)
     {
-        <div class="empty-state"><p>No impersonation sessions recorded yet.</p></div>
-    }
-    else
-    {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Admin</th>
-                    <th>Viewing as</th>
-                    <th>Started</th>
-                    <th>Ended</th>
-                    <th>Reason</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var row in _sessions)
-                {
+        <div class="section-title">Impersonation sessions</div>
+        @if (_sessions.Count == 0)
+        {
+            <div class="empty-state"><p>No impersonation sessions recorded yet.</p></div>
+        }
+        else
+        {
+            <table class="table">
+                <thead>
                     <tr>
-                        <td>@row.AdminName</td>
-                        <td>@row.TargetName</td>
-                        <td class="text-muted">@row.StartedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
-                        <td class="text-muted">@(row.EndedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
-                        <td class="text-muted">@ReasonText(row.EndReason)</td>
+                        <th>Admin</th>
+                        <th>Viewing as</th>
+                        <th>Started</th>
+                        <th>Ended</th>
+                        <th>Reason</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var row in _sessions)
+                    {
+                        <tr>
+                            <td>@row.AdminName</td>
+                            <td>@row.TargetName</td>
+                            <td class="text-muted">@row.StartedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
+                            <td class="text-muted">@(row.EndedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                            <td class="text-muted">@ReasonText(row.EndReason)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     }
 
     @if (_removeTarget is not null)
@@ -163,6 +184,7 @@ else
 @code {
     private bool _ready;
     private Guid _currentUserId;
+    private bool _isSuperAdmin;
 
     private List<AdminUserRow> _users = [];
     private List<ImpersonationSessionRow> _sessions = [];
@@ -180,9 +202,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _currentUserId = (await CurrentUser.GetAsync()).Id;
-        _users = await Admin.ListUsersAsync();
-        _sessions = await ImpersonationAudit.GetAllAsync();
+        var me = await CurrentUser.GetAsync();
+        _currentUserId = me.Id;
+        _isSuperAdmin = me.IsSuperAdmin;
+        _users = await Admin.ListUsersAsync(_currentUserId);
+        if (_isSuperAdmin)
+            _sessions = await ImpersonationAudit.GetAllAsync();
         _ready = true;
     }
 
@@ -231,7 +256,7 @@ else
             await Admin.AddUserAsync(_currentUserId, _newEmail, _newName);
             _newEmail = "";
             _newName = "";
-            _users = await Admin.ListUsersAsync();
+            _users = await Admin.ListUsersAsync(_currentUserId);
         }
         catch (Exception ex)
         {
@@ -259,7 +284,26 @@ else
         {
             await Admin.UpdateUserAsync(_currentUserId, id, _editName);
             _editingUserId = null;
-            _users = await Admin.ListUsersAsync();
+            _users = await Admin.ListUsersAsync(_currentUserId);
+        }
+        finally
+        {
+            _userBusy = false;
+        }
+    }
+
+    private async Task SetSuperAdminAsync(Guid userId, bool isSuperAdmin)
+    {
+        _userBusy = true;
+        _userError = null;
+        try
+        {
+            await Admin.SetSuperAdminAsync(_currentUserId, userId, isSuperAdmin);
+            _users = await Admin.ListUsersAsync(_currentUserId);
+        }
+        catch (Exception ex)
+        {
+            _userError = ex.Message;
         }
         finally
         {
@@ -274,7 +318,7 @@ else
         try
         {
             await Admin.SetAdminAsync(_currentUserId, userId, isAdmin);
-            _users = await Admin.ListUsersAsync();
+            _users = await Admin.ListUsersAsync(_currentUserId);
         }
         catch (Exception ex)
         {
@@ -303,7 +347,7 @@ else
         {
             await Admin.DeleteUserAsync(_currentUserId, _removeTarget.Id);
             _removeTarget = null;
-            _users = await Admin.ListUsersAsync();
+            _users = await Admin.ListUsersAsync(_currentUserId);
         }
         catch (Exception ex)
         {
@@ -321,7 +365,7 @@ else
         try
         {
             await Admin.RestoreUserAsync(_currentUserId, userId);
-            _users = await Admin.ListUsersAsync();
+            _users = await Admin.ListUsersAsync(_currentUserId);
         }
         finally
         {

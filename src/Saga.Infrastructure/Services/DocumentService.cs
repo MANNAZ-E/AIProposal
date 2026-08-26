@@ -15,7 +15,7 @@ public class DocumentService(
     public async Task<List<Document>> GetForProposalAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await db.Documents
             .Include(d => d.DocumentType)
             .Where(d => d.ProposalId == proposalId)
@@ -26,7 +26,7 @@ public class DocumentService(
     public async Task<List<DocumentType>> GetTypesAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await LoadTypesAsync(db, proposalId, ct);
     }
 
@@ -268,7 +268,7 @@ public class DocumentService(
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var document = await db.Documents.FirstAsync(d => d.Id == documentId, ct);
-        await ProposalService.EnsureRoleAsync(db, document.ProposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, document.ProposalId, userId, ct);
         return await db.DocumentVersions
             .Include(v => v.CreatedBy)
             .Where(v => v.DocumentId == documentId)

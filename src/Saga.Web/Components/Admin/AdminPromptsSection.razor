@@ -1,4 +1,6 @@
+﻿@using Saga.Web.Auth
 @inject AdminService Admin
+@inject CurrentUserService CurrentUser
 
 <h2 class="section-heading">System prompts</h2>
 
@@ -43,8 +45,11 @@ else
     private bool _saving;
     private bool _saved;
 
+    private Guid _currentUserId;
+
     protected override async Task OnInitializedAsync()
     {
+        _currentUserId = (await CurrentUser.GetAsync()).Id;
         var voice = await Admin.GetVoiceAsync();
         (_tone, _about, _terminology) = (voice.ToneOfVoice, voice.AboutMannaz, voice.Terminology);
         _ready = true;
@@ -56,7 +61,7 @@ else
         _saved = false;
         try
         {
-            await Admin.SaveVoiceAsync(_tone, _about, _terminology);
+            await Admin.SaveVoiceAsync(_currentUserId, _tone, _about, _terminology);
             _saved = true;
         }
         finally

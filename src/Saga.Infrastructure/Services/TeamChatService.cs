@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Saga.Core.Domain;
 using Saga.Core.Models;
 using Saga.Core.Pipeline;
@@ -38,7 +38,7 @@ public class TeamChatService(
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
         return await MembersAsync(db, proposalId, ct);
     }
 
@@ -51,7 +51,7 @@ public class TeamChatService(
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var role = await ProposalService.RequireRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        var role = await ProposalService.RequireRoleForReadAsync(db, proposalId, userId, ct);
 
         var rows = await db.TeamThreads
             .Where(t => t.ProposalId == proposalId)
@@ -103,7 +103,7 @@ public class TeamChatService(
         text = Clean(text);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureMemberAsync(db, proposalId, userId, ct);
 
         var now = DateTimeOffset.UtcNow;
         var thread = new TeamThread
@@ -137,6 +137,9 @@ public class TeamChatService(
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var (thread, _) = await LoadThreadAsync(db, threadId, userId, ct);
+        // Reading the team's conversation is oversight; joining it is not. A super admin who
+        // wants to say something adds themselves to the bid first.
+        await ProposalService.EnsureMemberAsync(db, thread.ProposalId, userId, ct);
 
         var now = DateTimeOffset.UtcNow;
         var message = await AddMessageAsync(db, thread, thread.ProposalId, userId, text, now, ct);
@@ -183,7 +186,7 @@ public class TeamChatService(
     public async Task<int> UnreadCountAsync(Guid proposalId, Guid userId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        await ProposalService.EnsureRoleAsync(db, proposalId, userId, ProposalRole.Reader, ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
 
         return await db.TeamMessages.CountAsync(
             m => m.Thread!.ProposalId == proposalId
@@ -266,7 +269,7 @@ public class TeamChatService(
         var thread = await db.TeamThreads.FirstOrDefaultAsync(t => t.Id == threadId, ct)
             // A business condition, not an auth failure: the UI shows this sentence verbatim.
             ?? throw new InvalidOperationException("That chat no longer exists.");
-        var role = await ProposalService.RequireRoleAsync(db, thread.ProposalId, userId, ProposalRole.Reader, ct);
+        var role = await ProposalService.RequireRoleForReadAsync(db, thread.ProposalId, userId, ct);
         return (thread, role);
     }
 

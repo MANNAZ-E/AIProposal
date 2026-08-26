@@ -1,5 +1,7 @@
+﻿@using Saga.Web.Auth
 @inject AdminService Admin
 @inject ProposalService Proposals
+@inject CurrentUserService CurrentUser
 
 <h2 class="section-heading">Recycling bin</h2>
 
@@ -46,9 +48,12 @@ else
     private List<DeletedProposal> _deleted = [];
     private bool _restoring;
 
+    private Guid _currentUserId;
+
     protected override async Task OnInitializedAsync()
     {
-        _deleted = await Admin.GetDeletedProposalsAsync();
+        _currentUserId = (await CurrentUser.GetAsync()).Id;
+        _deleted = await Admin.GetDeletedProposalsAsync(_currentUserId);
         _ready = true;
     }
 
@@ -58,7 +63,7 @@ else
         try
         {
             await Proposals.RestoreAsAdminAsync(proposalId);
-            _deleted = await Admin.GetDeletedProposalsAsync();
+            _deleted = await Admin.GetDeletedProposalsAsync(_currentUserId);
         }
         finally
         {

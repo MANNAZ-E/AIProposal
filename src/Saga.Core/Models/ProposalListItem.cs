@@ -1,4 +1,4 @@
-using Saga.Core.Domain;
+﻿using Saga.Core.Domain;
 
 namespace Saga.Core.Models;
 
@@ -8,7 +8,8 @@ public record ProposalListItem(
     string Title,
     string ClientName,
     string OwnerName,
-    ProposalRole MyRole,
+    /// <summary>Null when the viewer has no seat on the bid — a super admin listing every one.</summary>
+    ProposalRole? MyRole,
     bool IsOwnedByMe,
     bool IsArchived,
     DateTimeOffset CreatedAt,

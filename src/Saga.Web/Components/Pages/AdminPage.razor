@@ -1,4 +1,4 @@
-@page "/admin"
+﻿@page "/admin"
 @page "/admin/{SectionSlug}"
 @implements IDisposable
 @using Saga.Web.Auth
@@ -13,7 +13,7 @@
 {
     <div class="workspace">
         <nav class="workspace-nav">
-            @foreach (var (section, label) in Sections)
+            @foreach (var (section, label) in VisibleSections)
             {
                 <a class="nav-item @(_section == section ? "active" : null)" href="/admin/@Slug(section)">@label</a>
             }
@@ -25,7 +25,7 @@
                 {
                     <AdminUsersSection />
                 }
-                else if (_section == Section.Prompts)
+                else if (_section == Section.Prompts && _isSuperAdmin)
                 {
                     <AdminPromptsSection />
                 }
@@ -51,14 +51,26 @@ else
 
     private enum Section { Users, Prompts, Usage, RecycleBin }
 
-    /// <summary>The left menu, in the order it is drawn.</summary>
-    private static readonly (Section Section, string Label)[] Sections =
-    [
-        (Section.Users, "Users"),
-        (Section.Prompts, "System prompts"),
-        (Section.Usage, "Usage"),
-        (Section.RecycleBin, "Recycling bin"),
-    ];
+    /// <summary>
+    /// The left menu, in the order it is drawn. System prompts is super-admin only — the voice it
+    /// edits is prepended to every generated word, which is a different kind of power from adding
+    /// a colleague or reading the spend.
+    /// </summary>
+    private (Section Section, string Label)[] VisibleSections =>
+        _isSuperAdmin
+            ?
+            [
+                (Section.Users, "Users"),
+                (Section.Prompts, "System prompts"),
+                (Section.Usage, "Usage"),
+                (Section.RecycleBin, "Recycling bin"),
+            ]
+            :
+            [
+                (Section.Users, "Users"),
+                (Section.Usage, "Usage"),
+                (Section.RecycleBin, "Recycling bin"),
+            ];
 
     private static string Slug(Section section) => section switch
     {
@@ -78,6 +90,7 @@ else
     };
 
     private bool _ready;
+    private bool _isSuperAdmin;
     private Section _section = Section.Users;
 
     protected override async Task OnInitializedAsync()
@@ -88,15 +101,19 @@ else
             Nav.NavigateTo("/");
             return;
         }
+        _isSuperAdmin = me.IsSuperAdmin;
         Header.Set("Admin", null, null);
         _ready = true;
     }
 
+    /// <summary>
+    /// Bare /admin, a slug nobody recognises, or a section this admin may not see becomes
+    /// /admin/users — the menu should never render with nothing highlighted, and the URL should
+    /// say which section you are looking at. Runs after OnInitializedAsync, so the tier is known.
+    /// </summary>
     protected override void OnParametersSet()
     {
-        // Bare /admin, or a slug nobody recognises, becomes /admin/users — the menu should never
-        // render with nothing highlighted, and the URL should say which section you are looking at.
-        if (Parse(SectionSlug) is not { } section)
+        if (Parse(SectionSlug) is not { } section || section == Section.Prompts && !_isSuperAdmin)
         {
             Nav.NavigateTo("/admin/users", replace: true);
             return;

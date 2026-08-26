@@ -1,4 +1,4 @@
-﻿@inject ChatService Chat
+@inject ChatService Chat
 @inject CurrentUserService CurrentUser
 @inject WorkingContextService WorkingContext
 @inject ChatDraftState Drafts
@@ -95,10 +95,8 @@
                     <div class="card" style="margin-bottom: 1rem;">
                         <ChatMaterial Documents="_documents" Artifacts="_artifacts"
                                       SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
-                                      ReadOnly="true" Preset="ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject" />
-                        <button class="btn btn-outline btn-sm" @onclick="NewChatWithSameMaterial">
-                            New chat
-                        </button>
+                                      ReadOnly="true" Preset="ActiveChat?.WorkingContext ?? WorkingContextKind.FullProject"
+                                      OnNewChat="NewChatWithSameMaterial" />
                     </div>
                 }
 

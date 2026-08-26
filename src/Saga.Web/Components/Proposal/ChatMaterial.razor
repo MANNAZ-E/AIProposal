@@ -68,8 +68,11 @@
     @if (ReadOnly)
     {
         <div class="chat-material-locked">
-            <div class="chat-material-locked-head">New chat to change materials</div>
-            <p class="form-hint">Materials are locked when a chat is started - start a new chat to change</p>
+            <div class="chat-material-locked-head">Materials locked</div>
+            <p class="form-hint">
+                Materials are locked when a chat is started — start a
+                <button class="link-button" @onclick="OnNewChat">New chat</button> to change
+            </p>
         </div>
     }
     else if (!IsEmpty)
@@ -96,6 +99,9 @@
 
     /// <summary>Opens the Materials tab when there is nothing here to choose from.</summary>
     [Parameter] public EventCallback OnAddMaterials { get; set; }
+
+    /// <summary>Starts a fresh chat from this one's material — the only way to change a frozen selection.</summary>
+    [Parameter] public EventCallback OnNewChat { get; set; }
 
     /// <summary>Broadest first — "Everything" reads before "Client materials only".</summary>
     private static readonly WorkingContextKind[] DisplayPresets = MaterialSelection.DisplayPresets;

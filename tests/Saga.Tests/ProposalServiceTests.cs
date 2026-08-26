@@ -1,4 +1,4 @@
-using Saga.Core.Domain;
+﻿using Saga.Core.Domain;
 using Saga.Infrastructure.Services;
 
 namespace Saga.Tests;
@@ -124,21 +124,28 @@ public class ProposalServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixt
         Assert.Null(await _proposals.GetForUserAsync(id, elv));
         Assert.DoesNotContain(await _proposals.GetDashboardAsync(sda), p => p.Id == id);
 
-        // Both members see it in the recycle bin, with the deletion timestamp.
-        var bin = await _proposals.GetRecycleBinAsync(sda);
-        var item = Assert.Single(bin, p => p.Id == id);
+        // The owner sees it in their bin, with the deletion timestamp; a teammate does not, since
+        // only the owner can put it back.
+        var item = Assert.Single(await _proposals.GetRecycleBinAsync(elv), p => p.Id == id);
         Assert.NotNull(item.DeletedAt);
+        Assert.DoesNotContain(await _proposals.GetRecycleBinAsync(sda), p => p.Id == id);
     }
 
+    /// <summary>
+    /// Restoring mirrors deleting: a reader who could undo the owner's deletion would be
+    /// overruling them. An admin reaches a teammate's deleted bid from /admin instead.
+    /// </summary>
     [Fact]
-    public async Task Any_team_member_can_restore_from_the_recycle_bin()
+    public async Task Only_the_owner_can_restore_from_the_recycle_bin()
     {
         var (elv, sda) = await GetSeededUsersAsync();
         var id = await _proposals.CreateAsync(elv, "P", "C", null, OutputFormat.PowerPoint);
         await _proposals.ShareAsync(id, elv, "sda@mannaz.com", ProposalRole.Reader);
         await _proposals.DeleteAsync(id, elv);
 
-        await _proposals.RestoreAsync(id, sda);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _proposals.RestoreAsync(id, sda));
+
+        await _proposals.RestoreAsync(id, elv);
 
         Assert.NotNull(await _proposals.GetForUserAsync(id, elv));
         Assert.Contains(await _proposals.GetDashboardAsync(elv), p => p.Id == id);

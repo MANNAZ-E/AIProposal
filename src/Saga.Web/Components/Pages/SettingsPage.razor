@@ -1,0 +1,67 @@
+@page "/settings"
+@page "/settings/{SectionSlug}"
+@implements IDisposable
+@inject AppHeaderState Header
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Saga — Settings</PageTitle>
+
+<div class="workspace">
+    <nav class="workspace-nav">
+        @foreach (var (section, label) in Sections)
+        {
+            <a class="nav-item @(_section == section ? "active" : null)" href="/settings/@Slug(section)">@label</a>
+        }
+    </nav>
+
+    <div class="workspace-main">
+        <div class="workspace-content">
+            @if (_section == Section.RecycleBin)
+            {
+                <SettingsRecycleBinSection />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? SectionSlug { get; set; }
+
+    private enum Section { RecycleBin }
+
+    /// <summary>The left menu, in the order it is drawn.</summary>
+    private static readonly (Section Section, string Label)[] Sections =
+    [
+        (Section.RecycleBin, "Recycling bin"),
+    ];
+
+    private static string Slug(Section section) => section switch
+    {
+        _ => "recycle-bin",
+    };
+
+    private static Section? Parse(string? slug) => slug?.ToLowerInvariant() switch
+    {
+        "recycle-bin" => Section.RecycleBin,
+        _ => null,
+    };
+
+    private Section _section = Section.RecycleBin;
+
+    protected override void OnInitialized() => Header.Set("Settings", null, null);
+
+    protected override void OnParametersSet()
+    {
+        // Bare /settings, or a slug nobody recognises, becomes the first section — the menu should
+        // never render with nothing highlighted, and the URL should say what you are looking at.
+        if (Parse(SectionSlug) is not { } section)
+        {
+            Nav.NavigateTo("/settings/recycle-bin", replace: true);
+            return;
+        }
+        _section = section;
+    }
+
+    public void Dispose() => Header.Clear();
+}

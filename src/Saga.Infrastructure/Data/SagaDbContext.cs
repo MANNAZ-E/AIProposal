@@ -200,6 +200,7 @@ public class SagaDbContext(DbContextOptions<SagaDbContext> options) : DbContext(
                 DisplayName = "Emil Lindeløv Vestergaard",
                 CreatedAt = DateTimeOffset.Parse("2026-07-03T00:00:00Z"),
                 IsAdmin = true,
+                IsSuperAdmin = true,
             },
             new User
             {
