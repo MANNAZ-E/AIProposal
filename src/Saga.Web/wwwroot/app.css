@@ -8,9 +8,31 @@
     --saga-danger: #b32121;
     --saga-warning: #9a6b00;
     --saga-bg: #f6f7f8;
+    /* The field either side of the app once the window is wider than it. Darker than the
+       bar and the menu on purpose, so the menu keeps a visible edge against it. */
+    --saga-field: #333333;
     /* Workspace nav width, also used to line the app bar's proposal name up with the content. */
     --saga-nav-width: 250px;
     --saga-chat-list-width: 240px;
+    /* A nav label's inset from the menu's own left edge is these two added together — the
+       menu's side padding plus the item's. The app bar's logo lines up with that x, so all
+       three read off the same pair rather than a copied number. */
+    --saga-nav-pad: 0.6rem;
+    --saga-nav-item-pad: 0.7rem;
+    /* Maximum width of the content column, centred in whatever space the menus leave.
+       Set all three of these to `none` to go back to full-width pages. */
+    --saga-content-width: 1400px;
+    /* A second left pane (the chat thread list) is part of the same total, so the
+       transcript column gets what is left of it. */
+    --saga-chat-content-width: calc(var(--saga-content-width) - var(--saga-chat-list-width));
+    /* A page with no menu gets the same total footprint instead, so the dashboard's
+       tables are as wide as nav + content is on a proposal page. */
+    --saga-page-width: calc(var(--saga-content-width) + var(--saga-nav-width));
+    /* How much window falls outside the app on one side; zero until the window is wider
+       than the app. The percentage resolves against .app-bar's own width wherever this is
+       used — the bar spans the shell, so that is the window either way — which lets the
+       bar's padding and its gradient be placed from the same expression. */
+    --saga-app-margin: max(0px, (100% - var(--saga-page-width)) / 2);
     --saga-gutter: 1.5rem;
     /* The one gap between a page or section headline and whatever comes under it. */
     --saga-heading-gap: 1rem;
@@ -61,25 +83,45 @@ a {
 }
 
 .app-bar {
-    background: var(--saga-primary);
+    /* The bar is the app's width, not the window's: past the cap the field shows either
+       side of it, so the whole app reads as one slab. A gradient with hard stops rather
+       than an inner wrapper, for the same reason the insets are padding — the bar stays
+       one element. */
+    background: linear-gradient(to right,
+        var(--saga-field) 0 var(--saga-app-margin),
+        var(--saga-primary) var(--saga-app-margin) calc(100% - var(--saga-app-margin)),
+        var(--saga-field) calc(100% - var(--saga-app-margin)) 100%);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 var(--saga-gutter);
+    /* The colour spans the window but the row inside it does not. Both insets are the
+       margin outside the app plus what that side owes inside it: on the left a nav label's
+       inset, so the logo sits on the same x as "Materials"; on the right the content pane's
+       gutter, so the user menu ends where the content does. Below the cap the margin is
+       zero and each falls back to its inner part alone. Inset as padding rather than an
+       inner wrapper, so the bar stays one element. */
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: calc(var(--saga-app-margin) + var(--saga-nav-pad) + var(--saga-nav-item-pad));
+    padding-right: calc(var(--saga-app-margin) + var(--saga-gutter));
     height: 56px;
     flex-shrink: 0;
 }
 
 /*
-   The brand occupies exactly the nav width, so whatever follows it starts at the same x as the
-   workspace content (nav width + the content pane's own gutter).
+   Whatever follows the brand starts at the same x as the workspace content, which is why the
+   width is a sum rather than the nav width: the bar's left padding already spent a label
+   inset getting the logo onto the menu's labels, so the brand hands that back and takes the
+   content pane's gutter instead. Left inset + this width = nav width + gutter, the content's
+   own left edge, at every window size.
 */
 .app-brand {
     display: flex;
     align-items: baseline;
     gap: 0.75rem;
-    width: var(--saga-nav-width);
+    width: calc(var(--saga-nav-width) + var(--saga-gutter)
+                - var(--saga-nav-pad) - var(--saga-nav-item-pad));
     flex-shrink: 0;
     color: #fff;
     text-decoration: none;
@@ -187,12 +229,15 @@ a {
 
 .app-main {
     flex: 1;
-    padding: 1.5rem;
     width: 100%;
     min-width: 0;
     /* The shell fills the viewport; the content pane scrolls so the workspace nav
        can stay pinned over the full height. */
     overflow-y: auto;
+    /* The field the app sits on: shows either side once the window is wider than the app,
+       covered completely at or below that width. The gutter belongs to each page's own
+       block, so nothing has to negative-margin out of here to reach the window edge. */
+    background: var(--saga-field);
 }
 
 .auth-message {
@@ -541,14 +586,33 @@ a {
     margin-top: 1.25rem;
 }
 
+/* A page with no menu renders straight into .app-main, so it wraps itself in this to get
+   the same total footprint a menu page uses — nav width plus content width. */
+.content-column {
+    max-width: var(--saga-page-width);
+    margin-inline: auto;
+    padding: var(--saga-gutter);
+    /* Its own light ground, so the blue field stops where the app starts. Full height, or a
+       short page would leave the bottom of the column blue. */
+    background: var(--saga-bg);
+    height: calc(100vh - 56px);
+    /* Scrolls itself, like .workspace-main does. If .app-main scrolled instead, its
+       scrollbar would narrow the box this column centres in and the column would sit half a
+       scrollbar left of the app bar's logo, but only on the pages long enough to scroll. */
+    overflow-y: auto;
+}
+
 /* ---------- Workspace ---------- */
 
 .workspace {
     display: grid;
     grid-template-columns: var(--saga-nav-width) minmax(0, 1fr);
-    /* Break out of the .app-main padding so the nav sits flush against the app bar
-       and the viewport edge. */
-    margin: -1.5rem;
+    /* Centred as one block, menu included: the frame is nav plus content wide and sits in
+       the middle of the window with the blue field showing either side of it. Below that
+       width it simply fills, and the nav goes back to the window edge — which is why the
+       centring is a plain auto margin and not a negative one. */
+    max-width: var(--saga-page-width);
+    margin-inline: auto;
     /* Exactly fills .app-main, so the nav stays put and only the content pane
        scrolls — no sticky positioning and no scrollbar on .app-main itself. */
     height: calc(100vh - 56px);
@@ -560,7 +624,7 @@ a {
     gap: 2px;
     background: var(--saga-primary);
     color: #fff;
-    padding: 1rem 0.6rem;
+    padding: 1rem var(--saga-nav-pad);
     overflow-y: auto;
 }
 
@@ -568,6 +632,7 @@ a {
     min-width: 0;
     padding: var(--saga-gutter);
     overflow-y: auto;
+    background: var(--saga-bg);
 }
 
 /* Works on a button or an anchor: the admin nav uses real links so its sections can be
@@ -578,7 +643,7 @@ a {
     text-align: left;
     border: none;
     background: transparent;
-    padding: 0.45rem 0.7rem;
+    padding: 0.45rem var(--saga-nav-item-pad);
     border-radius: 6px;
     font: inherit;
     font-size: 0.92rem;
@@ -609,11 +674,15 @@ a {
 
 .nav-divider {
     border-top: 1px solid rgba(255, 255, 255, 0.25);
-    margin: 0.5rem 0.7rem;
+    margin: 0.5rem var(--saga-nav-item-pad);
 }
 
 .workspace-content {
     min-width: 0;
+    /* Centred in the space the nav leaves, so a table stops growing on a wide monitor.
+       The nav itself does not move: it stays flush against the viewport edge. */
+    max-width: var(--saga-content-width);
+    margin-inline: auto;
 }
 
 /* ---------- Team & settings ---------- */
@@ -1219,6 +1288,24 @@ button.type-list-name {
 .workspace-main.flush > .workspace-content {
     height: 100%;
     min-height: 0;
+    /* The pane owns the full-height scroll and has to fill its column, so it is exempt
+       from the page cap — that moves onto the transcript's own contents below. */
+    max-width: none;
+}
+
+/* The pane spans its column so its borders and scrollbar reach the edges; the reading
+   column inside is capped and centred, less what the thread list already took out of the
+   total. One rule for both chats — they share .chat-pane's three rows. */
+.chat-header > *,
+.chat-scroll > *,
+.team-scroll > *,
+.chat-composer > * {
+    /* Explicit, because the team transcript is a flex item of a column-reverse scroller:
+       auto inline margins cancel the stretch that would otherwise give it its width, and a
+       shrunk thread would take the team's right-aligned messages in with it. */
+    width: 100%;
+    max-width: var(--saga-chat-content-width);
+    margin-inline: auto;
 }
 
 .chat-layout {
@@ -1349,10 +1436,6 @@ button.type-list-name {
     padding: 0.75rem var(--saga-gutter);
 }
 
-.chat-composer .chat-input {
-    margin: 0;
-}
-
 /* ---------- Chat row menu ---------- */
 
 .chat-row-wrap {
@@ -1469,6 +1552,27 @@ button.type-list-name {
 
 .chat-visibility {
     position: relative;
+}
+
+/* The visibility menu is the only .menu-panel with icons, and its two differ in width
+   (lock 11, people 14), so each sits in a fixed column and the labels line up. A flex
+   basis on the svg widens the box without distorting it — the viewBox just centres
+   inside it. Wide enough, and nowrap, so "Shared with team" stays on one line. */
+.chat-visibility .menu-panel {
+    left: 0;
+    right: auto;
+    min-width: 11rem;
+}
+
+.chat-visibility .menu-panel button {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.chat-visibility .menu-panel button > svg {
+    flex: 0 0 1rem;
 }
 
 .nav-flag-count {

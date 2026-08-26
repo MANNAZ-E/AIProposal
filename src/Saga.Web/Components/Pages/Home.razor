@@ -6,77 +6,79 @@
 
 <PageTitle>Saga — Proposals</PageTitle>
 
-<div class="page-header">
-    <h1 class="page-heading">Proposals</h1>
-    <a class="btn btn-primary" href="/proposals/new">+ New proposal</a>
-</div>
+<div class="content-column">
+    <div class="page-header">
+        <h1 class="page-heading">Proposals</h1>
+        <a class="btn btn-primary" href="/proposals/new">+ New proposal</a>
+    </div>
 
-@if (_items is null)
-{
-    <p class="text-muted">Loading…</p>
-}
-else if (_all is not null)
-{
-    @* Super admin: their own work first, then everything they have oversight of. *@
-    <h3 class="list-heading" style="margin-top: 0;">My proposals</h3>
-    @if (_mine.Count == 0)
+    @if (_items is null)
     {
-        <div class="empty-state"><p>You are not on any active proposals.</p></div>
+        <p class="text-muted">Loading…</p>
+    }
+    else if (_all is not null)
+    {
+        @* Super admin: their own work first, then everything they have oversight of. *@
+        <h3 class="list-heading" style="margin-top: 0;">My proposals</h3>
+        @if (_mine.Count == 0)
+        {
+            <div class="empty-state"><p>You are not on any active proposals.</p></div>
+        }
+        else
+        {
+            <ProposalTable Items="_mine" OnOpen="Open" />
+        }
+
+        <h3 class="list-heading">Active proposals</h3>
+        var othersActive = _all.Where(p => !p.IsArchived && !_seated.Contains(p.Id)).ToList();
+        @if (othersActive.Count > 0)
+        {
+            <ProposalTable Items="othersActive" OnOpen="Open" />
+        }
+        else
+        {
+            <div class="empty-state"><p>No other active proposals.</p></div>
+        }
+
+        <h3 class="list-heading">My archived proposals</h3>
+        @if (_mineArchived.Count > 0)
+        {
+            <ProposalTable Items="_mineArchived" OnOpen="Open" />
+        }
+        else
+        {
+            <div class="empty-state"><p>You have no archived proposals.</p></div>
+        }
+
+        <h3 class="list-heading">All archived proposals</h3>
+        var othersArchived = _all.Where(p => p.IsArchived && !_seated.Contains(p.Id)).ToList();
+        @if (othersArchived.Count > 0)
+        {
+            <ProposalTable Items="othersArchived" OnOpen="Open" />
+        }
+        else
+        {
+            <div class="empty-state"><p>No archived proposals.</p></div>
+        }
+    }
+    else if (_mine.Count == 0)
+    {
+        <div class="empty-state">
+            <p>No proposals yet.</p>
+            <a class="btn btn-primary" href="/proposals/new">Create your first proposal</a>
+        </div>
     }
     else
     {
         <ProposalTable Items="_mine" OnOpen="Open" />
-    }
 
-    <h3 class="list-heading">Active proposals</h3>
-    var othersActive = _all.Where(p => !p.IsArchived && !_seated.Contains(p.Id)).ToList();
-    @if (othersActive.Count > 0)
-    {
-        <ProposalTable Items="othersActive" OnOpen="Open" />
+        @if (_mineArchived.Count > 0)
+        {
+            <h3 class="list-heading">Archived</h3>
+            <ProposalTable Items="_mineArchived" OnOpen="Open" />
+        }
     }
-    else
-    {
-        <div class="empty-state"><p>No other active proposals.</p></div>
-    }
-
-    <h3 class="list-heading">My archived proposals</h3>
-    @if (_mineArchived.Count > 0)
-    {
-        <ProposalTable Items="_mineArchived" OnOpen="Open" />
-    }
-    else
-    {
-        <div class="empty-state"><p>You have no archived proposals.</p></div>
-    }
-
-    <h3 class="list-heading">All archived proposals</h3>
-    var othersArchived = _all.Where(p => p.IsArchived && !_seated.Contains(p.Id)).ToList();
-    @if (othersArchived.Count > 0)
-    {
-        <ProposalTable Items="othersArchived" OnOpen="Open" />
-    }
-    else
-    {
-        <div class="empty-state"><p>No archived proposals.</p></div>
-    }
-}
-else if (_mine.Count == 0)
-{
-    <div class="empty-state">
-        <p>No proposals yet.</p>
-        <a class="btn btn-primary" href="/proposals/new">Create your first proposal</a>
-    </div>
-}
-else
-{
-    <ProposalTable Items="_mine" OnOpen="Open" />
-
-    @if (_mineArchived.Count > 0)
-    {
-        <h3 class="list-heading">Archived</h3>
-        <ProposalTable Items="_mineArchived" OnOpen="Open" />
-    }
-}
+</div>
 
 @code {
     private List<ProposalListItem>? _items;

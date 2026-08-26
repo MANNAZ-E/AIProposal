@@ -36,9 +36,12 @@ public class UserAdminTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var addedId = await _admin.AddUserAsync(elv, email, "Colleague");
 
         // Mirrors what happens on that person's first real sign-in: matched by email, no duplicate row.
-        var signedIn = await _users.GetOrCreateAsync(email, "Colleague (from Entra)", "entra-object-id");
+        var signedIn = await _users.GetOrCreateAsync(email, "Colleague Nyborg - Mannaz", "entra-object-id");
 
         Assert.Equal(addedId, signedIn.Id);
+        Assert.Equal("entra-object-id", signedIn.EntraObjectId);
+        // The directory name replaces the admin's, with the org suffix dropped on the way in.
+        Assert.Equal("Colleague Nyborg", signedIn.DisplayName);
     }
 
     [Fact]

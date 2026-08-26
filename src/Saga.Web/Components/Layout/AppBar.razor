@@ -74,7 +74,7 @@
             // impersonating that is the target, which ImpersonationBanner spells out.
             var user = await CurrentUser.GetAsync();
             _isAdmin = user.IsAdmin;
-            _displayName = PersonName.Display(user.DisplayName);
+            _displayName = user.DisplayName;
         }
         catch (UnauthorizedAccessException) { }
         catch (AccessRevokedException) { }

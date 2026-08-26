@@ -6,33 +6,35 @@
 
 <PageTitle>Saga — New proposal</PageTitle>
 
-<h1 class="page-heading">New proposal</h1>
+<div class="content-column">
+    <h1 class="page-heading">New proposal</h1>
 
-<div class="card" style="max-width: 640px;">
-    <EditForm Model="_model" OnValidSubmit="CreateAsync">
-        <DataAnnotationsValidator />
+    <div class="card" style="max-width: 640px;">
+        <EditForm Model="_model" OnValidSubmit="CreateAsync">
+            <DataAnnotationsValidator />
 
-        <div class="form-field">
-            <label for="title">Proposal title</label>
-            <AutoFocusInputText id="title" type="text" autofocus @bind-Value="_model.Title" />
-            <ValidationMessage For="() => _model.Title" />
-        </div>
+            <div class="form-field">
+                <label for="title">Proposal title</label>
+                <AutoFocusInputText id="title" type="text" autofocus @bind-Value="_model.Title" />
+                <ValidationMessage For="() => _model.Title" />
+            </div>
 
-        <div class="form-field">
-            <label for="client">Client name<span class="label-hint">(optional)</span></label>
-            <InputText id="client" type="text" @bind-Value="_model.ClientName" />
-        </div>
+            <div class="form-field">
+                <label for="client">Client name<span class="label-hint">(optional)</span></label>
+                <InputText id="client" type="text" @bind-Value="_model.ClientName" />
+            </div>
 
-        @if (_error is not null)
-        {
-            <p class="error-text">@_error</p>
-        }
+            @if (_error is not null)
+            {
+                <p class="error-text">@_error</p>
+            }
 
-        <div class="modal-actions" style="justify-content: flex-start;">
-            <button class="btn btn-primary" type="submit" disabled="@_saving">Create proposal</button>
-            <a class="btn btn-outline" href="/">Cancel</a>
-        </div>
-    </EditForm>
+            <div class="modal-actions" style="justify-content: flex-start;">
+                <button class="btn btn-primary" type="submit" disabled="@_saving">Create proposal</button>
+                <a class="btn btn-outline" href="/">Cancel</a>
+            </div>
+        </EditForm>
+    </div>
 </div>
 
 @code {

@@ -15,6 +15,9 @@ public class UserService(IDbContextFactory<SagaDbContext> dbFactory)
         CancellationToken ct = default)
     {
         email = email.Trim().ToLowerInvariant();
+        // The directory keeps the authoritative name, so a rename in Entra reaches Saga on the next
+        // sign-in — minus the org suffix, which PersonName drops before it is ever stored.
+        var name = PersonName.Normalise(displayName);
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         User? user = null;
@@ -28,7 +31,7 @@ public class UserService(IDbContextFactory<SagaDbContext> dbFactory)
             {
                 Id = Guid.NewGuid(),
                 Email = email,
-                DisplayName = displayName,
+                DisplayName = name,
                 EntraObjectId = entraObjectId,
                 CreatedAt = DateTimeOffset.UtcNow,
             };
@@ -38,10 +41,10 @@ public class UserService(IDbContextFactory<SagaDbContext> dbFactory)
         }
 
         if (user.EntraObjectId != entraObjectId && entraObjectId is not null
-            || !string.IsNullOrWhiteSpace(displayName) && user.DisplayName != displayName)
+            || name.Length > 0 && user.DisplayName != name)
         {
             user.EntraObjectId ??= entraObjectId;
-            if (!string.IsNullOrWhiteSpace(displayName)) user.DisplayName = displayName;
+            if (name.Length > 0) user.DisplayName = name;
             await db.SaveChangesAsync(ct);
         }
         return user;
