@@ -595,7 +595,10 @@ a {
     /* Its own light ground, so the blue field stops where the app starts. Full height, or a
        short page would leave the bottom of the column blue. */
     background: var(--saga-bg);
-    height: calc(100vh - 56px);
+    /* Whatever .app-main was left, rather than the viewport less the bar: the shell may
+       carry more chrome than the bar alone (the impersonation banner), and subtracting a
+       fixed 56px there would make this column taller than its parent and scroll .app-main. */
+    height: 100%;
     /* Scrolls itself, like .workspace-main does. If .app-main scrolled instead, its
        scrollbar would narrow the box this column centres in and the column would sit half a
        scrollbar left of the app bar's logo, but only on the pages long enough to scroll. */
@@ -614,8 +617,9 @@ a {
     max-width: var(--saga-page-width);
     margin-inline: auto;
     /* Exactly fills .app-main, so the nav stays put and only the content pane
-       scrolls — no sticky positioning and no scrollbar on .app-main itself. */
-    height: calc(100vh - 56px);
+       scrolls — no sticky positioning and no scrollbar on .app-main itself. A percentage of
+       the pane and not the viewport less the bar, for the reason .content-column gives. */
+    height: 100%;
 }
 
 .workspace-nav {
@@ -1324,17 +1328,19 @@ button.type-list-name {
     min-height: 0;
 }
 
+/* Same type and vertical padding as .chat-header beside it, so the rule under this title
+   lands on the rule under the thread's title instead of a few pixels above it. */
 .chat-list-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.9rem 0.8rem 0.5rem;
+    padding: 0.9rem 0.8rem 0.7rem;
 }
 
 .chat-list-title {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 1.05rem;
 }
 
 .chat-group {

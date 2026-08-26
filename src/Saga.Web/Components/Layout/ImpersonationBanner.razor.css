@@ -8,6 +8,8 @@
     color: var(--saga-warning);
     border-bottom: 1px solid #f0d78c;
     font-weight: 600;
+    /* Chrome, like .app-bar: it keeps its height and the content pane takes the rest. */
+    flex-shrink: 0;
 }
 
 .impersonation-banner .btn {
