@@ -102,12 +102,12 @@
                             <div class="section-title">Privacy</div>
                             <div class="chat-material-presets">
                                 <button type="button" class="chat-preset @(_draftVisibility == ChatVisibility.Private ? "active" : "")"
-                                        @onclick="() => _draftVisibility = ChatVisibility.Private">
+                                        @onclick="() => SetDraftVisibility(ChatVisibility.Private)">
                                     <LockIcon Class="lock-icon-muted" /> Private
                                 </button>
                                 <button type="button" class="chat-preset @(_draftVisibility == ChatVisibility.Shared ? "active" : "")"
                                         disabled="@(MyRole < ProposalRole.Editor)"
-                                        @onclick="() => _draftVisibility = ChatVisibility.Shared">
+                                        @onclick="() => SetDraftVisibility(ChatVisibility.Shared)">
                                     <PeopleIcon /> Shared with team
                                 </button>
                             </div>
@@ -164,7 +164,7 @@
                 @if (CanPost)
                 {
                     <div class="chat-input">
-                        <textarea rows="2" placeholder="Type a message"
+                        <textarea rows="2" placeholder="Type a message" @ref="_composer"
                                   @bind="Question" @bind:event="oninput" disabled="@ActiveIsBusy"
                                   @onkeydown="OnKeyDown"></textarea>
                         <button class="btn btn-primary" @onclick="AskAsync"
@@ -275,6 +275,17 @@
     private bool _disposed;
     private Guid _loadedProposalId;
 
+    /// <summary>The composer, so the caret can be put in it and handed back to it.</summary>
+    private ElementReference? _composer;
+
+    /// <summary>
+    /// Set wherever the caret belongs in the composer again: opening a chat, and after the
+    /// material or privacy controls, which are settings for the question rather than places to
+    /// leave the keyboard. Honoured in <see cref="OnAfterRenderAsync"/>, since the composer may
+    /// not be on screen yet at the moment the flag goes up.
+    /// </summary>
+    private bool _focusComposer;
+
     private ChatListItem? ActiveChat => _chats.FirstOrDefault(c => c.Id == _activeChatId);
     private int SelectedDocumentCount => _selectedDocuments.Count;
 
@@ -309,6 +320,16 @@
         else NewChat();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Not while the unshare confirmation is up: the caret belongs to the dialog until it closes.
+        if (_focusComposer && !_confirmUnshare && _composer is { } composer)
+        {
+            _focusComposer = false;
+            await composer.FocusAsync();
+        }
+    }
+
     private async Task LoadChatsAsync()
     {
         var user = await CurrentUser.GetAsync();
@@ -322,6 +343,7 @@
         _error = null;
         _isDraft = false;
         _showMaterial = false;
+        _focusComposer = true;
         _activeChatId = chatId;
         var user = await CurrentUser.GetAsync();
         try
@@ -363,6 +385,7 @@
         _error = null;
         _isDraft = true;
         _showMaterial = false;
+        _focusComposer = true;
         _draftVisibility = ChatVisibility.Private;
         _activeChatId = null;
         _activeSession = null;
@@ -389,7 +412,15 @@
     private void OnDraftMaterialChanged(WorkingContextKind kind)
     {
         _draftKind = kind;
+        _focusComposer = true;
         RememberDraftMaterial();
+    }
+
+    /// <summary>Who the draft will be shared with, chosen before the first question starts it.</summary>
+    private void SetDraftVisibility(ChatVisibility visibility)
+    {
+        _draftVisibility = visibility;
+        _focusComposer = true;
     }
 
     private void RememberDraftMaterial()
@@ -399,6 +430,8 @@
     private async Task SetVisibilityAsync(ChatVisibility visibility)
     {
         _showVisibility = false;
+        // Closing the menu hands the keyboard back whether or not anything changed.
+        _focusComposer = true;
         if (ActiveChat is null || ActiveChat.Visibility == visibility) return;
         // Unsharing only takes something away when there is somebody on the proposal to take it
         // from; on a one-person proposal the confirmation would be asking about nobody.

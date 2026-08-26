@@ -1759,7 +1759,9 @@ button.type-list-name {
 .chat-preset {
     border: 1px solid var(--saga-border);
     border-radius: 999px;
-    padding: 0.2rem 0.75rem;
+    /* 1px more above than below: an even split centres the line box, but the eye centres
+       the glyphs, which sit high in it — so the label reads as riding up against the top. */
+    padding: calc(0.3rem + 1px) 0.75rem calc(0.3rem - 1px);
     background: #fff;
     font-size: 0.85rem;
     color: var(--saga-text);
@@ -1833,6 +1835,15 @@ button.type-list-name {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
+}
+
+/* The icon wants the opposite of the label: it is centred on its own box, which already sits
+   level with the label's middle rather than its cap height. 2px because it also has to undo
+   the 1px the button's padding drops all of its content by. `vertical-align`, which handles
+   this wherever the icon sits in flowing text, does nothing on a flex item. */
+.chat-privacy .chat-preset .lock-icon,
+.chat-privacy .chat-preset .people-icon {
+    margin-top: -2px;
 }
 
 /* The padlock's grey and the people icon's blue are both invisible on the filled button. */

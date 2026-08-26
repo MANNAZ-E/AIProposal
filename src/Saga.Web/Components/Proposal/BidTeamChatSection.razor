@@ -138,6 +138,12 @@
     private ElementReference? _composer;
 
     /// <summary>
+    /// Set when a thread comes on screen, so the caret starts where the typing goes. Honoured in
+    /// <see cref="OnAfterRenderAsync"/>, since the composer is not rendered yet when it goes up.
+    /// </summary>
+    private bool _focusComposer;
+
+    /// <summary>
     /// The highlight, held against a list that may have shrunk under it since the last keystroke.
     /// </summary>
     private int ActiveIndex(int count) => count == 0 ? 0 : Math.Clamp(_active, 0, count - 1);
@@ -183,6 +189,15 @@
         else NewThread();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusComposer && _composer is { } composer)
+        {
+            _focusComposer = false;
+            await composer.FocusAsync();
+        }
+    }
+
     /// <summary>
     /// Somebody posted. The event fires on whichever circuit did the posting, so the work has to
     /// hop back onto this component's own synchronization context before it touches state. The
@@ -224,6 +239,7 @@
         _isDraft = false;
         _error = null;
         _dismissedAt = -1;
+        _focusComposer = true;
         // The other thread's draft may itself end in an '@' run, and its picker opens on the top name.
         _active = 0;
         _activeThreadId = threadId;
@@ -249,6 +265,7 @@
         _error = null;
         _dismissedAt = -1;
         _active = 0;
+        _focusComposer = true;
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)
