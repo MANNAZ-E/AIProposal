@@ -1,3 +1,6 @@
+using Saga.Core.Domain;
+using Saga.Core.Models;
+
 namespace Saga.Web.Components.Proposal;
 
 /// <summary>Which composer a draft was typed into; both start their unsaved chat at Guid.Empty.</summary>
@@ -32,4 +35,20 @@ public sealed class ChatDraftState
         if (string.IsNullOrEmpty(text)) _drafts.Remove((proposalId, kind, chatId));
         else _drafts[(proposalId, kind, chatId)] = text;
     }
+
+    /// <summary>
+    /// What the AI Chat material picker was last set to, per proposal. Same reasoning as the
+    /// unsent text, and the same round trip loses it — but it outlives the one draft: once
+    /// somebody has said which material their questions are about, every chat they start next
+    /// opens on that rather than back on the default.
+    /// </summary>
+    private readonly Dictionary<Guid, ChatMaterialDraft> _material = [];
+
+    public ChatMaterialDraft? GetMaterial(Guid proposalId)
+        => _material.TryGetValue(proposalId, out var draft) ? draft : null;
+
+    public void SetMaterial(Guid proposalId, ChatMaterialDraft draft) => _material[proposalId] = draft;
 }
+
+/// <summary>A material picker's state: what it selects, and which preset that still counts as.</summary>
+public sealed record ChatMaterialDraft(WorkingContextKind Kind, MaterialSelection Selection);

@@ -45,7 +45,7 @@ public static class ReviewPrompts
           "coverage": "Addressed" | "Partly" | "NotAddressed",
           "whereAddressed": "which slides/sections address it, or null",
           "improvement": "concrete suggestion to strengthen coverage, or null if none needed",
-          "risk": "the risk to the bid if left as is, or null"
+          "risk": "the risk to the proposal if left as is, or null"
         }
         Write whereAddressed/improvement/risk in the same language as the proposal content.
         Be honest: a requirement mentioned in passing is "Partly", not "Addressed".

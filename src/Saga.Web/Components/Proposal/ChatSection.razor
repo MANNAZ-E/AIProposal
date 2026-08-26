@@ -41,7 +41,7 @@
                                 <button class="link-button" @onclick="() => _showVisibility = !_showVisibility">
                                     @if (ActiveChat.Visibility == ChatVisibility.Shared)
                                     {
-                                        <PeopleIcon /> <text>Shared with bid team</text>
+                                        <PeopleIcon /> <text>Shared with team</text>
                                     }
                                     else
                                     {
@@ -57,7 +57,7 @@
                                             <LockIcon Class="lock-icon-muted" /> Private
                                         </button>
                                         <button @onclick="() => SetVisibilityAsync(ChatVisibility.Shared)">
-                                            <PeopleIcon /> Shared with bid team
+                                            <PeopleIcon /> Shared with team
                                         </button>
                                     </div>
                                 }
@@ -87,7 +87,7 @@
                         <ChatMaterial Documents="_documents" Artifacts="_artifacts"
                                       SelectedDocuments="_selectedDocuments" SelectedArtifacts="_selectedArtifacts"
                                       Budget="WorkingContext.Budget" OnAddMaterials="OnAddMaterials"
-                                      Preset="_draftKind" PresetChanged="k => _draftKind = k" />
+                                      Preset="_draftKind" PresetChanged="OnDraftMaterialChanged" />
                     </div>
                 }
                 else if (_showMaterial)
@@ -335,13 +335,34 @@
         _activeChatId = null;
         _activeSession = null;
         _messages = [];
-        // The broadest preset that has anything to offer, so a proposal with no artifacts yet
-        // starts on "All materials" instead of on a greyed-out "Everything".
-        _draftKind = MaterialSelection.DefaultPreset(_documents, _artifacts);
-        var selection = MaterialSelection.ForPreset(_draftKind, _documents, _artifacts);
-        _selectedDocuments = selection.DocumentIds.ToHashSet();
+        // Whatever the picker was last left on, if it has been touched at all this session —
+        // including before the trip to Materials and back that destroys this component. Only a
+        // first chat falls back to the default preset.
+        var remembered = Drafts.GetMaterial(ProposalId);
+        var selection = remembered?.Selection;
+        if (remembered is not null) _draftKind = remembered.Kind;
+        else
+        {
+            _draftKind = MaterialSelection.DefaultPreset(_documents, _artifacts);
+            selection = MaterialSelection.ForPreset(_draftKind, _documents, _artifacts);
+        }
+        _selectedDocuments = selection!.DocumentIds.ToHashSet();
         _selectedArtifacts = selection.ArtifactTypes.ToHashSet();
     }
+
+    /// <summary>
+    /// The picker edits the selection sets in place and reports what preset that leaves it on,
+    /// so this is the one place a draft's material changes — and the one place to remember it.
+    /// </summary>
+    private void OnDraftMaterialChanged(WorkingContextKind kind)
+    {
+        _draftKind = kind;
+        RememberDraftMaterial();
+    }
+
+    private void RememberDraftMaterial()
+        => Drafts.SetMaterial(ProposalId, new ChatMaterialDraft(_draftKind,
+            new MaterialSelection(_selectedDocuments.ToList(), _selectedArtifacts.ToList())));
 
     private async Task SetVisibilityAsync(ChatVisibility visibility)
     {
@@ -428,6 +449,7 @@
         _selectedDocuments = documents;
         _selectedArtifacts = artifacts;
         _draftKind = kind;
+        RememberDraftMaterial();
     }
 
     private async Task OnKeyDown(KeyboardEventArgs e)

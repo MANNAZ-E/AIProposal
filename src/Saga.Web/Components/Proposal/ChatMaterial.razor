@@ -5,7 +5,19 @@
    can serve it from its cache. *@
 
 <div class="chat-material">
-    @if (!ReadOnly)
+    @if (ReadOnly)
+    {
+        @* Above the list, not under it: the list is long enough to scroll the reason it cannot
+           be touched off the screen. *@
+        <div class="chat-material-locked">
+            <div class="chat-material-locked-head">Materials locked</div>
+            <p class="form-hint">
+                Materials are locked when a chat is started — start a
+                <button class="link-button" @onclick="OnNewChat">New chat</button> to change
+            </p>
+        </div>
+    }
+    else
     {
         <div class="section-title" style="margin-top: 0;">Choose materials</div>
         @if (IsEmpty)
@@ -19,19 +31,20 @@
         }
         else
         {
+            @* Buttons rather than a radio group: a preset is a shortcut that fills the
+               checkboxes below, and the consultant is expected to edit it afterwards — which
+               a radio, standing for a choice that holds, would misdescribe. Narrowest first,
+               so the row widens left to right from "None". Editing a checkbox afterwards only
+               unlights the button it moved away from; naming the result adds nothing the boxes
+               do not already show. *@
             <div class="chat-material-presets">
-                @foreach (var preset in DisplayPresets)
+                <button type="button" class="chat-preset @(NothingSelected ? "active" : "")"
+                        @onclick="ClearSelection">None</button>
+                @foreach (var preset in Presets)
                 {
-                    <label class="chat-preset @(IsPresetDisabled(preset) ? "disabled" : "")">
-                        <input type="radio" name="chat-preset" checked="@(Preset == preset)"
-                               disabled="@IsPresetDisabled(preset)"
-                               @onchange="() => ApplyPreset(preset)" />
-                        <span>@ContextLabel(preset)</span>
-                    </label>
-                }
-                @if (Preset == WorkingContextKind.Custom)
-                {
-                    <span class="badge badge-shared">Custom</span>
+                    <button type="button" class="chat-preset @(IsPresetActive(preset) ? "active" : "")"
+                            disabled="@IsPresetDisabled(preset)"
+                            @onclick="() => ApplyPreset(preset)">@ContextLabel(preset)</button>
                 }
             </div>
         }
@@ -65,17 +78,7 @@
         </div>
     }
 
-    @if (ReadOnly)
-    {
-        <div class="chat-material-locked">
-            <div class="chat-material-locked-head">Materials locked</div>
-            <p class="form-hint">
-                Materials are locked when a chat is started — start a
-                <button class="link-button" @onclick="OnNewChat">New chat</button> to change
-            </p>
-        </div>
-    }
-    else if (!IsEmpty)
+    @if (!ReadOnly && !IsEmpty)
     {
         <div class="chat-token-meter">
             @SelectedTokens.ToString("N0") tokens
@@ -103,11 +106,17 @@
     /// <summary>Starts a fresh chat from this one's material — the only way to change a frozen selection.</summary>
     [Parameter] public EventCallback OnNewChat { get; set; }
 
-    /// <summary>Broadest first — "Everything" reads before "Client materials only".</summary>
-    private static readonly WorkingContextKind[] DisplayPresets = MaterialSelection.DisplayPresets;
+    /// <summary>Narrowest first — "Client materials" reads before the wider presets.</summary>
+    private static readonly WorkingContextKind[] Presets = MaterialSelection.ChatPresets;
 
     /// <summary>Nothing to read: every preset would be greyed out and every count zero.</summary>
     private bool IsEmpty => Documents.Count == 0 && Artifacts.Count == 0;
+
+    /// <summary>What "None" leaves behind. No preset selects nothing — one that would is
+    /// greyed out — so an empty selection is the "None" button's alone to light up.</summary>
+    private bool NothingSelected => SelectedDocuments.Count == 0 && SelectedArtifacts.Count == 0;
+
+    private bool IsPresetActive(WorkingContextKind kind) => Preset == kind && !NothingSelected;
 
     private bool IsPresetDisabled(WorkingContextKind kind)
         => !MaterialSelection.IsPresetAvailable(kind, Documents, Artifacts);
@@ -170,6 +179,15 @@
         await MarkCustomAsync();
     }
 
+    /// <summary>Clears the lot, so a selection can be built up from nothing instead of pared down.</summary>
+    private async Task ClearSelection()
+    {
+        if (ReadOnly) return;
+        SelectedDocuments.Clear();
+        SelectedArtifacts.Clear();
+        await MarkCustomAsync();
+    }
+
     /// <summary>Touching a checkbox means the selection is no longer one of the presets.</summary>
     private async Task MarkCustomAsync()
     {
@@ -210,16 +228,16 @@
     }
 
     /// <summary>
-    /// What a chat's material selection is called — on the preset radios here and on the header
+    /// What a chat's material selection is called — on the preset buttons here and on the header
     /// of a chat that already froze one, so both name the same thing.
     /// </summary>
     public static string ContextLabel(WorkingContextKind kind) => kind switch
     {
-        WorkingContextKind.ClientMaterial => "Client materials only",
+        WorkingContextKind.ClientMaterial => "Client materials",
         WorkingContextKind.SourceMaterial => "All materials",
         WorkingContextKind.Analysis => "Analysis",
         WorkingContextKind.Custom => "Selected material",
-        _ => "Everything",
+        _ => "All materials and proposal content",
     };
 
     public static string ArtifactLabel(ArtifactType type) => type switch

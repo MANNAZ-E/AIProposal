@@ -1,4 +1,4 @@
-@page "/"
+﻿@page "/"
 @inject ProposalService Proposals
 @inject CurrentUserService CurrentUser
 @inject NavigationManager Nav
@@ -18,27 +18,46 @@
 else if (_all is not null)
 {
     @* Super admin: their own work first, then everything they have oversight of. *@
-    <div class="section-title" style="margin-top: 0;">My bids</div>
+    <h3 class="list-heading" style="margin-top: 0;">My proposals</h3>
     @if (_mine.Count == 0)
     {
-        <div class="empty-state"><p>You are not on any active bids.</p></div>
+        <div class="empty-state"><p>You are not on any active proposals.</p></div>
     }
     else
     {
         <ProposalTable Items="_mine" OnOpen="Open" />
     }
 
-    <div class="section-title">All active bids</div>
-    <ProposalTable Items="_all.Where(p => !p.IsArchived).ToList()" OnOpen="Open" />
-
-    <div class="section-title">All archived bids</div>
-    @if (_all.Any(p => p.IsArchived))
+    <h3 class="list-heading">Active proposals</h3>
+    var othersActive = _all.Where(p => !p.IsArchived && !_seated.Contains(p.Id)).ToList();
+    @if (othersActive.Count > 0)
     {
-        <ProposalTable Items="_all.Where(p => p.IsArchived).ToList()" OnOpen="Open" />
+        <ProposalTable Items="othersActive" OnOpen="Open" />
     }
     else
     {
-        <div class="empty-state"><p>No archived bids.</p></div>
+        <div class="empty-state"><p>No other active proposals.</p></div>
+    }
+
+    <h3 class="list-heading">My archived proposals</h3>
+    @if (_mineArchived.Count > 0)
+    {
+        <ProposalTable Items="_mineArchived" OnOpen="Open" />
+    }
+    else
+    {
+        <div class="empty-state"><p>You have no archived proposals.</p></div>
+    }
+
+    <h3 class="list-heading">All archived proposals</h3>
+    var othersArchived = _all.Where(p => p.IsArchived && !_seated.Contains(p.Id)).ToList();
+    @if (othersArchived.Count > 0)
+    {
+        <ProposalTable Items="othersArchived" OnOpen="Open" />
+    }
+    else
+    {
+        <div class="empty-state"><p>No archived proposals.</p></div>
     }
 }
 else if (_mine.Count == 0)
@@ -52,11 +71,10 @@ else
 {
     <ProposalTable Items="_mine" OnOpen="Open" />
 
-    var archived = _items.Where(p => p.IsArchived).ToList();
-    @if (archived.Count > 0)
+    @if (_mineArchived.Count > 0)
     {
-        <div class="section-title">Archived</div>
-        <ProposalTable Items="archived" OnOpen="Open" />
+        <h3 class="list-heading">Archived</h3>
+        <ProposalTable Items="_mineArchived" OnOpen="Open" />
     }
 }
 
@@ -68,11 +86,18 @@ else
 
     private List<ProposalListItem> _mine = [];
 
+    private List<ProposalListItem> _mineArchived = [];
+
+    /// <summary>The bids the viewer has a seat on, so the all-of-Saga tables can leave out what stands above them.</summary>
+    private HashSet<Guid> _seated = [];
+
     protected override async Task OnInitializedAsync()
     {
         var user = await CurrentUser.GetAsync();
         _items = await Proposals.GetDashboardAsync(user.Id);
         _mine = _items.Where(p => !p.IsArchived).ToList();
+        _mineArchived = _items.Where(p => p.IsArchived).ToList();
+        _seated = _items.Select(p => p.Id).ToHashSet();
         if (user.IsSuperAdmin)
             _all = await Proposals.GetAllAsync(user.Id);
     }

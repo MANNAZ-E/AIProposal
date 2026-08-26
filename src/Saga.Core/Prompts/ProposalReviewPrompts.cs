@@ -80,7 +80,7 @@ public static class ProposalReviewPrompts
               "coverage": "Addressed" | "Partly" | "NotAddressed",
               "whereAddressed": "which files/slides/sections address it, or null",
               "improvement": "concrete suggestion to strengthen coverage, or null if none needed",
-              "risk": "the risk to the bid if left as is, or null"
+              "risk": "the risk to the proposal if left as is, or null"
             }
           ],
           "language": [

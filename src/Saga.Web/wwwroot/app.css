@@ -477,6 +477,12 @@ a {
     margin: 2rem 0 0.75rem;
 }
 
+/* The headline over one table in a stack of them — a real h3, on the rhythm of .section-title. */
+.list-heading {
+    margin: 2rem 0 0.75rem;
+    line-height: 1.25;
+}
+
 .empty-state {
     padding: 2.5rem;
     text-align: center;
@@ -1581,7 +1587,7 @@ button.type-list-name {
     font-weight: 600;
 }
 
-/* Same picker, reused by the Bid Team add-row. It drops downwards: its input sits at the top of a
+/* Same picker, reused by the Team add-row. It drops downwards: its input sits at the top of a
    card rather than above a composer pinned to the bottom of the screen. */
 .team-user-picker {
     position: relative;
@@ -1600,13 +1606,12 @@ button.type-list-name {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.9rem;
+    gap: 0.4rem;
     padding-bottom: 0.7rem;
     margin-bottom: 0.7rem;
     border-bottom: 1px solid var(--saga-border);
 }
 
-.chat-preset,
 .chat-material-head,
 .chat-material-item {
     display: inline-flex;
@@ -1615,7 +1620,29 @@ button.type-list-name {
     cursor: pointer;
 }
 
-.chat-preset.disabled {
+/* Filled rather than outlined when it matches: the row is a set of shortcuts into the
+   checkboxes below, and the filled one says which shortcut the boxes still stand on. */
+.chat-preset {
+    border: 1px solid var(--saga-border);
+    border-radius: 999px;
+    padding: 0.2rem 0.75rem;
+    background: #fff;
+    font-size: 0.85rem;
+    color: var(--saga-text);
+    cursor: pointer;
+}
+
+.chat-preset:hover:not(:disabled) {
+    border-color: var(--saga-primary);
+}
+
+.chat-preset.active {
+    border-color: var(--saga-primary);
+    background: var(--saga-primary);
+    color: #fff;
+}
+
+.chat-preset:disabled {
     opacity: 0.55;
     cursor: default;
 }
@@ -1642,9 +1669,9 @@ button.type-list-name {
 }
 
 .chat-material-locked {
-    margin-top: 0.7rem;
-    padding-top: 0.6rem;
-    border-top: 1px solid var(--saga-border);
+    padding-bottom: 0.7rem;
+    margin-bottom: 0.7rem;
+    border-bottom: 1px solid var(--saga-border);
 }
 
 .chat-material-locked-head {

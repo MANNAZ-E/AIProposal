@@ -97,7 +97,7 @@
 @code {
     [Parameter, EditorRequired] public Guid ProposalId { get; set; }
 
-    /// <summary>Lets the page refresh the unread badge on the Bid Team Chat nav item.</summary>
+    /// <summary>Lets the page refresh the unread badge on the Team Chat nav item.</summary>
     [Parameter] public EventCallback OnUnreadChanged { get; set; }
 
     /// <summary>At most this many names in the picker; past that it stops being a shortcut.</summary>
@@ -148,7 +148,7 @@
     private Guid ActiveKey => _isDraft ? Guid.Empty : _activeThreadId ?? Guid.Empty;
 
     /// <summary>
-    /// The composer's text, kept in the circuit rather than in a field: leaving the Bid Team Chat
+    /// The composer's text, kept in the circuit rather than in a field: leaving the Team Chat
     /// tab destroys this component, and a message half typed should survive that, exactly as an
     /// unsent question does in AI Chat.
     /// </summary>

@@ -16,7 +16,7 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
 
     public bool IsEmpty => DocumentIds.Count == 0 && ArtifactTypes.Count == 0;
 
-    /// <summary>Everything the proposal currently has — the default for a new chat.</summary>
+    /// <summary>Everything the proposal currently has, artifacts included.</summary>
     public static MaterialSelection Everything(
         IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
         => new(
@@ -24,23 +24,20 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
             artifacts.Where(a => a.Status != ArtifactStatus.Empty).Select(a => a.Type).ToList());
 
     /// <summary>
-    /// The presets a chat can be started from, narrowest first — which is also the order
-    /// <see cref="PresetOrCustom"/> resolves ties in, so a proposal holding nothing but client
-    /// material reads as "Client materials" rather than as the wider preset selecting the same rows.
-    /// The picker itself lists them broadest-first, so it reverses this order for display.
+    /// The presets a chat can be started from, narrowest first — the order the picker lists
+    /// them in, widening left to right; the order <see cref="DefaultPreset"/> falls through them;
+    /// and the order <see cref="PresetOrCustom"/> resolves ties in, so a proposal holding nothing
+    /// but client material reads as "Client materials" rather than as the wider preset selecting
+    /// the same rows.
     /// </summary>
     public static readonly WorkingContextKind[] ChatPresets =
         [WorkingContextKind.ClientMaterial, WorkingContextKind.SourceMaterial, WorkingContextKind.FullProject];
 
-    /// <summary>Broadest first, the reverse of <see cref="ChatPresets"/> — the order the picker
-    /// lists the presets in, and the order <see cref="DefaultPreset"/> falls through them.</summary>
-    public static readonly WorkingContextKind[] DisplayPresets = ChatPresets.Reverse().ToArray();
-
     /// <summary>
-    /// Whether a preset picks anything beyond a narrower preset already on offer: "Client materials
-    /// only" and "All materials" need matching documents to exist at all, and "Everything" needs
-    /// artifacts — without them it would just select the same rows as "All materials". The picker
-    /// greys out what is unavailable, and <see cref="DefaultPreset"/> skips it.
+    /// Whether a preset picks anything beyond a narrower preset already on offer: "Client
+    /// materials" and "All materials" need matching documents to exist at all, and the widest
+    /// preset needs artifacts — without them it would just select the same rows as "All
+    /// materials". The picker greys out what is unavailable, and <see cref="DefaultPreset"/> skips it.
     /// </summary>
     public static bool IsPresetAvailable(
         WorkingContextKind kind, IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
@@ -53,16 +50,19 @@ public record MaterialSelection(IReadOnlyList<Guid> DocumentIds, IReadOnlyList<A
         };
 
     /// <summary>
-    /// What a new chat starts on: the broadest preset that is actually available, so a proposal
-    /// with no artifacts yet opens on "All materials" rather than on a greyed-out "Everything".
-    /// <see cref="WorkingContextKind.Custom"/> when the proposal has nothing to read at all.
+    /// What a new chat starts on: the narrowest preset that is actually available, which is
+    /// "Client materials" whenever the client sent anything — a question is nearly always about
+    /// what they sent, and the wider presets charge for material the answer never needed. A
+    /// proposal with nothing filed as client material falls through to the next preset that has
+    /// something to offer, and one with nothing to read at all lands on
+    /// <see cref="WorkingContextKind.Custom"/>.
     /// </summary>
     public static WorkingContextKind DefaultPreset(
         IEnumerable<Document> documents, IEnumerable<Artifact> artifacts)
     {
         var material = documents as IReadOnlyCollection<Document> ?? documents.ToList();
         var built = artifacts as IReadOnlyCollection<Artifact> ?? artifacts.ToList();
-        foreach (var preset in DisplayPresets)
+        foreach (var preset in ChatPresets)
             if (IsPresetAvailable(preset, material, built)) return preset;
         return WorkingContextKind.Custom;
     }

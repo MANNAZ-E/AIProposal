@@ -33,7 +33,7 @@ else
             <button class="nav-item @(_section == Section.Chat ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Chat)">AI Chat @ChatBadge()</button>
             <button class="nav-item @(_section == Section.BidTeamChat ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Bid Team Chat @TeamBadge()</button>
+                    @onclick="() => SelectSectionAsync(Section.BidTeamChat)">Team Chat @TeamBadge()</button>
             <div class="nav-divider"></div>
             <button class="nav-item @(_section == Section.Generate ? "active" : null)"
                     disabled="@IsDraft(Section.Generate)"
@@ -72,7 +72,7 @@ else
             <button class="nav-item @(_section == Section.Usage ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Usage)">Usage</button>
             <button class="nav-item @(_section == Section.People ? "active" : null)"
-                    @onclick="() => SelectSectionAsync(Section.People)">Bid Team</button>
+                    @onclick="() => SelectSectionAsync(Section.People)">Team</button>
             <button class="nav-item @(_section == Section.Settings ? "active" : null)"
                     @onclick="() => SelectSectionAsync(Section.Settings)">Settings</button>
         </nav>
