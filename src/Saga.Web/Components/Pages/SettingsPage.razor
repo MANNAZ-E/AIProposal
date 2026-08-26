@@ -4,7 +4,7 @@
 @inject AppHeaderState Header
 @inject NavigationManager Nav
 
-<PageTitle>Saga — Settings</PageTitle>
+<PageTitle>Saga – Settings</PageTitle>
 
 <div class="workspace">
     <nav class="workspace-nav">
@@ -48,7 +48,9 @@
 
     private Section _section = Section.RecycleBin;
 
-    protected override void OnInitialized() => Header.Set("Settings", null, null);
+    private int _headerPublication;
+
+    protected override void OnInitialized() => _headerPublication = Header.Set("Settings", null, null);
 
     protected override void OnParametersSet()
     {
@@ -62,5 +64,5 @@
         _section = section;
     }
 
-    public void Dispose() => Header.Clear();
+    public void Dispose() => Header.ClearIfCurrent(_headerPublication);
 }

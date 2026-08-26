@@ -47,11 +47,11 @@
                     }
                     @if (artifact?.IsLocked == true)
                     {
-                        <span class="badge badge-locked" style="margin-left: 0.5rem;"><LockIcon /> locked — skipped</span>
+                        <span class="badge badge-locked" style="margin-left: 0.5rem;"><LockIcon /> locked – skipped</span>
                     }
                     else if (hasContent)
                     {
-                        <span class="badge badge-role" style="margin-left: 0.5rem;">exists — will be replaced</span>
+                        <span class="badge badge-role" style="margin-left: 0.5rem;">exists – will be replaced</span>
                     }
                 </span>
                 <span class="gen-status">@StatusFor(option.Type)</span>
@@ -278,7 +278,7 @@
                             var (_, requirements) = await Extraction.ExtractAsync(ProposalId, user.Id,
                                 async p =>
                                 {
-                                    _currentDetail = $"Extracting requirements: {p.DocumentName} — part {p.Chunk}/{p.TotalChunks}";
+                                    _currentDetail = $"Extracting requirements: {p.DocumentName} – part {p.Chunk}/{p.TotalChunks}";
                                     await InvokeAsync(StateHasChanged);
                                 });
                             await Generation.ApplyAsync(ProposalId, type, user.Id, null, requirements.ToJson());

@@ -144,7 +144,7 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var second = capturing.Requests[1].Messages;
         Assert.Contains(second, m => m.Role == "user" && m.Content == "First question");
         Assert.Contains(second, m => m.Role == "assistant" && m.Content.Length > 0);
-        Assert.Equal("Second question", second[^1].Content);
+        Assert.EndsWith("Second question", second[^1].Content);
     }
 
     [Fact]
@@ -274,6 +274,26 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
     }
 
     [Fact]
+    public async Task Renaming_the_proposal_mid_chat_leaves_the_prefix_untouched()
+    {
+        var (elv, _, proposalId) = await SetupAsync();
+        var capturing = new CapturingAiService();
+        var chat = NewChat(capturing);
+
+        var (chatId, _) = await chat.AskAsync(proposalId, null, elv, "First");
+        await _proposals.UpdateDetailsAsync(proposalId, elv, "Renamed", "New Client");
+        await chat.AskAsync(proposalId, chatId, elv, "Second");
+
+        // The proposal's identity rides with the question, not the cached prefix, so a rename
+        // between messages does not shift a single byte the provider already cached.
+        Assert.Equal(capturing.Requests[0].SystemPrompt, capturing.Requests[1].SystemPrompt);
+        Assert.Equal(capturing.Requests[0].Messages[0].Content, capturing.Requests[1].Messages[0].Content);
+        Assert.DoesNotContain("Renamed", capturing.Requests[0].SystemPrompt);
+        Assert.DoesNotContain("Renamed", capturing.Requests[1].SystemPrompt);
+        Assert.Contains("Renamed", capturing.Requests[1].Messages[^1].Content);
+    }
+
+    [Fact]
     public async Task Asking_with_nothing_selected_sends_no_context()
     {
         var (elv, _, proposalId) = await SetupAsync();
@@ -287,7 +307,7 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         // The question is the whole conversation: no context block, so nothing tells the model
         // to answer strictly from material it was never given.
         var request = Assert.Single(capturing.Requests);
-        Assert.Equal("Q", Assert.Single(request.Messages).Content);
+        Assert.EndsWith("Q", Assert.Single(request.Messages).Content);
         Assert.DoesNotContain("TENDER-TEXT", request.SystemPrompt);
         Assert.DoesNotContain("Answer strictly from the provided context", request.SystemPrompt);
     }

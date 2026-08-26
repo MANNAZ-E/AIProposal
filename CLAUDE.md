@@ -6,6 +6,10 @@ proposal documents. Solution: `Saga.slnx` (`src/Saga.Core`, `src/Saga.Infrastruc
 
 ## UI
 
+- **No em dashes in text the user sees.** Write – (en dash) instead of — in page titles,
+  labels, buttons, messages, placeholders and empty-cell markers. Applies to anything rendered in
+  the browser and to strings that surface there (call-log labels, stand-in placeholder prose);
+  code comments, log messages and LLM prompts are unaffected.
 - **Do not add explanatory help text to new features.** No intro paragraph under a
   heading explaining what the section does, no caption spelling out what a control
   accepts. The consultants using Saga know their job; a label and a placeholder are

@@ -156,7 +156,7 @@ else
                             <td>@row.AdminName</td>
                             <td>@row.TargetName</td>
                             <td class="text-muted">@row.StartedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
-                            <td class="text-muted">@(row.EndedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                            <td class="text-muted">@(row.EndedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "–")</td>
                             <td class="text-muted">@ReasonText(row.EndReason)</td>
                         </tr>
                     }
@@ -244,7 +244,7 @@ else
     {
         ImpersonationEndReason.StoppedByAdmin => "Stopped",
         ImpersonationEndReason.CircuitDisconnected => "Disconnected",
-        _ => "—",
+        _ => "–",
     };
 
     private async Task AddUserAsync()

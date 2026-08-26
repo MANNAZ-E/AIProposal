@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Saga.Core.Abstractions;
 using Saga.Core.Domain;
 using Saga.Infrastructure.Data;
+using Saga.Infrastructure.Services;
 
 namespace Saga.Infrastructure.Ai;
 
@@ -18,6 +19,7 @@ public class UsageTrackingAiService(
     IAiService inner,
     IDbContextFactory<SagaDbContext> dbFactory,
     PricingService pricing,
+    AiUsageNotifier notifier,
     ILogger<UsageTrackingAiService>? logger = null) : IAiService
 {
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(AiRequest request,
@@ -156,6 +158,12 @@ public class UsageTrackingAiService(
         catch (Exception ex)
         {
             logger?.LogError(ex, "Failed to record AI usage for operation {OperationId}.", record.OperationId);
+            return;
         }
+
+        // After the save, not inside it: the listeners re-read the total from the rows, so
+        // announcing one that never landed would have every open circuit query for a figure that
+        // has not moved. A call with no proposal has no proposal header to update.
+        if (record.ProposalId is { } proposalId) notifier.Publish(proposalId);
     }
 }

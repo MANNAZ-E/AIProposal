@@ -30,12 +30,12 @@
                     }
                     else
                     {
-                        <span class="text-muted">—</span>
+                        <span class="text-muted">–</span>
                     }
                 </td>
                 <td class="text-muted">
                     @(IsRecycleBin
-                        ? item.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy") ?? "—"
+                        ? item.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy") ?? "–"
                         : item.CreatedAt.LocalDateTime.ToString("dd MMM yyyy"))
                 </td>
                 @if (IsRecycleBin)

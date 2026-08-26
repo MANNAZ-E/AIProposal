@@ -211,7 +211,7 @@ public class EmbeddedImageTests
         Assert.Single(recording.Calls.Select(c => c.Context!.OperationId).Distinct());
         Assert.Equal(["figure 1.png", "figure 2.png"],
             recording.Calls.Skip(1).Select(c => c.FileName).Order());
-        Assert.Contains(recording.Calls, c => c.Context!.Label == "tender.docx — figure 1");
+        Assert.Contains(recording.Calls, c => c.Context!.Label == "tender.docx – figure 1");
     }
 
     [Fact]

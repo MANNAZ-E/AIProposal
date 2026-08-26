@@ -4,6 +4,7 @@
 @inject CurrentUserService CurrentUser
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
+@inject AiUsageService Usage
 
 <header class="app-bar">
     <a class="app-brand" href="/">
@@ -24,6 +25,13 @@
         }
     </div>
     <div class="app-user">
+        @* Only inside a proposal, and only once the figure is known — an empty slot beats 0,00 DKK
+           on a bid that has already spent. *@
+        @if (Header.UsageProposalId is { } usageProposalId && Header.UsageCostUsd is { } usageCostUsd)
+        {
+            <a class="app-nav-link app-usage"
+               href="@ProposalSectionUrl.For(usageProposalId, ProposalSection.Usage)">Usage: @Money.Display(usageCostUsd, _rate)</a>
+        }
         <a class="app-nav-link" href="/settings">Settings</a>
         @if (_isAdmin)
         {
@@ -63,10 +71,16 @@
     private bool _menuOpen;
     private string? _displayName;
 
+    /// <summary>DKK per USD for the spend figure, read the same way every other money view does.</summary>
+    private decimal _rate;
+
     protected override async Task OnInitializedAsync()
     {
         Header.Changed += OnHeaderChanged;
         _canSignOut = !Configuration.GetValue<bool>("Auth:DevAutoSignIn");
+        // Before the try, which is there to swallow the auth exceptions below: the display rate is
+        // a configuration read, and a signed-out bar still has no business showing the wrong one.
+        _rate = Usage.UsdToDkk;
         try
         {
             // The effective user, so the bar names whoever the app is acting as — while

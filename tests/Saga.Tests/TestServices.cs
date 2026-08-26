@@ -30,15 +30,20 @@ public static class TestServices
     /// Wraps an AI service in the usage decorator, exactly as Program.cs does — so tests
     /// exercise the same metering path the app runs.
     /// </summary>
-    public static IAiService Ai(LocalDbFixture db, IAiService? inner = null, IConfiguration? config = null)
+    /// <param name="notifier">
+    /// Pass one to watch the live-update event the app bar's spend figure runs on; otherwise the
+    /// decorator gets a throwaway, since publishing to nobody is what the tests care about least.
+    /// </param>
+    public static IAiService Ai(LocalDbFixture db, IAiService? inner = null,
+        IConfiguration? config = null, AiUsageNotifier? notifier = null)
         => new UsageTrackingAiService(inner ?? new FakeAiService(), db,
-            new PricingService(config ?? Pricing()));
+            new PricingService(config ?? Pricing()), notifier ?? new AiUsageNotifier());
 
     /// <summary>Wraps an extractor in the usage decorator, as Program.cs does for the billed one.</summary>
     public static IDocumentTextExtractor Extractor(LocalDbFixture db, IDocumentTextExtractor inner,
-        IConfiguration? config = null)
+        IConfiguration? config = null, AiUsageNotifier? notifier = null)
         => new UsageTrackingTextExtractor(inner, ContentUnderstandingExtractor.AnalyzerId, db,
-            new PricingService(config ?? Pricing()));
+            new PricingService(config ?? Pricing()), notifier ?? new AiUsageNotifier());
 
     public static WorkingContextService WorkingContext(LocalDbFixture db,
         IAiService? ai = null, IConfiguration? config = null)

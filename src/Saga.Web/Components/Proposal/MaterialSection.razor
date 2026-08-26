@@ -32,7 +32,7 @@
         }
         else
         {
-            <span><strong>Choose files</strong> or drop them here — PDF, Word, PowerPoint, Excel, images, text</span>
+            <span><strong>Choose files</strong> or drop them here – PDF, Word, PowerPoint, Excel, images, text</span>
         }
     </label>
 
@@ -104,7 +104,7 @@
             </td>
             <td class="text-muted" title="@TokenTitle(TokenBudget.TokensOf(doc))">@FormatTokens(TokenBudget.TokensOf(doc))</td>
             <td class="text-muted">@doc.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
-            <td class="text-muted">@(doc.UpdatedAt > doc.CreatedAt ? doc.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm") : "—")</td>
+            <td class="text-muted">@(doc.UpdatedAt > doc.CreatedAt ? doc.UpdatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm") : "–")</td>
             <td style="text-align: right; white-space: nowrap;">
                 @if (CanEdit)
                 {
@@ -311,7 +311,7 @@ else
                             <tr>
                                 <td>@version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
                                 <td><span class="badge badge-role">@OriginLabel(version.Origin)</span></td>
-                                <td>@(version.CreatedBy?.DisplayName ?? "—")</td>
+                                <td>@(version.CreatedBy?.DisplayName ?? "–")</td>
                                 <td class="text-muted" title="@TokenTitle(VersionTokens(version))">@FormatTokens(VersionTokens(version))</td>
                                 <td style="text-align: right;">
                                     <button class="btn btn-outline btn-sm" @onclick="() => _viewHistoryVersion = version">View</button>
@@ -547,7 +547,7 @@ else
         => _documents?.Where(d => d.DocumentTypeId == typeId).ToList() ?? [];
 
     private string TypeName(Document document)
-        => _types.FirstOrDefault(t => t.Id == document.DocumentTypeId)?.Name ?? "—";
+        => _types.FirstOrDefault(t => t.Id == document.DocumentTypeId)?.Name ?? "–";
 
     /// <summary>The two standard categories have no Remove button at all, so this only covers
     /// types added to this proposal.</summary>

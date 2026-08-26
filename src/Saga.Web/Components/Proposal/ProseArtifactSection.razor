@@ -154,7 +154,7 @@ else if (_mode == Mode.DiffReview)
                             <tr>
                                 <td>@version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")</td>
                                 <td><span class="badge badge-role">@version.Origin</span></td>
-                                <td>@(version.CreatedBy?.DisplayName ?? "—")</td>
+                                <td>@(version.CreatedBy?.DisplayName ?? "–")</td>
                                 <td style="text-align: right;">
                                     <button class="btn btn-outline btn-sm" @onclick="() => _viewVersion = version">View</button>
                                 </td>
@@ -175,7 +175,7 @@ else if (_mode == Mode.DiffReview)
     <div class="modal-backdrop">
         <div class="modal-panel modal-wide" @onclick:stopPropagation>
             <h2 class="modal-title">Someone else changed this artifact</h2>
-            <p>While you were editing, another user saved changes. Nothing has been lost — choose what to do.</p>
+            <p>While you were editing, another user saved changes. Nothing has been lost – choose what to do.</p>
             <div class="editor-grid">
                 <div>
                     <div class="section-title" style="margin-top: 0;">Their version (currently saved)</div>

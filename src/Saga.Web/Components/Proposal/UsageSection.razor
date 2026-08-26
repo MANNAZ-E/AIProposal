@@ -101,11 +101,11 @@ else
                                 <td class="text-muted">@call.StartedAt.ToLocalTime().ToString("dd MMM HH:mm:ss")</td>
                                 <td>@UsageLabels.OperationName(call.Operation)</td>
                                 <td class="text-muted">@call.Label</td>
-                                <td>@(string.IsNullOrEmpty(call.Model) ? "—" : call.Model)</td>
+                                <td>@(string.IsNullOrEmpty(call.Model) ? "–" : call.Model)</td>
                                 <td class="text-muted">@(call.UserName ?? "System")</td>
-                                <td style="text-align: right;">@(call.InputTokens > 0 ? call.InputTokens.ToString("N0") : "—")</td>
+                                <td style="text-align: right;">@(call.InputTokens > 0 ? call.InputTokens.ToString("N0") : "–")</td>
                                 <td style="text-align: right;">@Tokens.Cached(call.CachedInputTokens, call.InputTokens)</td>
-                                <td style="text-align: right;">@(call.OutputTokens > 0 ? call.OutputTokens.ToString("N0") : "—")</td>
+                                <td style="text-align: right;">@(call.OutputTokens > 0 ? call.OutputTokens.ToString("N0") : "–")</td>
                                 <td style="text-align: right;">@Cost(call.CostUsd)</td>
                                 <td><span class="badge @OutcomeClass(call.Outcome)">@call.Outcome</span></td>
                             </tr>
@@ -158,8 +158,8 @@ else
                                 <td class="text-muted">@call.Label</td>
                                 <td>@call.Model</td>
                                 <td class="text-muted">@(call.UserName ?? "System")</td>
-                                <td class="text-muted">@(call.Meter ?? "—")</td>
-                                <td style="text-align: right;">@(call.Pages is > 0 ? call.Pages.Value.ToString("N0") : "—")</td>
+                                <td class="text-muted">@(call.Meter ?? "–")</td>
+                                <td style="text-align: right;">@(call.Pages is > 0 ? call.Pages.Value.ToString("N0") : "–")</td>
                                 <td style="text-align: right;">@Cost(call.CostUsd)</td>
                                 <td><span class="badge @OutcomeClass(call.Outcome)">@call.Outcome</span></td>
                             </tr>
@@ -175,7 +175,7 @@ else
 {
     <div class="modal-backdrop" @onclick="() => _detail = null">
         <div class="modal-panel modal-wide" @onclick:stopPropagation>
-            <h2 class="modal-title">@UsageLabels.OperationName(_detail.Call.Operation) — @_detail.Call.Model</h2>
+            <h2 class="modal-title">@UsageLabels.OperationName(_detail.Call.Operation) – @_detail.Call.Model</h2>
             <p class="text-muted" style="margin-top: -0.5rem;">
                 @_detail.Call.StartedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss") ·
                 @(_detail.Call.UserName ?? "System") ·

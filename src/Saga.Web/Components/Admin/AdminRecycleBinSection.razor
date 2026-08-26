@@ -32,7 +32,7 @@ else
                     <td><strong>@row.Title</strong></td>
                     <td>@row.ClientName</td>
                     <td>@row.OwnerName</td>
-                    <td class="text-muted">@(row.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "—")</td>
+                    <td class="text-muted">@(row.DeletedAt?.LocalDateTime.ToString("dd MMM yyyy HH:mm") ?? "–")</td>
                     <td style="text-align: right;">
                         <button class="btn btn-outline btn-sm" @onclick="() => RestoreProposalAsync(row.ProposalId)"
                                 disabled="@_restoring">Restore</button>

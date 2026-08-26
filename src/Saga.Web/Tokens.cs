@@ -12,5 +12,5 @@ public static class Tokens
     /// every Content Understanding row and any call the provider sent no usage for.
     /// </summary>
     public static string Cached(long cachedTokens, long inputTokens)
-        => inputTokens <= 0 ? "—" : $"{cachedTokens:N0} ({(double)cachedTokens / inputTokens:P0})";
+        => inputTokens <= 0 ? "–" : $"{cachedTokens:N0} ({(double)cachedTokens / inputTokens:P0})";
 }

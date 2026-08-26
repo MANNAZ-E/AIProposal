@@ -66,7 +66,7 @@ public class RequirementsExtractionService(
                     AiModelTier.Light,
                     new AiCallContext(operationId, AiOperation.ExtractRequirements, proposalId, userId,
                         ArtifactType: ArtifactType.Requirements,
-                        Label: $"{document.Name} — {chunk.LocationLabel}"));
+                        Label: $"{document.Name} – {chunk.LocationLabel}"));
                 var completion = await ai.CompleteAsync(request, ct);
 
                 foreach (var item in ParseItems(completion.Text))

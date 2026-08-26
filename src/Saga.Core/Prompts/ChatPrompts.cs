@@ -14,13 +14,10 @@ public static class ChatPrompts
     /// answer strictly from, so the grounding rules would only tell the model to refuse every
     /// question; it works from the conversation and its own knowledge instead.
     /// </param>
-    public static string BuildSystemPrompt(
-        Proposal proposal, WorkingContextKind kind, bool hasMaterial = true)
+    public static string BuildSystemPrompt(WorkingContextKind kind, bool hasMaterial = true)
     {
         var sb = new StringBuilder();
         sb.AppendLine("You are Saga, Mannaz's proposal assistant. Mannaz is a Scandinavian consultancy specialising in leadership development, project management and organisational change.");
-        sb.AppendLine();
-        sb.AppendLine($"A Mannaz consultant is asking questions about the proposal \"{proposal.Title}\" for the client \"{proposal.ClientName}\".");
         sb.AppendLine();
         sb.AppendLine("## Rules");
         if (hasMaterial)
@@ -38,6 +35,17 @@ public static class ChatPrompts
         sb.AppendLine("- Answer in the language the question was asked in.");
         sb.AppendLine("- You only answer questions. You cannot change the proposal; if asked to, explain that edits happen in the artifact views.");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The final user turn: the proposal identity line plus the question itself. The identity line
+    /// names the proposal's current title and client, so it travels with the question rather than
+    /// the system prompt — a rename between messages of a long-lived chat would otherwise shift the
+    /// cached prefix and re-charge the whole conversation history at full input price.
+    /// </summary>
+    public static string BuildQuestionMessage(Proposal proposal, string question)
+    {
+        return $"A Mannaz consultant is asking questions about the proposal \"{proposal.Title}\" for the client \"{proposal.ClientName}\".\n\n{question}";
     }
 
     private static string Describe(WorkingContextKind kind) => kind switch

@@ -22,7 +22,7 @@ public class FakeDocumentExtractor : IDocumentTextExtractor
             size += read;
 
         var text = $"""
-            *(Placeholder text from the offline stand-in extractor — configure ContentUnderstanding:Endpoint
+            *(Placeholder text from the offline stand-in extractor – configure ContentUnderstanding:Endpoint
             to extract the real content of "{Path.GetFileName(fileName)}" ({size:N0} bytes).)*
 
             ## Background and purpose
@@ -35,7 +35,7 @@ public class FakeDocumentExtractor : IDocumentTextExtractor
             - The solution will be evaluated on quality of the proposed approach.
 
             ## Practical information
-            Questions can be submitted in writing. The placeholder ends here — edit this text via
+            Questions can be submitted in writing. The placeholder ends here – edit this text via
             "Edit text" if you want to work with real content before Azure is wired up.
             """;
         return new ExtractionResult(text, [new PageSpan(1, 0, text.Length)], Billed(fileName));

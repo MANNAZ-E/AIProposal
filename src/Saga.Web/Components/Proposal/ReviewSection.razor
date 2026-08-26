@@ -21,7 +21,7 @@
         }
         else
         {
-            <span><strong>Choose files</strong> or drop them here — all files together become one new version</span>
+            <span><strong>Choose files</strong> or drop them here – all files together become one new version</span>
         }
     </label>
     <div class="form-field" style="max-width: 420px; margin-top: 1rem;">
@@ -53,12 +53,12 @@ else
                         <strong>Version @version.Number</strong>
                         @if (version.Label is not null)
                         {
-                            <span> — @version.Label</span>
+                            <span> – @version.Label</span>
                         }
                         <div class="text-muted" style="font-size: 0.85rem;">
                             @string.Join(", ", version.Files.Select(f => f.Name))
                             · uploaded @version.CreatedAt.LocalDateTime.ToString("dd MMM yyyy HH:mm")
-                            by @(version.CreatedBy?.DisplayName ?? "—")
+                            by @(version.CreatedBy?.DisplayName ?? "–")
                         </div>
                     </div>
                     <span style="white-space: nowrap; display: flex; gap: 0.4rem; align-items: center;">

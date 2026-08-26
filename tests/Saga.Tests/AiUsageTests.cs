@@ -342,6 +342,76 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
         Assert.Equal(0m, row.CostUsd);
     }
 
+    /// <summary>
+    /// The app bar's figure links to the Usage tab, so the two have to be the same number — down to
+    /// the rows a filter would be tempting to add later. A failed or rejected call still cost money,
+    /// and a header that quietly disagreed with the page it links to would be worse than no header.
+    /// </summary>
+    [Fact]
+    public async Task Header_cost_is_the_same_total_the_usage_tab_shows()
+    {
+        var (elv, proposalId) = await SetupAsync();
+        var usage = TestServices.Usage(db);
+
+        // Both services, so the header cannot be right by only counting one of them.
+        await TestServices.Generation(db)
+            .GenerateAsync(proposalId, ArtifactType.Summary, elv, null, null);
+        var extractor = TestServices.Extractor(db, new FakeDocumentExtractorStub());
+        var documents = new DocumentService(db, new TempDirStorage(_storageDir), extractor);
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("tender content"));
+        await documents.UploadAsync(proposalId, elv, "tender.pdf", stream);
+
+        var tabTotal = (await usage.GetProposalUsageAsync(proposalId, elv)).Totals.CostUsd;
+        var headerTotal = await usage.GetProposalCostUsdAsync(proposalId, elv);
+
+        Assert.True(tabTotal > 0m);
+        Assert.Equal(tabTotal, headerTotal);
+    }
+
+    /// <summary>
+    /// Every proposal starts here, and SQL sums no rows to NULL — so this is the path the header
+    /// takes the first time anyone opens a new bid.
+    /// </summary>
+    [Fact]
+    public async Task Header_cost_is_zero_for_a_proposal_with_no_calls()
+    {
+        var (elv, proposalId) = await SetupAsync(material: null);
+
+        Assert.Equal(0m, await TestServices.Usage(db).GetProposalCostUsdAsync(proposalId, elv));
+    }
+
+    /// <summary>The header reads the meter from the app bar, so it needs the same gate as the tab.</summary>
+    [Fact]
+    public async Task Header_cost_is_only_readable_by_someone_with_access()
+    {
+        var (elv, proposalId) = await SetupAsync();
+        var sda = (await _users.FindByEmailAsync("sda@mannaz.com"))!.Id;
+
+        await TestServices.Generation(db)
+            .GenerateAsync(proposalId, ArtifactType.Summary, elv, null, null);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => TestServices.Usage(db).GetProposalCostUsdAsync(proposalId, sda));
+    }
+
+    /// <summary>
+    /// The only proof the decorator is wired to the notifier at all. Without it the app bar's figure
+    /// simply never moves while you spend, and nothing else in the suite notices.
+    /// </summary>
+    [Fact]
+    public async Task A_recorded_call_publishes_its_proposal()
+    {
+        var (elv, proposalId) = await SetupAsync();
+        var notifier = new AiUsageNotifier();
+        var published = new List<Guid>();
+        notifier.Recorded += id => published.Add(id);
+
+        await TestServices.Generation(db, TestServices.Ai(db, notifier: notifier))
+            .GenerateAsync(proposalId, ArtifactType.Summary, elv, null, null);
+
+        Assert.Equal(proposalId, Assert.Single(published));
+    }
+
     /// <summary>A digital Office file: read on the native path, billed on the Minimal meter.</summary>
     private sealed class MinimalExtractorStub : IDocumentTextExtractor
     {

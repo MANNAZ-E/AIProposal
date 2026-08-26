@@ -94,7 +94,7 @@ public class ReviewService(
                 RequirementType = requirement.Type,
                 Coverage = row?.Coverage ?? ReviewCoverage.NotAddressed,
                 WhereAddressed = row?.WhereAddressed,
-                Improvement = row?.Improvement ?? (row is null ? "The review did not assess this requirement — run it again." : null),
+                Improvement = row?.Improvement ?? (row is null ? "The review did not assess this requirement – run it again." : null),
                 Risk = row?.Risk,
             });
         }

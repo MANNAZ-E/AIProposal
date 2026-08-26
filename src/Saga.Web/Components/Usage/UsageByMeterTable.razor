@@ -20,10 +20,10 @@
             <tr>
                 <td>@row.Meter</td>
                 <td style="text-align: right;">@row.Calls.ToString("N0")</td>
-                <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "—")</td>
+                <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "–")</td>
                 @if (_hasContextualization)
                 {
-                    <td style="text-align: right;">@(row.ContextualizationTokens > 0 ? row.ContextualizationTokens.ToString("N0") : "—")</td>
+                    <td style="text-align: right;">@(row.ContextualizationTokens > 0 ? row.ContextualizationTokens.ToString("N0") : "–")</td>
                 }
                 <td style="text-align: right;">@Cost(row.CostUsd)</td>
             </tr>

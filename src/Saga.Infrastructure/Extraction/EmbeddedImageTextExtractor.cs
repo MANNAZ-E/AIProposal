@@ -146,7 +146,7 @@ public partial class EmbeddedImageTextExtractor(
     private async Task<string?> RecoverOneAsync(EmbeddedImage image, string fileName,
         AiCallContext? context, CancellationToken ct)
     {
-        var label = $"{Path.GetFileName(fileName)} — figure {image.Ordinal}";
+        var label = $"{Path.GetFileName(fileName)} – figure {image.Ordinal}";
         var text = "";
         try
         {

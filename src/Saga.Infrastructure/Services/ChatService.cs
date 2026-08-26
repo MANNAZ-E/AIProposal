@@ -261,10 +261,10 @@ public class ChatService(
                 ? AiMessage.User(author + m.Text)
                 : AiMessage.Assistant(m.Text));
         }
-        messages.Add(AiMessage.User(question));
+        messages.Add(AiMessage.User(ChatPrompts.BuildQuestionMessage(proposal, question)));
 
         var request = new AiRequest(
-            ChatPrompts.BuildSystemPrompt(proposal, chatKind, hasMaterial: snapshot.Length > 0),
+            ChatPrompts.BuildSystemPrompt(chatKind, hasMaterial: snapshot.Length > 0),
             messages,
             Context: new AiCallContext(Guid.NewGuid(), AiOperation.Chat, proposalId, userId, Label: title));
 

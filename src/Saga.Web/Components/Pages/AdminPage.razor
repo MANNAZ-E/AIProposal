@@ -6,7 +6,7 @@
 @inject AppHeaderState Header
 @inject NavigationManager Nav
 
-<PageTitle>Saga — Admin</PageTitle>
+<PageTitle>Saga – Admin</PageTitle>
 
 @if (_ready)
 {
@@ -90,6 +90,7 @@ else
 
     private bool _ready;
     private bool _isSuperAdmin;
+    private int _headerPublication;
     private Section _section = Section.Users;
 
     protected override async Task OnInitializedAsync()
@@ -101,7 +102,7 @@ else
             return;
         }
         _isSuperAdmin = me.IsSuperAdmin;
-        Header.Set("Admin", null, null);
+        _headerPublication = Header.Set("Admin", null, null);
         _ready = true;
     }
 
@@ -120,5 +121,5 @@ else
         _section = section;
     }
 
-    public void Dispose() => Header.Clear();
+    public void Dispose() => Header.ClearIfCurrent(_headerPublication);
 }

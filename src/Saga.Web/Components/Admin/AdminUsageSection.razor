@@ -43,7 +43,7 @@ else
                         <td style="text-align: right;">@row.InputTokens.ToString("N0")</td>
                         <td style="text-align: right;">@Tokens.Cached(row.CachedInputTokens, row.InputTokens)</td>
                         <td style="text-align: right;">@row.OutputTokens.ToString("N0")</td>
-                        <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "—")</td>
+                        <td style="text-align: right;">@(row.Pages > 0 ? row.Pages.ToString("N0") : "–")</td>
                         <td style="text-align: right;">@Cost(row.CostUsd)</td>
                         <td>@row.LastCallAt?.ToLocalTime().ToString("dd MMM HH:mm")</td>
                     </tr>

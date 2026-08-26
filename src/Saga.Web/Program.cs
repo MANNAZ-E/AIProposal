@@ -79,6 +79,10 @@ builder.Services.AddSingleton<ImpersonationState>();
 // circuit subscribes, and a post wakes the ones watching that proposal.
 builder.Services.AddSingleton<TeamChatNotifier>();
 
+// The same one-event mechanism for AI spend: a recorded call wakes every circuit watching that
+// proposal, so the app bar's running figure moves while the money is being spent.
+builder.Services.AddSingleton<AiUsageNotifier>();
+
 // Every LLM call goes through the usage decorator — the fake included, so a dev session
 // produces the same usage rows as production.
 builder.Services.AddSingleton<IAiService>(sp =>
@@ -90,6 +94,7 @@ builder.Services.AddSingleton<IAiService>(sp =>
     return new UsageTrackingAiService(inner,
         sp.GetRequiredService<IDbContextFactory<SagaDbContext>>(),
         sp.GetRequiredService<PricingService>(),
+        sp.GetRequiredService<AiUsageNotifier>(),
         sp.GetService<ILogger<UsageTrackingAiService>>());
 });
 
@@ -112,6 +117,7 @@ builder.Services.AddSingleton<IDocumentTextExtractor>(sp =>
         ContentUnderstandingExtractor.AnalyzerId,
         sp.GetRequiredService<IDbContextFactory<SagaDbContext>>(),
         sp.GetRequiredService<PricingService>(),
+        sp.GetRequiredService<AiUsageNotifier>(),
         sp.GetService<ILogger<UsageTrackingTextExtractor>>());
 
     // Outside the meter, so each image it reads back is billed as its own row. Pointless against

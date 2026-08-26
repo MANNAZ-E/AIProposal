@@ -100,6 +100,29 @@ public class AiUsageService(IDbContextFactory<SagaDbContext> dbFactory, PricingS
         return new ProposalUsage(Sum(breakdown.Select(b => b.Totals)), breakdown, meters);
     }
 
+    /// <summary>
+    /// Just the money, for the app bar's running figure. Summed in SQL rather than by calling
+    /// <see cref="GetProposalUsageAsync"/> and reading its total: this runs on every tab switch and
+    /// again on every call recorded anywhere in the process, and the breakdown it would otherwise
+    /// build — one row per service and model, plus the meters grouped in memory — is all discarded.
+    /// The <c>(ProposalId, StartedAt)</c> index makes it a prefix seek.
+    /// <para>
+    /// The filter is deliberately the same "every row of the proposal" the Usage tab uses. A failed,
+    /// cancelled or rejected call still cost money, and a header that links to that tab must not
+    /// quietly disagree with it.
+    /// </para>
+    /// </summary>
+    public async Task<decimal> GetProposalCostUsdAsync(Guid proposalId, Guid userId,
+        CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await ProposalService.EnsureReadAccessAsync(db, proposalId, userId, ct);
+
+        return await db.AiUsage
+            .Where(r => r.ProposalId == proposalId)
+            .SumAsync(r => r.EstimatedCostUsd, ct);
+    }
+
     /// <summary>The proposal's calls, newest first. Never projects the payload columns.</summary>
     public async Task<List<AiUsageCall>> GetProposalCallsAsync(Guid proposalId, Guid userId,
         CancellationToken ct = default)

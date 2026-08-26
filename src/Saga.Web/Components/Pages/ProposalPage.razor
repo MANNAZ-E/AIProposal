@@ -11,8 +11,10 @@
 @inject CurrentUserService CurrentUser
 @inject AppHeaderState Header
 @inject NavigationManager Nav
+@inject AiUsageService Usage
+@inject AiUsageNotifier AiUsageNotifier
 
-<PageTitle>Saga — @(_proposal?.Title ?? "Proposal")</PageTitle>
+<PageTitle>Saga – @(_proposal?.Title ?? "Proposal")</PageTitle>
 
 @if (_notFound)
 {
@@ -195,7 +197,7 @@ else
                         <div class="section-title">Delete</div>
                         <div class="card danger-zone">
                             <p style="margin-top: 0;">
-                                Deleting moves the proposal to the recycle bin on the dashboard. Nothing is erased —
+                                Deleting moves the proposal to the recycle bin on the dashboard. Nothing is erased –
                                 you or any other team member can restore it from there.
                             </p>
                             <button class="btn btn-danger" @onclick="OpenDelete">Delete proposal</button>
@@ -278,6 +280,14 @@ else
     private bool _busy;
     private bool _disposed;
 
+    /// <summary>Coalescing flags for <see cref="RefreshUsageAsync"/>: one query at a time, and one
+    /// more afterwards if calls were recorded while it ran.</summary>
+    private bool _usageRefreshing;
+    private bool _usageRefreshAgain;
+
+    /// <summary>The header this page last published, so Dispose only clears it if it is still up.</summary>
+    private int _headerPublication;
+
     /// <summary>
     /// Who may add or remove team members — wider than the Owner check the rest of this page uses,
     /// and mirroring ProposalService: the owner, an admin already on the bid, or a super admin.
@@ -314,13 +324,18 @@ else
     private void GoToMaterials()
         => Nav.NavigateTo(ProposalSectionUrl.For(ProposalId, Section.Material));
 
-    protected override void OnInitialized() => TeamChatNotifier.Posted += OnTeamPosted;
+    protected override void OnInitialized()
+    {
+        TeamChatNotifier.Posted += OnTeamPosted;
+        AiUsageNotifier.Recorded += OnUsageRecorded;
+    }
 
     public void Dispose()
     {
         _disposed = true;
         TeamChatNotifier.Posted -= OnTeamPosted;
-        Header.Clear();
+        AiUsageNotifier.Recorded -= OnUsageRecorded;
+        Header.ClearIfCurrent(_headerPublication);
     }
 
     /// <summary>
@@ -345,7 +360,7 @@ else
         if (result is null)
         {
             _notFound = true;
-            Header.Clear();
+            _headerPublication = Header.Clear();
             return;
         }
         (_proposal, _myRole) = result.Value;
@@ -355,7 +370,60 @@ else
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
         _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
         _unreadTeam = await TeamChat.UnreadCountAsync(ProposalId, user.Id);
-        Header.Set(_proposal.Title, _proposal.ClientName, _proposal.IsArchived ? "Archived" : null);
+        _headerPublication = Header.Set(_proposal.Title, _proposal.ClientName,
+            _proposal.IsArchived ? "Archived" : null, ProposalId);
+        await RefreshUsageAsync();
+    }
+
+    /// <summary>
+    /// The app bar's running spend figure. Published through the header rather than rendered here
+    /// because it belongs beside Settings, and re-read from the rows rather than accumulated, so a
+    /// teammate generating against the same bid moves it too.
+    /// <para>
+    /// Coalesced rather than debounced: a content generation records one call per unit, requirements
+    /// extraction one per chunk, and a single upload one per embedded figure, so the events arrive in
+    /// bursts of tens. Folding a burst into the query already in flight plus one more afterwards
+    /// leaves the figure final without a timer to own and dispose.
+    /// </para>
+    /// </summary>
+    private async Task RefreshUsageAsync()
+    {
+        if (_usageRefreshing)
+        {
+            _usageRefreshAgain = true;
+            return;
+        }
+        _usageRefreshing = true;
+        try
+        {
+            do
+            {
+                _usageRefreshAgain = false;
+                var user = await CurrentUser.GetAsync();
+                Header.SetUsageCost(ProposalId,
+                    await Usage.GetProposalCostUsdAsync(ProposalId, user.Id));
+            } while (_usageRefreshAgain && !_disposed);
+        }
+        finally
+        {
+            _usageRefreshing = false;
+        }
+    }
+
+    /// <summary>
+    /// Keeps the spend figure live on the tabs that spend without reloading this page — AI Chat and
+    /// Materials, the two paths with no OnChanged of their own — and while a teammate spends on the
+    /// same bid. No StateHasChanged: the figure belongs to the app bar, which re-renders itself off
+    /// Header.Changed. Fired from whichever thread wrote the row, so the work goes back on the circuit.
+    /// </summary>
+    private void OnUsageRecorded(Guid proposalId)
+    {
+        if (_disposed || proposalId != ProposalId) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await RefreshUsageAsync();
+        });
     }
 
     /// <summary>
@@ -453,7 +521,7 @@ else
         _busy = true;
         var user = await CurrentUser.GetAsync();
         await Proposals.DeleteAsync(ProposalId, user.Id);
-        Header.Clear();
+        _headerPublication = Header.Clear();
         Nav.NavigateTo("/");
     }
 }

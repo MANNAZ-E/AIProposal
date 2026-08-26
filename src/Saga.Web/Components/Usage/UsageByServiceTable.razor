@@ -33,7 +33,7 @@
                     <td></td>
                     @* A call that failed before the stream named its deployment stored a blank
                        model; the row still cost time and belongs in the table. *@
-                    <td>@(string.IsNullOrEmpty(row.Model) ? "—" : row.Model)</td>
+                    <td>@(string.IsNullOrEmpty(row.Model) ? "–" : row.Model)</td>
                     <td style="text-align: right;">@row.Totals.Calls.ToString("N0")</td>
                     <td style="text-align: right;">@row.Totals.InputTokens.ToString("N0")</td>
                     <td style="text-align: right;">@Tokens.Cached(row.Totals.CachedInputTokens, row.Totals.InputTokens)</td>
