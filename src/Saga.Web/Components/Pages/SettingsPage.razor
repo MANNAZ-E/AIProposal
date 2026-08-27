@@ -48,9 +48,13 @@
 
     private Section _section = Section.RecycleBin;
 
-    private int _headerPublication;
+    private HeaderPublication _header = null!;
 
-    protected override void OnInitialized() => _headerPublication = Header.Set("Settings", null, null);
+    protected override void OnInitialized()
+    {
+        _header = new HeaderPublication(Header);
+        _header.Set("Settings", null, null);
+    }
 
     protected override void OnParametersSet()
     {
@@ -64,5 +68,7 @@
         _section = section;
     }
 
-    public void Dispose() => Header.ClearIfCurrent(_headerPublication);
+    // Null-conditional because Dispose also runs on a component the renderer tore down before
+    // OnInitialized ever set the field, and a throw out of Dispose faults the whole circuit.
+    public void Dispose() => _header?.Dispose();
 }

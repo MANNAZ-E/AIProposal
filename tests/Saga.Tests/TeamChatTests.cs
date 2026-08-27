@@ -360,4 +360,22 @@ public class TeamChatTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         Assert.Equal(
             [(proposalId, threadId), (proposalId, threadId), (proposalId, started)], seen);
     }
+
+    /// <summary>
+    /// A tab closed while someone was typing throws out of its handler. That must neither fail the
+    /// post that woke it nor stop the notification reaching the circuits behind it.
+    /// </summary>
+    [Fact]
+    public void A_faulting_subscriber_neither_throws_nor_stops_the_others()
+    {
+        var notifier = new TeamChatNotifier();
+        var reached = new List<int>();
+        notifier.Posted += (_, _) => reached.Add(1);
+        notifier.Posted += (_, _) => throw new ObjectDisposedException("circuit");
+        notifier.Posted += (_, _) => reached.Add(3);
+
+        notifier.Publish(Guid.NewGuid(), Guid.NewGuid());
+
+        Assert.Equal([1, 3], reached);
+    }
 }

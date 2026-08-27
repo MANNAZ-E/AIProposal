@@ -286,7 +286,7 @@ else
     private bool _usageRefreshAgain;
 
     /// <summary>The header this page last published, so Dispose only clears it if it is still up.</summary>
-    private int _headerPublication;
+    private HeaderPublication _header = null!;
 
     /// <summary>
     /// Who may add or remove team members — wider than the Owner check the rest of this page uses,
@@ -326,6 +326,7 @@ else
 
     protected override void OnInitialized()
     {
+        _header = new HeaderPublication(Header);
         TeamChatNotifier.Posted += OnTeamPosted;
         AiUsageNotifier.Recorded += OnUsageRecorded;
     }
@@ -335,7 +336,9 @@ else
         _disposed = true;
         TeamChatNotifier.Posted -= OnTeamPosted;
         AiUsageNotifier.Recorded -= OnUsageRecorded;
-        Header.ClearIfCurrent(_headerPublication);
+        // Null-conditional because Dispose also runs on a component the renderer tore down before
+        // OnInitialized ever set the field, and a throw out of Dispose faults the whole circuit.
+        _header?.Dispose();
     }
 
     /// <summary>
@@ -360,7 +363,7 @@ else
         if (result is null)
         {
             _notFound = true;
-            _headerPublication = Header.Clear();
+            _header.Clear();
             return;
         }
         (_proposal, _myRole) = result.Value;
@@ -370,7 +373,7 @@ else
         _artifacts = await Artifacts.GetAllAsync(ProposalId, user.Id);
         _unreadChats = await Chat.UnreadCountAsync(ProposalId, user.Id);
         _unreadTeam = await TeamChat.UnreadCountAsync(ProposalId, user.Id);
-        _headerPublication = Header.Set(_proposal.Title, _proposal.ClientName,
+        _header.Set(_proposal.Title, _proposal.ClientName,
             _proposal.IsArchived ? "Archived" : null, ProposalId);
         await RefreshUsageAsync();
     }
@@ -521,7 +524,7 @@ else
         _busy = true;
         var user = await CurrentUser.GetAsync();
         await Proposals.DeleteAsync(ProposalId, user.Id);
-        _headerPublication = Header.Clear();
+        _header.Clear();
         Nav.NavigateTo("/");
     }
 }

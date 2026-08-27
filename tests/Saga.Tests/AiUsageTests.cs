@@ -412,6 +412,27 @@ public class AiUsageTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>, ID
         Assert.Equal(proposalId, Assert.Single(published));
     }
 
+    /// <summary>
+    /// One circuit faulting is the normal case, not the exotic one: a tab closed mid-generation
+    /// throws ObjectDisposedException out of its handler. The publish must survive it and carry on
+    /// to the circuits behind it, and the invariant is invisible in the output — publishing through
+    /// the multicast delegate directly would leave the rest of the suite green.
+    /// </summary>
+    [Fact]
+    public void A_faulting_subscriber_neither_throws_nor_stops_the_others()
+    {
+        var proposalId = Guid.NewGuid();
+        var notifier = new AiUsageNotifier();
+        var reached = new List<int>();
+        notifier.Recorded += _ => reached.Add(1);
+        notifier.Recorded += _ => throw new ObjectDisposedException("circuit");
+        notifier.Recorded += _ => reached.Add(3);
+
+        notifier.Publish(proposalId);
+
+        Assert.Equal([1, 3], reached);
+    }
+
     /// <summary>A digital Office file: read on the native path, billed on the Minimal meter.</summary>
     private sealed class MinimalExtractorStub : IDocumentTextExtractor
     {

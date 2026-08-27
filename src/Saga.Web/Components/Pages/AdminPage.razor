@@ -90,11 +90,12 @@ else
 
     private bool _ready;
     private bool _isSuperAdmin;
-    private int _headerPublication;
+    private HeaderPublication _header = null!;
     private Section _section = Section.Users;
 
     protected override async Task OnInitializedAsync()
     {
+        _header = new HeaderPublication(Header);
         var me = await CurrentUser.GetAsync();
         if (!me.IsAdmin)
         {
@@ -102,7 +103,7 @@ else
             return;
         }
         _isSuperAdmin = me.IsSuperAdmin;
-        _headerPublication = Header.Set("Admin", null, null);
+        _header.Set("Admin", null, null);
         _ready = true;
     }
 
@@ -121,5 +122,7 @@ else
         _section = section;
     }
 
-    public void Dispose() => Header.ClearIfCurrent(_headerPublication);
+    // Null-conditional because Dispose also runs on a component the renderer tore down before
+    // OnInitialized ever set the field, and a throw out of Dispose faults the whole circuit.
+    public void Dispose() => _header?.Dispose();
 }

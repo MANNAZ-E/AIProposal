@@ -144,7 +144,9 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         var second = capturing.Requests[1].Messages;
         Assert.Contains(second, m => m.Role == "user" && m.Content == "First question");
         Assert.Contains(second, m => m.Role == "assistant" && m.Content.Length > 0);
-        Assert.EndsWith("Second question", second[^1].Content);
+        Assert.Equal(
+            "A Mannaz consultant is asking questions about the proposal \"P\" for the client \"C\".\n\nSecond question",
+            second[^1].Content);
     }
 
     [Fact]
@@ -307,7 +309,9 @@ public class ChatServiceTests(LocalDbFixture db) : IClassFixture<LocalDbFixture>
         // The question is the whole conversation: no context block, so nothing tells the model
         // to answer strictly from material it was never given.
         var request = Assert.Single(capturing.Requests);
-        Assert.EndsWith("Q", Assert.Single(request.Messages).Content);
+        Assert.Equal(
+            "A Mannaz consultant is asking questions about the proposal \"P\" for the client \"C\".\n\nQ",
+            Assert.Single(request.Messages).Content);
         Assert.DoesNotContain("TENDER-TEXT", request.SystemPrompt);
         Assert.DoesNotContain("Answer strictly from the provided context", request.SystemPrompt);
     }

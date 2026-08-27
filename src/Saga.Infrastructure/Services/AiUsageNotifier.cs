@@ -25,13 +25,21 @@ public class AiUsageNotifier(ILogger<AiUsageNotifier>? logger = null)
 
     public void Publish(Guid proposalId)
     {
-        try
+        if (Recorded is not { } recorded) return;
+
+        // Invoked one handler at a time rather than through the multicast delegate directly: a
+        // synchronous throw from one circuit must not stop the notification reaching every other
+        // circuit still subscribed after it.
+        foreach (var handler in recorded.GetInvocationList())
         {
-            Recorded?.Invoke(proposalId);
-        }
-        catch (Exception ex)
-        {
-            logger?.LogError(ex, "Failed to publish AI usage for proposal {ProposalId}.", proposalId);
+            try
+            {
+                ((Action<Guid>)handler)(proposalId);
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Failed to publish AI usage for proposal {ProposalId}.", proposalId);
+            }
         }
     }
 }
